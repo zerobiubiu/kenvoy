@@ -1,0 +1,17 @@
+[package]
+name = "kengine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Core engine library for kenvoy — reusable primitives and runtime"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["engine", "runtime", "toolkit"]
+categories = ["parsing", "compilers", "development-tools"]
+
+[dependencies]
+
+[lints]
+workspace = true

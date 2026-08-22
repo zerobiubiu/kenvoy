@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+authors = ["zerobiubiu"]
+license = "MIT"
+repository = "https://github.com/zerobiubiu/kenvoy"
+
+
+[workspace.lints.rust]
+warnings = "warn"
+
+[workspace.lints.clippy]
+pedantic = "warn"
+
+[workspace.dependencies]
+kengine = { path = "crates/kengine", version = "0.1" }
