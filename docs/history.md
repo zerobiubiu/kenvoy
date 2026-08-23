@@ -9,3 +9,12 @@
 - 影响范围：`kengine` 对外产物形态（IR JSON）、渲染器分层（`kengine-html`）、`kenvoy` CLI 的 `dev` 命令
 - 验证情况：设计文档，尚未实现；B1（IR 类型）动工后在本条目下追加执行验证记录
 - 关联文档：`docs/01-ir-contract.md`、`docs/02-demo-plan.md`
+
+### 执行验证记录（2026-08-23，B1 完成）
+
+- 环境：本地 Windows，Rust 1.98
+- 命令：`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过
+- 实现：`crates/kengine/src/ir/` 新增 `IR` 类型（`ProjectIr` / `Model` / `Layout` / `Page` / `Node` 及 props）+ serde round-trip 测试
+- 决策确认：D1~D6 全部确认；`Custom` 组件因 serde 内部标签限制改用 `component` 字段承载组件名（契约已同步更新）
+- 已知限制：B2（XML 解析）未开始；`flow` / `permissions` 为占位结构

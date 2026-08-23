@@ -71,10 +71,10 @@
 
 | # | 决策点 | 建议 | 状态 |
 | :--- | :--- | :--- | :--- |
-| D1 | 数据模型文件位置 | `apps/<应用名>/models.kenvoy.xml` | 待确认 |
-| D2 | IR→HTML 位置 | 独立 crate `kengine-html`（渲染器与解析器分离，避免返工） | 待确认 |
-| D3 | dev 服务器框架 | axum + notify + tokio（后期 Kenvoy-Runtime 可复用 axum 生态） | 待确认 |
-| D4 | demo 热更新 | 整页刷新即可；SSE/WebSocket 推送后置 | 待确认 |
-| D5 | 解析库 | roxmltree（树遍历 + 校验更顺手，性能后置再考虑 quick-xml） | 待确认 |
+| D1 | 数据模型文件位置 | `apps/<应用名>/models.kenvoy.xml` | 已确认（2026-08-23） |
+| D2 | IR→HTML 位置 | 独立 crate `kengine-html`（渲染器与解析器分离，避免返工） | 已确认（2026-08-23） |
+| D3 | dev 服务器框架 | axum + notify + tokio（后期 Kenvoy-Runtime 可复用 axum 生态） | 已确认（2026-08-23） |
+| D4 | demo 热更新 | 整页刷新即可；SSE/WebSocket 推送后置 | 已确认（2026-08-23） |
+| D5 | 解析库 | roxmltree（树遍历 + 校验更顺手，性能后置再考虑 quick-xml） | 已确认（2026-08-23） |
 
 > 决策点与 [01-ir-contract.md](./01-ir-contract.md) 第 7 节交叉引用。

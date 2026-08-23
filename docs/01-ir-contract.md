@@ -135,26 +135,27 @@ pub struct ProjectIr {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "PascalCase")]
 pub enum Node {
-    Row     { #[serde(default)] props: LayoutProps,   #[serde(default)] children: Vec<Node> },
-    Col     { #[serde(default)] props: ColProps,      #[serde(default)] children: Vec<Node> },
-    Section { #[serde(default)] props: SectionProps,  #[serde(default)] children: Vec<Node> },
+    Row     { #[serde(default)] props: RowProps,     #[serde(default)] children: Vec<Node> },
+    Col     { #[serde(default)] props: ColProps,     #[serde(default)] children: Vec<Node> },
+    Section { #[serde(default)] props: SectionProps, #[serde(default)] children: Vec<Node> },
     Slot,
-    Form    { #[serde(default)] props: FormProps,     #[serde(default)] children: Vec<Node> },
+    Form    { #[serde(default)] props: FormProps,    #[serde(default)] children: Vec<Node> },
     Field   { #[serde(default)] props: FieldProps },
-    Table   { #[serde(default)] props: TableProps,    #[serde(default)] children: Vec<Node> },
+    Table   { #[serde(default)] props: TableProps,   #[serde(default)] children: Vec<Node> },
     Column  { #[serde(default)] props: ColumnProps },
     StatCard { #[serde(default)] props: StatCardProps },
     Text    { #[serde(default)] props: TextProps },
     /// 用户 DSL 自定义组件（kengine 解析成子树，或透传给渲染器）
-    Custom  { r#type: String,
+    #[serde(rename = "custom")]
+    Custom  { component: String,
               #[serde(default)] props: HashMap<String, Value>,
               #[serde(default)] children: Vec<Node> },
 }
 ```
 
-`#[serde(tag = "type")]` 内部标签，JSON 里就是 `"type": "Form"` 形态；`Custom` 的 `type` 直接是用户组件名——**扩展路径和内置组件完全统一**。
+`#[serde(tag = "type")]` 内部标签，JSON 里就是 `"type": "Form"` 形态。因 serde 内部标签占用 `type` 字段，`Custom` 的组件名放在 `component` 字段，JSON 为 `{"type":"custom","component":"my-widget",...}`；内置组件与用户组件在渲染路径上统一为 `Node`。
 
 ## 5. layout 解析规则（kengine 实现）
 
@@ -179,9 +180,9 @@ resolve_layout_chain(app_root, page_dir):
 
 | # | 决策点 | 建议 | 状态 |
 | :--- | :--- | :--- | :--- |
-| D1 | 数据模型文件位置 | `apps/<应用名>/models.kenvoy.xml` | 待确认 |
-| D2 | IR→HTML 位置 | 独立 crate `kengine-html` | 待确认 |
-| D3 | dev 服务器框架 | axum + notify + tokio | 待确认 |
-| D4 | demo 热更新 | 整页刷新；SSE/WebSocket 后置 | 待确认 |
-| D5 | 解析库 | roxmltree | 待确认 |
-| D6 | Node 表示 | tagged enum + Custom 兜底 | 已定（本文按此设计） |
+| D1 | 数据模型文件位置 | `apps/<应用名>/models.kenvoy.xml` | 已确认（2026-08-23） |
+| D2 | IR→HTML 位置 | 独立 crate `kengine-html` | 已确认（2026-08-23） |
+| D3 | dev 服务器框架 | axum + notify + tokio | 已确认（2026-08-23） |
+| D4 | demo 热更新 | 整页刷新；SSE/WebSocket 后置 | 已确认（2026-08-23） |
+| D5 | 解析库 | roxmltree | 已确认（2026-08-23） |
+| D6 | Node 表示 | tagged enum + Custom 兜底（`component` 字段） | 已确认（2026-08-23） |

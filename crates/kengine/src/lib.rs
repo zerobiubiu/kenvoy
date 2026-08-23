@@ -2,6 +2,8 @@
 //!
 //! 对外暴露最小可用 API，供 `kenvoy` 及下游 crate 复用。
 
+pub mod ir;
+
 /// 引擎版本，与 workspace 版本一致。
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
