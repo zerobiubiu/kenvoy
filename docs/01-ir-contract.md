@@ -1,0 +1,187 @@
+# IR 契约设计 v0.1
+
+> 文档类型：📋 接口契约
+> 状态：🔧 待执行
+> 影响范围：`kengine`（解析引擎）、`kengine-html`（渲染器，待建）、`kenvoy` CLI
+> 前置文档：无
+> 替代文档：无
+> 生效版本：kengine 0.2.0（目标）
+
+## 1. 设计原则
+
+1. **IR 是 kengine 的唯一对外产物**——渲染器只读 IR，永远不读 XML
+2. **kengine 完成语义工作**——layout 逐级匹配、组件引用解析都在 kengine 里做，渲染器保持「笨」
+3. **组件树可扩展**——内置组件用枚举，用户 DSL 组件用 `Custom` 兜底
+4. **版本化**——IR 顶层带 `version`，渲染器必须校验兼容性
+5. **数据绑定用 `{{ }}` 约定**——demo 阶段不做表达式引擎，渲染器只做最简替换
+
+## 2. 顶层 IR
+
+```json
+{
+  "version": "1.0",
+  "project": {
+    "name": "请假管理",
+    "description": "企业请假管理数字化平台"
+  },
+  "models": {},
+  "layouts": {},
+  "pages": [],
+  "flows": [],
+  "permissions": {}
+}
+```
+
+`flows` / `permissions` demo 阶段可为空数组 / 空对象，但**结构字段必须存在**（防止后期改 IR 形状）。
+
+## 3. 实体定义
+
+### 3.1 Model（数据模型）
+
+```json
+{
+  "name": "请假单",
+  "fields": [
+    { "name": "申请人", "type": "user", "label": "申请人" },
+    { "name": "请假天数", "type": "number", "label": "请假天数" },
+    { "name": "请假类型", "type": "select", "label": "请假类型",
+      "options": ["年假", "病假", "事假", "调休"] },
+    { "name": "事由", "type": "textarea", "label": "事由" }
+  ]
+}
+```
+
+字段类型枚举（demo 子集）：`text / textarea / number / date / select / boolean / file / user / department`；完整集后续补 `money / datetime / multi-select`。
+
+### 3.2 Layout（布局）
+
+```json
+{
+  "path": "/请假管理",
+  "title": "请假管理",
+  "root": {
+    "type": "Row",
+    "children": [
+      { "type": "Text", "props": { "value": "请假管理导航" } },
+      { "type": "Slot" }
+    ]
+  }
+}
+```
+
+`Slot` 是布局占位节点，渲染时被内层 layout 或页面内容替换。
+
+### 3.3 Page（页面）—— 核心是 layoutChain
+
+```json
+{
+  "path": "/请假管理/申请",
+  "title": "填写请假单",
+  "layoutChain": ["/", "/请假管理"],
+  "content": { "type": "Row", "children": [] }
+}
+```
+
+`layoutChain` 由 kengine **在解析期算好**（外层在前），渲染器按序嵌套渲染：根 layout 的 Slot → 下一层 layout → … → 最内层 Slot → 页面 `content`。
+
+### 3.4 Node（组件树）—— 统一结构
+
+```json
+{ "type": "Form",
+  "props": { "model": "请假单" },
+  "children": [
+    { "type": "Field", "props": { "name": "申请人", "readonly": true, "default": "{{currentUser.name}}" } },
+    { "type": "Field", "props": { "name": "事由", "rows": 4 } }
+  ] }
+```
+
+demo 组件类型：`Row / Col / Section / Slot / Form / Field / Table / Column / StatCard / Text`，外加 `Custom` 兜底。
+
+**Table 节点（含数据源）**
+
+```json
+{ "type": "Table",
+  "props": {
+    "model": "请假单",
+    "filter": { "申请人": "{{currentUser.id}}" },
+    "sort": { "创建时间": "desc" },
+    "pageSize": 20
+  },
+  "children": [
+    { "type": "Column", "props": { "field": "请假类型", "label": "类型", "width": 100 } },
+    { "type": "Column", "props": { "field": "审批状态", "label": "状态" } }
+  ] }
+```
+
+## 4. Rust 类型与位置
+
+建议放 `crates/kengine/src/ir/mod.rs`（serde + thiserror）：
+
+```rust
+pub const IR_VERSION: &str = "1.0";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectIr {
+    pub version: String,
+    pub project: ProjectMeta,
+    pub models: HashMap<String, Model>,
+    pub layouts: HashMap<String, Layout>,
+    pub pages: Vec<Page>,
+    #[serde(default)]
+    pub flows: Vec<Flow>,
+    #[serde(default)]
+    pub permissions: Permissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Node {
+    Row     { #[serde(default)] props: LayoutProps,   #[serde(default)] children: Vec<Node> },
+    Col     { #[serde(default)] props: ColProps,      #[serde(default)] children: Vec<Node> },
+    Section { #[serde(default)] props: SectionProps,  #[serde(default)] children: Vec<Node> },
+    Slot,
+    Form    { #[serde(default)] props: FormProps,     #[serde(default)] children: Vec<Node> },
+    Field   { #[serde(default)] props: FieldProps },
+    Table   { #[serde(default)] props: TableProps,    #[serde(default)] children: Vec<Node> },
+    Column  { #[serde(default)] props: ColumnProps },
+    StatCard { #[serde(default)] props: StatCardProps },
+    Text    { #[serde(default)] props: TextProps },
+    /// 用户 DSL 自定义组件（kengine 解析成子树，或透传给渲染器）
+    Custom  { r#type: String,
+              #[serde(default)] props: HashMap<String, Value>,
+              #[serde(default)] children: Vec<Node> },
+}
+```
+
+`#[serde(tag = "type")]` 内部标签，JSON 里就是 `"type": "Form"` 形态；`Custom` 的 `type` 直接是用户组件名——**扩展路径和内置组件完全统一**。
+
+## 5. layout 解析规则（kengine 实现）
+
+```text
+resolve_layout_chain(app_root, page_dir):
+  chain = []
+  从 page_dir 逐级向上到 app_root：
+    若该目录存在 layout.kenvoy.xml → chain 头部插入该目录路径
+  校验：app_root 的 layout 必须存在，否则报 LayoutNotFound
+  返回 chain（外层在前）
+```
+
+同时校验：`Form.model` 引用的模型必须存在（`ModelNotFound`）、`Import` 的文件必须存在、字段类型合法。
+
+## 6. 版本演进
+
+- IR 顶层 `version` 字符串，kengine 产出、渲染器校验
+- 新增组件类型 = 枚举加变体，**只加不改**，向后兼容
+- 破坏性变更 → 升大版本，渲染器做 `version` 分派
+
+## 7. 决策点
+
+| # | 决策点 | 建议 | 状态 |
+| :--- | :--- | :--- | :--- |
+| D1 | 数据模型文件位置 | `apps/<应用名>/models.kenvoy.xml` | 待确认 |
+| D2 | IR→HTML 位置 | 独立 crate `kengine-html` | 待确认 |
+| D3 | dev 服务器框架 | axum + notify + tokio | 待确认 |
+| D4 | demo 热更新 | 整页刷新；SSE/WebSocket 后置 | 待确认 |
+| D5 | 解析库 | roxmltree | 待确认 |
+| D6 | Node 表示 | tagged enum + Custom 兜底 | 已定（本文按此设计） |
