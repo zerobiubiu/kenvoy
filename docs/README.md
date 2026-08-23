@@ -4,6 +4,7 @@
 | :--- | :--- | :--- | :--- |
 | [01-ir-contract.md](./01-ir-contract.md) | 📋 接口契约 | 🔧 待执行 | kengine 与渲染器之间的 IR 中间表示契约（v0.1） |
 | [02-demo-plan.md](./02-demo-plan.md) | 🔧 开发指导 | 🔧 待执行 | demo 最小闭环实现清单（XML → IR → HTML） |
+| [03-project-structure.md](./03-project-structure.md) | 📄 参考说明 | 📄 参考 | 目标项目结构（源自设计会话） |
 | [history.md](./history.md) | 🧾 变更记录 | 📄 参考 | 项目变更历史（追加型，只增不改） |
 
 ## 推荐阅读顺序
