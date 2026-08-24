@@ -2,7 +2,7 @@
 //!
 //! 契约见 `docs/01-ir-contract.md`。渲染器只读 `IR`，不读 XML。
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -18,12 +18,12 @@ pub struct ProjectIr {
     pub version: String,
     /// 项目元信息。
     pub project: ProjectMeta,
-    /// 全部数据模型，按模型名索引。
+    /// 全部数据模型，按模型名索引（有序，保证序列化输出确定）。
     #[serde(default)]
-    pub models: HashMap<String, Model>,
-    /// 全部布局，按布局路径索引。
+    pub models: BTreeMap<String, Model>,
+    /// 全部布局，按布局路径索引（有序，保证序列化输出确定）。
     #[serde(default)]
-    pub layouts: HashMap<String, Layout>,
+    pub layouts: BTreeMap<String, Layout>,
     /// 全部页面。
     #[serde(default)]
     pub pages: Vec<Page>,
@@ -201,7 +201,7 @@ pub enum Node {
         /// 用户 DSL 中定义的组件名。
         component: String,
         #[serde(default)]
-        props: HashMap<String, Value>,
+        props: BTreeMap<String, Value>,
         #[serde(default)]
         children: Vec<Node>,
     },
@@ -435,7 +435,7 @@ mod tests {
             },
             Node::Custom {
                 component: "my-widget".into(),
-                props: HashMap::new(),
+                props: BTreeMap::new(),
                 children: vec![],
             },
         ];
@@ -467,7 +467,7 @@ mod tests {
     fn custom_node_tag_is_custom() {
         let json = serde_json::to_string(&Node::Custom {
             component: "my-widget".into(),
-            props: HashMap::new(),
+            props: BTreeMap::new(),
             children: vec![],
         })
         .unwrap();
@@ -483,7 +483,7 @@ mod tests {
                 name: "请假管理".into(),
                 description: Some("企业请假管理数字化平台".into()),
             },
-            models: HashMap::from([(
+            models: BTreeMap::from([(
                 "请假单".to_string(),
                 Model {
                     name: "请假单".into(),
@@ -510,7 +510,7 @@ mod tests {
                     ],
                 },
             )]),
-            layouts: HashMap::from([(
+            layouts: BTreeMap::from([(
                 "/".to_string(),
                 Layout {
                     path: "/".into(),

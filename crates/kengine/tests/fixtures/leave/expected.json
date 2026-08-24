@@ -1,0 +1,192 @@
+{
+  "version": "1.0",
+  "project": {
+    "name": "请假管理"
+  },
+  "models": {
+    "请假单": {
+      "name": "请假单",
+      "fields": [
+        {
+          "name": "申请人",
+          "type": "user",
+          "label": "申请人",
+          "required": false
+        },
+        {
+          "name": "请假天数",
+          "type": "number",
+          "label": "请假天数",
+          "required": false
+        },
+        {
+          "name": "请假类型",
+          "type": "select",
+          "label": "请假类型",
+          "options": [
+            "年假",
+            "病假",
+            "事假",
+            "调休"
+          ],
+          "required": false
+        },
+        {
+          "name": "事由",
+          "type": "textarea",
+          "label": "事由",
+          "required": false
+        }
+      ]
+    }
+  },
+  "layouts": {
+    "/": {
+      "path": "/",
+      "title": "Kenvoy 演示",
+      "root": {
+        "type": "Row",
+        "props": {},
+        "children": [
+          {
+            "type": "Section",
+            "props": {
+              "title": "导航"
+            },
+            "children": [
+              {
+                "type": "Text",
+                "props": {
+                  "value": "Kenvoy 请假管理"
+                }
+              }
+            ]
+          },
+          {
+            "type": "Slot"
+          }
+        ]
+      }
+    },
+    "/leave": {
+      "path": "/leave",
+      "title": "请假管理",
+      "root": {
+        "type": "Row",
+        "props": {},
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "请假应用导航"
+            }
+          },
+          {
+            "type": "Slot"
+          }
+        ]
+      }
+    }
+  },
+  "pages": [
+    {
+      "path": "/leave/apply",
+      "title": "填写请假单",
+      "layoutChain": [
+        "/",
+        "/leave"
+      ],
+      "content": {
+        "type": "Row",
+        "props": {},
+        "children": [
+          {
+            "type": "Section",
+            "props": {
+              "title": "请假信息"
+            },
+            "children": [
+              {
+                "type": "Form",
+                "props": {
+                  "model": "请假单"
+                },
+                "children": [
+                  {
+                    "type": "Field",
+                    "props": {
+                      "name": "申请人",
+                      "readonly": true,
+                      "required": false,
+                      "default": "{{currentUser.name}}"
+                    }
+                  },
+                  {
+                    "type": "Field",
+                    "props": {
+                      "name": "请假类型",
+                      "readonly": false,
+                      "required": false
+                    }
+                  },
+                  {
+                    "type": "Field",
+                    "props": {
+                      "name": "请假天数",
+                      "readonly": false,
+                      "required": false,
+                      "suffix": "天"
+                    }
+                  },
+                  {
+                    "type": "Field",
+                    "props": {
+                      "name": "事由",
+                      "readonly": false,
+                      "required": false,
+                      "rows": 4
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "/leave/list",
+      "title": "我的申请",
+      "layoutChain": [
+        "/",
+        "/leave"
+      ],
+      "content": {
+        "type": "Table",
+        "props": {
+          "model": "请假单",
+          "pageSize": 20
+        },
+        "children": [
+          {
+            "type": "Column",
+            "props": {
+              "field": "请假类型",
+              "label": "类型"
+            }
+          },
+          {
+            "type": "Column",
+            "props": {
+              "field": "请假天数",
+              "label": "天数",
+              "width": 80
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [],
+  "permissions": {}
+}

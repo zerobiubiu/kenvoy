@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Layout>
+  <Title>请假管理</Title>
+  <Root>
+    <Row>
+      <Text value="请假应用导航" />
+      <Slot />
+    </Row>
+  </Root>
+</Layout>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Layout>
+  <Title>Kenvoy 演示</Title>
+  <Root>
+    <Row>
+      <Section title="导航">
+        <Text value="Kenvoy 请假管理" />
+      </Section>
+      <Slot />
+    </Row>
+  </Root>
+</Layout>

@@ -4,6 +4,10 @@
 
 pub mod ir;
 
+mod parse;
+
+pub use parse::{ParseError, SourceFile, build_project};
+
 /// 引擎版本，与 workspace 版本一致。
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

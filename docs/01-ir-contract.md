@@ -125,8 +125,8 @@ pub const IR_VERSION: &str = "1.0";
 pub struct ProjectIr {
     pub version: String,
     pub project: ProjectMeta,
-    pub models: HashMap<String, Model>,
-    pub layouts: HashMap<String, Layout>,
+    pub models: BTreeMap<String, Model>,    // 有序：保证序列化输出确定（golden 测试/可复现）
+    pub layouts: BTreeMap<String, Layout>,
     pub pages: Vec<Page>,
     #[serde(default)]
     pub flows: Vec<Flow>,
@@ -150,7 +150,7 @@ pub enum Node {
     /// 用户 DSL 自定义组件（kengine 解析成子树，或透传给渲染器）
     #[serde(rename = "custom")]
     Custom  { component: String,
-              #[serde(default)] props: HashMap<String, Value>,
+              #[serde(default)] props: BTreeMap<String, Value>,
               #[serde(default)] children: Vec<Node> },
 }
 ```

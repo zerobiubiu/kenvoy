@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Models>
+  <Model name="请假单">
+    <Field name="申请人" type="user" label="申请人" />
+    <Field name="请假天数" type="number" label="请假天数" />
+    <Field name="请假类型" type="select" label="请假类型" options="年假,病假,事假,调休" />
+    <Field name="事由" type="textarea" label="事由" />
+  </Model>
+</Models>
