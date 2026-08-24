@@ -1,6 +1,11 @@
 /target/
 /**/target/
 
+/dist/
+/**/dist/
+/.kenvoy/
+/**/.kenvoy/
+
 .idea/
 .vscode/
 *.swp

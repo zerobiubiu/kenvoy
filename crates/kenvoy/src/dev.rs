@@ -3,6 +3,7 @@
 //! 按 D3/D4 决策：axum + notify + tokio；文件变更后整页刷新（轮询自动刷新，非 SSE/WS）。
 
 use std::fmt::Write;
+use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, mpsc};
 
@@ -30,16 +31,33 @@ struct BuildState {
 struct AppState {
     /// 项目根目录（包含 `apps/` 与 `public/`）。
     dir: PathBuf,
+    /// 项目描述（`kenvoy.toml`，可选）。
+    description: Option<String>,
     /// 当前构建状态。
     build: Arc<RwLock<BuildState>>,
 }
 
 /// 启动开发服务器。
-pub async fn run(dir: &Path, port: u16) -> anyhow::Result<()> {
+pub async fn run(
+    dir: &Path,
+    host: &str,
+    port: u16,
+    project_name: &str,
+    description: Option<String>,
+) -> anyhow::Result<()> {
     let build_state = Arc::new(RwLock::new(
-        build(dir).with_context(|| format!("构建项目失败：{}", dir.display()))?,
+        build(dir, project_name).with_context(|| format!("构建项目失败：{}", dir.display()))?,
     ));
-    spawn_watcher(dir.to_path_buf(), build_state.clone());
+    spawn_watcher(
+        dir.to_path_buf(),
+        project_name.to_string(),
+        build_state.clone(),
+    );
+    spawn_watcher(
+        dir.to_path_buf(),
+        project_name.to_string(),
+        build_state.clone(),
+    );
 
     let routes: Vec<String> = build_state
         .read()
@@ -52,6 +70,7 @@ pub async fn run(dir: &Path, port: u16) -> anyhow::Result<()> {
 
     let state = AppState {
         dir: dir.to_path_buf(),
+        description,
         build: build_state,
     };
     let app = Router::new()
@@ -60,7 +79,10 @@ pub async fn run(dir: &Path, port: u16) -> anyhow::Result<()> {
         .route("/{*path}", get(page_or_static))
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = (host, port)
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("无法解析监听地址 {host}:{port}"))?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("kenvoy dev 服务器已启动：http://{addr}");
     for route in &routes {
@@ -71,11 +93,16 @@ pub async fn run(dir: &Path, port: u16) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 扫描 `apps/` 并构建 `IR`。
-fn build(dir: &Path) -> anyhow::Result<BuildState> {
+/// 扫描 `apps/` 并解析为 `IR`（供 `dev` / `build` 复用）。
+pub(crate) fn build_ir(dir: &Path, project_name: &str) -> anyhow::Result<ProjectIr> {
     let mut files = Vec::new();
     collect_source_files(dir, &mut files)?;
-    let ir = build_project(&files, "kenvoy")?;
+    Ok(build_project(&files, project_name)?)
+}
+
+/// 扫描 `apps/` 并构建 `IR`。
+fn build(dir: &Path, project_name: &str) -> anyhow::Result<BuildState> {
+    let ir = build_ir(dir, project_name)?;
     Ok(BuildState { ir, version: 0 })
 }
 
@@ -108,7 +135,7 @@ fn walk_dir(dir: &Path, base: &Path, out: &mut Vec<SourceFile>) -> std::io::Resu
 }
 
 /// 启动文件监听：XML 变更（或目录结构增删）→ 合并事件 → 重建 `IR`。
-fn spawn_watcher(dir: PathBuf, state: Arc<RwLock<BuildState>>) {
+fn spawn_watcher(dir: PathBuf, project_name: String, state: Arc<RwLock<BuildState>>) {
     let (tx, rx) = mpsc::channel::<()>();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         if let Ok(event) = res {
@@ -140,19 +167,19 @@ fn spawn_watcher(dir: PathBuf, state: Arc<RwLock<BuildState>>) {
             while rx.try_recv().is_ok() {}
             std::thread::sleep(std::time::Duration::from_millis(200));
             while rx.try_recv().is_ok() {}
-            rebuild(&dir, &state);
+            rebuild(&dir, &project_name, &state);
         }
     });
 }
 
 /// 重建 `IR`：成功则替换并递增版本；失败则保留旧版本并打印错误。
-fn rebuild(dir: &Path, state: &RwLock<BuildState>) {
+fn rebuild(dir: &Path, project_name: &str, state: &RwLock<BuildState>) {
     let next_version = state
         .read()
         .expect("读取状态失败")
         .version
         .saturating_add(1);
-    match build(dir) {
+    match build(dir, project_name) {
         Ok(new_state) => {
             let mut s = state.write().expect("写入状态失败");
             s.ir = new_state.ir;
@@ -168,6 +195,11 @@ fn rebuild(dir: &Path, state: &RwLock<BuildState>) {
 /// 首页：页面索引。
 async fn index(State(state): State<AppState>) -> Html<String> {
     let ir = &state.build.read().expect("读取状态失败").ir;
+    let desc = state
+        .description
+        .as_deref()
+        .map(|d| format!("<p class=\"kv-desc\">{}</p>", escape_html(d)))
+        .unwrap_or_default();
     let mut links = String::new();
     for page in &ir.pages {
         let path = escape_html(&page.path);
@@ -176,7 +208,7 @@ async fn index(State(state): State<AppState>) -> Html<String> {
     }
     let html = format!(
         "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Kenvoy dev</title></head>\
-         <body><h1>Kenvoy dev</h1><p>选择页面：</p><ul>{links}</ul></body></html>"
+         <body><h1>Kenvoy dev</h1>{desc}<p>选择页面：</p><ul>{links}</ul></body></html>"
     );
     Html(html)
 }
@@ -288,7 +320,7 @@ mod tests {
 
     #[test]
     fn builds_example_project() {
-        let state = build(&example_dir()).expect("构建示例项目失败");
+        let state = build(&example_dir(), "测试").expect("构建示例项目失败");
         assert!(state.ir.pages.iter().any(|p| p.path == "/leave/apply"));
         assert!(state.ir.pages.iter().any(|p| p.path == "/leave/list"));
         assert!(state.ir.pages.iter().any(|p| p.path == "/dashboard"));
@@ -342,8 +374,8 @@ mod tests {
         )
         .expect("写入页面失败");
 
-        let build_state = Arc::new(RwLock::new(build(&dir).expect("构建失败")));
-        spawn_watcher(dir.clone(), build_state.clone());
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
+        spawn_watcher(dir.clone(), "测试".to_string(), build_state.clone());
 
         // 等 watcher 就绪后修改 XML
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -384,9 +416,10 @@ mod tests {
         use tower::ServiceExt;
 
         let dir = example_dir();
-        let build_state = Arc::new(RwLock::new(build(&dir).expect("构建失败")));
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
         let state = AppState {
             dir: dir.clone(),
+            description: None,
             build: build_state,
         };
         let app = Router::new()

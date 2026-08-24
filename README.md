@@ -158,7 +158,9 @@ cargo build --workspace
 cargo run -p kenvoy -- --help     # 查看命令
 cargo run -p kenvoy -- hello      # 打印问候语
 cargo run -p kenvoy -- info       # 显示引擎信息
-cargo run -p kenvoy -- dev --port 8080   # 自定义端口
+cargo run -p kenvoy -- init my-app --title 我的应用   # 初始化新项目骨架
+cargo run -p kenvoy -- build                          # 构建静态产物到 dist/
+cargo run -p kenvoy -- dev --port 8080                # 自定义端口
 cargo test --workspace            # 运行测试
 ```
 
@@ -174,7 +176,9 @@ cargo install kenvoy
 - [x] `kengine`：XML 解析子集（`<Layout>` / `<Page>` / `<Models>`）
 - [ ] `kengine`：`flow` / `publish` 解析
 - [x] `kenvoy` CLI：`kv dev`（扫描 apps/ → 解析 → 渲染 → 热更新预览）
-- [ ] `kenvoy` CLI：`kv init` / `kv build` / `kv deploy`
+- [x] `kenvoy` CLI：`kv init` / `kv build`
+- [ ] `kenvoy` CLI：`kv deploy`（需闭源 KenvoySpace，暂未开放）
+- [x] `kenvoy.toml` 配置读取（`[project]` / `[server]` / `[build]`）
 - [x] layout 逐级匹配与继承（`layoutChain` 解析）
 - [x] `kengine-html`：IR → HTML 渲染（SSR 核心，含 HTML 转义防 XSS）
 - [ ] 组件库（表单、表格、图表、布局容器）
