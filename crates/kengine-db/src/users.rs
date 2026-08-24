@@ -41,6 +41,31 @@ pub struct Role {
     pub description: Option<String>,
 }
 
+/// 用户详情（含角色名与账号等级）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserDetail {
+    /// 用户账号。
+    #[serde(flatten)]
+    pub user: User,
+    /// 角色名列表。
+    pub roles: Vec<String>,
+    /// 账号等级（最高角色等级）。
+    pub level: i32,
+}
+
+/// 部门（树形）。
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Department {
+    /// 部门 id。
+    pub id: i64,
+    /// 部门名。
+    pub name: String,
+    /// 上级部门 id。
+    pub parent_id: Option<i64>,
+    /// 排序。
+    pub sort_order: i32,
+}
+
 /// 通讯录人员（可无账号）。
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Contact {
@@ -256,6 +281,80 @@ impl<'a> UserStore<'a> {
         .fetch_one(self.pool)
         .await?;
         Ok(row.get("level"))
+    }
+
+    /// 用户的全部角色。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn user_roles(&self, user_id: i64) -> Result<Vec<Role>, DbError> {
+        Ok(sqlx::query_as::<_, Role>(
+            "SELECT r.id, r.name, r.level, r.description \
+             FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_all(self.pool)
+        .await?)
+    }
+
+    /// 用户列表（含角色与账号等级）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn list_users(&self) -> Result<Vec<UserDetail>, DbError> {
+        let users = sqlx::query_as::<_, User>(
+            "SELECT id, username, display_name, email, phone, status FROM users ORDER BY id",
+        )
+        .fetch_all(self.pool)
+        .await?;
+        let mut out = Vec::with_capacity(users.len());
+        for user in users {
+            let roles = self.user_roles(user.id).await?;
+            let level = self.user_level(user.id).await?;
+            out.push(UserDetail {
+                roles: roles.iter().map(|r| r.name.clone()).collect(),
+                level,
+                user,
+            });
+        }
+        Ok(out)
+    }
+
+    /// 删除会话（登出）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn delete_session(&self, token: &str) -> Result<(), DbError> {
+        sqlx::query("DELETE FROM sessions WHERE id = $1")
+            .bind(token)
+            .execute(self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// 列出全部部门。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn list_departments(&self) -> Result<Vec<Department>, DbError> {
+        Ok(sqlx::query_as::<_, Department>(
+            "SELECT id, name, parent_id, sort_order FROM departments ORDER BY sort_order, id",
+        )
+        .fetch_all(self.pool)
+        .await?)
+    }
+
+    /// 通讯录人员关联账号（人事 app 自动关联；`user_id` 可空表示解除关联）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn link_contact(&self, contact_id: i64, user_id: Option<i64>) -> Result<(), DbError> {
+        sqlx::query("UPDATE contacts SET user_id = $1 WHERE id = $2")
+            .bind(user_id)
+            .bind(contact_id)
+            .execute(self.pool)
+            .await?;
+        Ok(())
     }
 
     /// 创建部门（树形）。

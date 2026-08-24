@@ -94,3 +94,14 @@
   - 修复：handler 持锁跨 await 导致 Future 非 Send（clone 模型定义后释放锁）；校验对空值比较错误跳过（如 `结束日期 >= 开始日期` 字段未填时不阻断提交）
 - 冒烟：非法提交 400（只报对应错误）；合法提交 200 入库；重启服务器后数据保留（PG 持久化）
 - 已知限制：dev 服务器若未配置数据库连接回退内存模式；模型字段类型映射简化（date/select/user 等存 TEXT）；用户/通讯录/鉴权 API 尚未暴露 HTTP 端点（下一阶段 auth）
+
+### 执行验证记录（2026-08-23，auth 系统：HTTP API + CLI）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`；PG 集成测试经 `KENVOY_TEST_DATABASE_URL`
+- 结果：全部通过
+- 实现：
+  - `kengine-db` 扩展：`UserDetail`（含角色名+账号等级）、`user_roles` / `list_users` / `delete_session` / `list_departments` / `link_contact`（通讯录-账号关联）
+  - `kenvoy/src/auth.rs`：`/__kenvoy/auth/*` HTTP API（register / login / logout / me / users / roles+等级 / departments / contacts+关联）；Bearer token 会话
+  - `kenvoy/src/cli_auth.rs` + 子命令：`kv user add|list`、`kv role add|list`、`kv contact add|list`、`kv department add|list`（读 `kenvoy.toml [database].url`）
+- 冒烟（真实 PG 容器）：HTTP 注册/登录/分配角色后 `me` 显示等级 50；通讯录关联账号、无账号人员；登出后会话失效（401）；CLI 全流程（部门/角色/用户含角色分配/通讯录）
+- 已知限制：HTTP auth 端点尚未做权限分级（任何能连 dev 服务的人可注册/管理）；页面级/字段级鉴权与 `DataFilter` 未实现（下一阶段）；`register` 未做密码强度/账号唯一性业务校验（DB 唯一约束兜底）

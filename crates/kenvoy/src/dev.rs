@@ -72,6 +72,7 @@ pub async fn run(
         .map(|p| p.path.clone())
         .collect();
 
+    let db_for_auth = db.clone();
     let state = AppState {
         dir: dir.to_path_buf(),
         description,
@@ -84,6 +85,10 @@ pub async fn run(
         .route("/__kenvoy/version", get(version))
         .route("/__kenvoy/runtime.js", get(runtime_js))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
+        .nest(
+            "/__kenvoy/auth",
+            crate::auth::router().with_state(crate::auth::AuthState { db: db_for_auth }),
+        )
         .route("/{*path}", get(page_or_static))
         .with_state(state);
 

@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 use kengine::{self, EngineInfo};
 
+mod auth;
 mod build_cmd;
+mod cli_auth;
 mod config;
 mod dev;
 mod init;
@@ -10,6 +12,9 @@ mod init;
 #[derive(Parser, Debug)]
 #[command(name = "kenvoy", version, about, long_about = None)]
 struct Cli {
+    /// 项目根目录（含 `kenvoy.toml`，auth 管理命令使用）
+    #[arg(long, global = true, default_value = ".")]
+    dir: std::path::PathBuf,
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -56,9 +61,115 @@ enum Commands {
         #[arg(long, default_value = ".")]
         dir: std::path::PathBuf,
     },
+    /// 用户管理
+    User {
+        #[command(subcommand)]
+        cmd: UserCmd,
+    },
+    /// 角色管理（账号等级）
+    Role {
+        #[command(subcommand)]
+        cmd: RoleCmd,
+    },
+    /// 通讯录管理
+    Contact {
+        #[command(subcommand)]
+        cmd: ContactCmd,
+    },
+    /// 部门管理
+    Department {
+        #[command(subcommand)]
+        cmd: DepartmentCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum UserCmd {
+    /// 创建用户
+    Add {
+        /// 登录名
+        #[arg(long)]
+        username: String,
+        /// 密码
+        #[arg(long)]
+        password: String,
+        /// 显示名
+        #[arg(long)]
+        display_name: String,
+        /// 分配角色（按名称）
+        #[arg(long)]
+        role: Option<String>,
+    },
+    /// 列出用户
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+enum RoleCmd {
+    /// 创建角色
+    Add {
+        /// 角色名
+        #[arg(long)]
+        name: String,
+        /// 账号等级
+        #[arg(long)]
+        level: i32,
+        /// 描述
+        #[arg(long)]
+        description: Option<String>,
+    },
+    /// 列出角色
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+enum ContactCmd {
+    /// 新增通讯录人员
+    Add {
+        /// 姓名
+        #[arg(long)]
+        name: String,
+        /// 部门（按名称）
+        #[arg(long)]
+        department: Option<String>,
+        /// 关联账号（按用户名，可空=无账号人员）
+        #[arg(long)]
+        user: Option<String>,
+        /// 邮箱
+        #[arg(long)]
+        email: Option<String>,
+        /// 手机
+        #[arg(long)]
+        phone: Option<String>,
+        /// 职务
+        #[arg(long)]
+        title: Option<String>,
+    },
+    /// 列出通讯录
+    List {
+        /// 姓名关键字过滤
+        #[arg(long)]
+        keyword: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum DepartmentCmd {
+    /// 创建部门
+    Add {
+        /// 部门名
+        #[arg(long)]
+        name: String,
+        /// 上级部门（按名称）
+        #[arg(long)]
+        parent: Option<String>,
+    },
+    /// 列出部门
+    List,
 }
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)] // CLI 入口：子命令分支较多
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -106,6 +217,70 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Deploy { dir: _ }) => {
             println!("KenvoySpace 为闭源商业产品，部署命令暂未开放，请关注后续版本。");
+        }
+        Some(Commands::User { cmd }) => {
+            let dir = cli.dir.clone();
+            match cmd {
+                UserCmd::Add {
+                    username,
+                    password,
+                    display_name,
+                    role,
+                } => {
+                    cli_auth::user_add(&dir, &username, &password, &display_name, role.as_deref())
+                        .await?;
+                }
+                UserCmd::List => cli_auth::user_list(&dir).await?,
+            }
+        }
+        Some(Commands::Role { cmd }) => {
+            let dir = cli.dir.clone();
+            match cmd {
+                RoleCmd::Add {
+                    name,
+                    level,
+                    description,
+                } => cli_auth::role_add(&dir, &name, level, description.as_deref()).await?,
+                RoleCmd::List => cli_auth::role_list(&dir).await?,
+            }
+        }
+        Some(Commands::Contact { cmd }) => {
+            let dir = cli.dir.clone();
+            match cmd {
+                ContactCmd::Add {
+                    name,
+                    department,
+                    user,
+                    email,
+                    phone,
+                    title,
+                } => {
+                    cli_auth::contact_add(
+                        &dir,
+                        &name,
+                        department.as_deref(),
+                        user.as_deref(),
+                        email.as_deref(),
+                        phone.as_deref(),
+                        title.as_deref(),
+                    )
+                    .await?;
+                }
+                ContactCmd::List { keyword } => {
+                    cli_auth::contact_list(&dir, keyword.as_deref()).await?;
+                }
+            }
+        }
+        Some(Commands::Department { cmd }) => {
+            let dir = cli.dir.clone();
+            match cmd {
+                DepartmentCmd::Add { name, parent } => {
+                    cli_auth::dept_add(&dir, &name, parent.as_deref()).await?;
+                }
+                DepartmentCmd::List => {
+                    cli_auth::dept_list(&dir).await?;
+                }
+            }
         }
         None => {
             // 默认行为：提示 help
