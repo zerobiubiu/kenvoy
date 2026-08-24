@@ -36,3 +36,12 @@
 - 实现：新增 `crates/kengine-html`，`render_page(&ProjectIr, &Page) -> String`（纯函数无 I/O）；布局链嵌套 + `Slot` 替换；Form 按模型字段类型渲染控件（text/textarea/number/date/select/boolean/file）；Table 表头 + 空态；StatCard；未知元素（Custom）渲染为 `data-component` 容器；HTML 转义防 XSS；内置极简样式
 - 决策：D2（独立 crate `kengine-html`）落地
 - 已知限制：`filter` / `sort` / 分页数据未渲染（demo 空态）；客户端交互（提交/审批）未实现
+
+### 执行验证记录（2026-08-23，B4+B5 完成）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kenvoy 9 个测试，含 watcher 热重建与 HTTP 层测试）
+- 实现：`crates/kenvoy/src/dev.rs` 新增 `dev` 子命令（axum + notify + tokio）：扫描 `apps/` → `build_project` → `render_page` 实时渲染；`public/` 静态资源直出（防目录穿越）；文件变更合并重建（300ms 防抖）+ 轮询自动刷新（`/__kenvoy/version`）；示例项目 `examples/leave-app`（根布局 + 工作台 + 请假应用：申请表单 / 我的申请表格 / 数据模型）
+- 决策落地：D3（axum + notify + tokio）、D4（整页刷新，轮询非 SSE/WS）
+- 冒烟测试：`cargo run -p kenvoy -- dev` 启动，`/leave/apply` 返回 200 且含根布局与页面内容、`/hello.txt` 静态直出、404 正常
+- 已知限制：`kenvoy.toml` 配置尚未读取；`kv init` / `kv build` / `kv deploy` 未实现

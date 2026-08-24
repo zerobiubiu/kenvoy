@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>填写请假单</Title>
+  <Content>
+    <Row>
+      <Col span="8">
+        <Section title="请假信息">
+          <Form model="请假单">
+            <Field name="申请人" readonly="true" default="{{currentUser.name}}" />
+            <Field name="部门" readonly="true" default="{{currentUser.department}}" />
+            <Field name="请假类型" />
+            <Field name="开始日期" />
+            <Field name="结束日期" />
+            <Field name="请假天数" suffix="天" />
+            <Field name="事由" rows="4" />
+            <Field name="附件" />
+          </Form>
+        </Section>
+      </Col>
+      <Col span="4">
+        <Section title="温馨提示">
+          <Text value="1. 请提前 3 个工作日提交申请" />
+          <Text value="2. 3 天以上需人事总监审批" />
+          <Text value="3. 提交后不可修改" />
+        </Section>
+      </Col>
+    </Row>
+  </Content>
+</Page>

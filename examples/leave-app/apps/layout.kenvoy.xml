@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Layout>
+  <Title>Kenvoy 演示</Title>
+  <Root>
+    <Row>
+      <Section title="导航">
+        <Text value="Kenvoy 请假管理平台" />
+      </Section>
+      <Slot />
+      <Section title="页脚">
+        <Text value="© 2026 KenvoySpace · 汇批呈览" />
+      </Section>
+    </Row>
+  </Root>
+</Layout>

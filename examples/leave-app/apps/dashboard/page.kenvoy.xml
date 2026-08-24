@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>工作台</Title>
+  <Content>
+    <Row>
+      <Col span="4">
+        <StatCard data="统计(请假单.数量)" unit="次" color="blue" />
+      </Col>
+      <Col span="4">
+        <StatCard data="统计(请假单.数量)" unit="次" color="orange" />
+      </Col>
+      <Col span="4">
+        <StatCard data="统计(请假单.数量)" unit="%" color="green" />
+      </Col>
+    </Row>
+  </Content>
+</Page>

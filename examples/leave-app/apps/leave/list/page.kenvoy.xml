@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>我的申请</Title>
+  <Content>
+    <Table model="请假单" pageSize="20">
+      <Column field="请假类型" label="类型" />
+      <Column field="开始日期" label="开始" />
+      <Column field="结束日期" label="结束" />
+      <Column field="请假天数" label="天数" width="80" />
+      <Column field="事由" label="事由" />
+    </Table>
+  </Content>
+</Page>

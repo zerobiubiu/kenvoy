@@ -142,13 +142,23 @@ kenvoy/
 
 ## 快速开始
 
-当前为骨架阶段，仅提供最简 CLI：
+运行示例项目（请假管理 demo）：
+
+```bash
+cd examples/leave-app
+cargo run -p kenvoy -- dev          # 启动开发服务器，浏览器打开 http://127.0.0.1:5173
+```
+
+修改 `apps/` 下的 `.kenvoy.xml` 会自动重新构建并刷新页面。
+
+开发命令：
 
 ```bash
 cargo build --workspace
 cargo run -p kenvoy -- --help     # 查看命令
 cargo run -p kenvoy -- hello      # 打印问候语
 cargo run -p kenvoy -- info       # 显示引擎信息
+cargo run -p kenvoy -- dev --port 8080   # 自定义端口
 cargo test --workspace            # 运行测试
 ```
 
@@ -160,10 +170,13 @@ cargo install kenvoy
 
 ## 状态与路线图
 
-- [x] Workspace 骨架（kengine 库 + kenvoy CLI）
-- [ ] `kengine`：XML 解析器核心（layout / page / flow / publish）
-- [ ] `kenvoy` CLI：`kv init` / `kv dev`（热更新预览）/ `kv build` / `kv deploy`
-- [ ] layout 逐级匹配与继承
+- [x] Workspace 骨架（kengine 库 + kenvoy CLI + kengine-html）
+- [x] `kengine`：XML 解析子集（`<Layout>` / `<Page>` / `<Models>`）
+- [ ] `kengine`：`flow` / `publish` 解析
+- [x] `kenvoy` CLI：`kv dev`（扫描 apps/ → 解析 → 渲染 → 热更新预览）
+- [ ] `kenvoy` CLI：`kv init` / `kv build` / `kv deploy`
+- [x] layout 逐级匹配与继承（`layoutChain` 解析）
+- [x] `kengine-html`：IR → HTML 渲染（SSR 核心，含 HTML 转义防 XSS）
 - [ ] 组件库（表单、表格、图表、布局容器）
 - [ ] flow 审批流引擎
 - [ ] publish 权限控制
