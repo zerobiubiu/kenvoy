@@ -20,3 +20,4 @@ pedantic = "warn"
 kengine = { path = "crates/kengine", version = "0.1" }
 kengine-html = { path = "crates/kengine-html", version = "0.1" }
 kengine-db = { path = "crates/kengine-db", version = "0.1" }
+kengine-s3 = { path = "crates/kengine-s3", version = "0.1" }
