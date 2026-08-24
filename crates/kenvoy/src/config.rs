@@ -35,9 +35,16 @@ pub struct AuthConfig {
     /// 注册模式：`open`（公开注册，默认）/ `review`（审核注册，注册后需审核）/ `hr`（人事绑定式，关闭公开注册）。
     #[serde(default)]
     pub mode: String,
+    /// 管理端点（用户/角色/部门/通讯录、审核）所需的最低账号等级；缺省 90。
+    #[serde(default = "default_admin_level")]
+    pub admin_level: i32,
     /// 密码强度策略。
     #[serde(default)]
     pub password: PasswordConfig,
+}
+
+fn default_admin_level() -> i32 {
+    90
 }
 
 /// `[auth.password]` 段（密码强度校验）。

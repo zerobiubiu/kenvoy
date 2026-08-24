@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 
 use anyhow::Context;
 use axum::Router;
-use axum::extract::{Json, Multipart, Path as AxumPath, State};
+use axum::extract::{DefaultBodyLimit, Json, Multipart, Path as AxumPath, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
@@ -122,7 +122,10 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         .route("/assets/icons.css", get(icons_css))
         .route("/assets/tabler-icons.woff2", get(tabler_icons_woff2))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
-        .route("/__kenvoy/file", post(upload_file))
+        .route(
+            "/__kenvoy/file",
+            post(upload_file).layer(DefaultBodyLimit::max(upload_body_limit(storage))),
+        )
         .route("/__kenvoy/file/{id}", get(download_file))
         .nest(
             "/__kenvoy/auth",
@@ -426,6 +429,17 @@ fn s3_config(cfg: &StorageConfig) -> Option<kengine_s3::S3Config> {
         bucket: s.bucket.clone()?,
         access_key: s.access_key.clone()?,
         secret_key: s.secret_key.clone()?,
+    })
+}
+
+/// multipart body 上限（避免 axum 默认 2MB 隐藏瓶颈）：
+/// 配置 `[storage].max_size_mb` 时取「上限 + 2MB 缓冲」（保证业务层 413 优先）；
+/// 未配置时取 512MB（限制决策完全归业务层）。
+fn upload_body_limit(storage: &StorageConfig) -> usize {
+    storage.max_size_mb.map_or(512 * 1024 * 1024, |mb| {
+        usize::try_from(mb.saturating_mul(1024 * 1024))
+            .unwrap_or(usize::MAX)
+            .saturating_add(2 * 1024 * 1024)
     })
 }
 

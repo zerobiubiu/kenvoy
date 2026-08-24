@@ -21,6 +21,8 @@ secret_key = "minioadmin"
 [auth]
 # 注册模式：open（公开注册）| review（审核注册）| hr（人事绑定式，关闭公开注册）
 mode = "open"
+# 管理端点（用户/角色/部门/通讯录、审核）所需最低账号等级
+admin_level = 90
 # 密码强度：none | weak | medium | strong | custom
 [auth.password]
 strength = "none"

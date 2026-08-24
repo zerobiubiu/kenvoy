@@ -169,3 +169,13 @@
   7. **上传限制**（`[storage]`）：`max_size_mb`（超限 413）、`allowed_types`（支持 `image/*` 通配，不符 415）；`kv init` 骨架与示例 `kenvoy.toml` 附注释模板
 - 冒烟（真实 PG + MinIO）：open 注册 200；strong 弱密码 400（列出全部缺失项）；review 注册 pending → 登录 401 → 管理 token approve 204 → 登录 200；管理端点无 token 401；hr 注册 403；上传 txt 415、1.5MB 413；dev 图标资源 200；`public_path=/myapps` build 产物与引用全部带前缀
 - 已知限制：管理端点仅要求登录（未按账号等级分级，后续可加 level 门槛）；axum multipart 默认 2MB 字段上限（超过直接 400，未配置化）；`kv deploy` 保持占位（闭源 KenvoySpace）
+
+### 执行验证记录（2026-08-25，遗留限制收尾：管理等级门槛 + multipart 上限配置化）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过
+- 实现：
+  - **管理端点等级分级**：`[auth].admin_level`（缺省 90）；管理端点（用户/角色/部门/通讯录、审核）要求登录且账号等级 ≥ 门槛，不足返回 403 并提示所需等级（`require_admin`）；CLI 管理命令不受限（负责 bootstrap 管理员）
+  - **multipart 上限配置化**：配置 `[storage].max_size_mb` 时表单解析上限 = 上限 + 2MB 缓冲（业务层 413 语义优先）；未配置时默认 512MB（不再有 2MB 隐藏瓶颈，限制决策归业务层）
+- 冒烟（真实 PG + MinIO）：level 0 用户访问管理端点 403、level 90 管理员 200；未配置上传限制时 3MB 文件上传 200（此前 2MB 即被 axum 默认上限拦为 400）
+- 验证结论：✅ 通过；`kv deploy` 保持占位（闭源 KenvoySpace）

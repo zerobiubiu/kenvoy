@@ -21,7 +21,7 @@ pub fn run(dir: &Path, title: Option<&str>) -> Result<()> {
     std::fs::write(
         dir.join("kenvoy.toml"),
         format!(
-            "[project]\nname = \"{name}\"\n\n# 注册模式：open（公开注册）| review（审核注册）| hr（人事绑定式，关闭公开注册）\n# [auth]\n# mode = \"open\"\n# 密码强度：none | weak | medium | strong | custom（默认 none）\n# [auth.password]\n# strength = \"none\"\n\n# 对象存储（上传文件走 S3，写入 public/ 是被禁止的）\n# [storage]\n# endpoint = \"http://127.0.0.1:9000\"\n# region = \"us-east-1\"\n# bucket = \"kenvoy-dev\"\n# access_key = \"minioadmin\"\n# secret_key = \"minioadmin\"\n# max_size_mb = 10                  # 上传大小上限（缺省不限）\n# allowed_types = [\"image/*\", \"application/pdf\"]   # 类型白名单（缺省不限）\n"
+            "[project]\nname = \"{name}\"\n\n# 注册模式：open（公开注册）| review（审核注册）| hr（人事绑定式，关闭公开注册）\n# [auth]\n# mode = \"open\"\n# admin_level = 90      # 管理端点（用户/角色/部门/通讯录、审核）所需最低账号等级\n# 密码强度：none | weak | medium | strong | custom（默认 none）\n# [auth.password]\n# strength = \"none\"\n\n# 对象存储（上传文件走 S3，写入 public/ 是被禁止的）\n# [storage]\n# endpoint = \"http://127.0.0.1:9000\"\n# region = \"us-east-1\"\n# bucket = \"kenvoy-dev\"\n# access_key = \"minioadmin\"\n# secret_key = \"minioadmin\"\n# max_size_mb = 10                  # 上传大小上限（缺省不限，默认表单解析上限 512MB）\n# allowed_types = [\"image/*\", \"application/pdf\"]   # 类型白名单（缺省不限）\n"
         ),
     )?;
     std::fs::write(dir.join("apps/layout.kenvoy.xml"), ROOT_LAYOUT)?;

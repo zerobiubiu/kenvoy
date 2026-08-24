@@ -59,20 +59,35 @@ pub(crate) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-/// 管理端点前置校验：数据库可用 + 已登录（返回当前用户）。
-async fn require_login(
+/// 管理端点前置校验：数据库可用 + 已登录 + 账号等级达标（`[auth].admin_level`，缺省 90）。
+async fn require_admin(
     state: &AuthState,
     headers: &HeaderMap,
-) -> Result<User, (StatusCode, &'static str)> {
-    let pool = require_db(state).map_err(|c| (c, "数据库未配置"))?;
+) -> Result<User, (StatusCode, String)> {
+    let pool = require_db(state).map_err(|c| (c, "数据库未配置".to_string()))?;
     let Some(token) = bearer_token(headers) else {
-        return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token"));
+        return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token".to_string()));
     };
-    UserStore::new(pool)
+    let store = UserStore::new(pool);
+    let user = store
         .user_by_session(token)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误"))?
-        .ok_or((StatusCode::UNAUTHORIZED, "会话无效或已过期"))
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误".to_string()))?
+        .ok_or((StatusCode::UNAUTHORIZED, "会话无效或已过期".to_string()))?;
+    let level = store
+        .user_level(user.id)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误".to_string()))?;
+    if level < state.auth.admin_level {
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!(
+                "账号等级不足：管理操作需等级不低于 {}",
+                state.auth.admin_level
+            ),
+        ));
+    }
+    Ok(user)
 }
 
 async fn user_detail_json(
@@ -204,7 +219,7 @@ async fn me(State(state): State<AuthState>, headers: HeaderMap) -> Response {
 }
 
 async fn list_users(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -228,7 +243,7 @@ async fn assign_role(
     headers: HeaderMap,
     Json(req): Json<AssignRoleReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -253,7 +268,7 @@ async fn create_role(
     headers: HeaderMap,
     Json(req): Json<RoleReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -270,7 +285,7 @@ async fn create_role(
 }
 
 async fn list_roles(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -294,7 +309,7 @@ async fn set_role_level(
     headers: HeaderMap,
     Json(req): Json<LevelReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -321,7 +336,7 @@ async fn create_department(
     headers: HeaderMap,
     Json(req): Json<DepartmentReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -338,7 +353,7 @@ async fn create_department(
 }
 
 async fn list_departments(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -366,7 +381,7 @@ async fn add_contact(
     headers: HeaderMap,
     Json(req): Json<ContactReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -394,7 +409,7 @@ async fn list_contacts(
     headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<ContactListParams>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -426,7 +441,7 @@ async fn approve_user(
     Path(user_id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -445,7 +460,7 @@ async fn disable_user(
     Path(user_id): Path<i64>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
@@ -464,7 +479,7 @@ async fn link_contact(
     headers: HeaderMap,
     Json(req): Json<LinkUserReq>,
 ) -> Response {
-    if let Err((code, msg)) = require_login(&state, &headers).await {
+    if let Err((code, msg)) = require_admin(&state, &headers).await {
         return (code, msg).into_response();
     }
     let pool = match require_db(&state) {
