@@ -1,4 +1,8 @@
 //! `IR` 组件树 → HTML 片段渲染。
+//!
+//! 样式基于 [Tabler](https://github.com/tabler/tabler)（Bootstrap 5 风格）：
+//! 输出 Tabler/Bootstrap 类名（`row` / `col-md-*` / `card` / `form-control` / `table` 等），
+//! 保留 `kv-*` 语义类与 `data-*` 属性供客户端运行时与扩展使用。
 
 use std::fmt::Write;
 
@@ -18,26 +22,34 @@ pub(crate) fn render_node(ir: &ProjectIr, node: &Node, slot: &str) -> String {
     match node {
         Node::Row { children, .. } => {
             let body = render_nodes(ir, children, slot);
-            format!("<div class=\"kv-row\">{body}</div>")
+            format!("<div class=\"row kv-row\">{body}</div>")
         }
         Node::Col { props, children } => {
             let body = render_nodes(ir, children, slot);
-            let width = f64::from(props.span) * 100.0 / 12.0;
-            format!("<div class=\"kv-col\" style=\"width:{width:.0}%\">{body}</div>")
+            // Bootstrap 栅格：手机全宽（默认），`md` 断点起按 span/12 分栏
+            format!(
+                "<div class=\"col-md-{} kv-col\">{body}</div>",
+                props.span.clamp(1, 12)
+            )
         }
         Node::Section { props, children } => {
             let body = render_nodes(ir, children, slot);
             let title = props
                 .title
                 .as_deref()
-                .map(|t| format!("<h3 class=\"kv-section-title\">{}</h3>", escape_html(t)))
+                .map(|t| format!("<h3 class=\"card-title\">{}</h3>", escape_html(t)))
                 .unwrap_or_default();
-            format!("<section class=\"kv-section\">{title}{body}</section>")
+            format!(
+                "<div class=\"card kv-section\"><div class=\"card-body\">{title}{body}</div></div>"
+            )
         }
         Node::Slot => slot.to_string(),
-        Node::Form { props, children } => {
-            let model = ir.models.get(&props.model);
-            let model_name = escape_html(&props.model);
+        Node::Form {
+            props: form_props,
+            children,
+        } => {
+            let model_name = escape_html(&form_props.model);
+            let model = ir.models.get(&form_props.model);
             let fields: String = children
                 .iter()
                 .map(|c| match c {
@@ -76,7 +88,7 @@ pub(crate) fn render_node(ir: &ProjectIr, node: &Node, slot: &str) -> String {
     }
 }
 
-/// 渲染表单：按模型字段类型渲染控件。
+/// 渲染表单字段（Tabler `form-label` / `form-control` / `form-select`）。
 fn render_field(model: Option<&Model>, props: &FieldProps) -> String {
     let field_def = model.and_then(|m| m.fields.iter().find(|f| f.name == props.name));
     let field_type = field_def.map_or(FieldType::Text, |f| f.field_type);
@@ -104,7 +116,7 @@ fn render_field(model: Option<&Model>, props: &FieldProps) -> String {
                 .unwrap_or_default();
             let body = escape_html(props.default.as_deref().unwrap_or(""));
             format!(
-                "<textarea class=\"kv-control\" name=\"{name}\"{rows}{disabled}{required_attr}>{body}</textarea>"
+                "<textarea class=\"form-control kv-control\" name=\"{name}\"{rows}{disabled}{required_attr}>{body}</textarea>"
             )
         }
         FieldType::Select => {
@@ -115,40 +127,52 @@ fn render_field(model: Option<&Model>, props: &FieldProps) -> String {
                 let _ = write!(options_html, "<option value=\"{opt}\">{opt}</option>");
             }
             format!(
-                "<select class=\"kv-control\" name=\"{name}\"{disabled}{required_attr}>{options_html}</select>"
+                "<select class=\"form-select kv-control\" name=\"{name}\"{disabled}{required_attr}>{options_html}</select>"
             )
         }
         FieldType::Boolean => {
-            format!("<input class=\"kv-control\" type=\"checkbox\" name=\"{name}\"{disabled} />")
+            format!(
+                "<input class=\"form-check-input kv-control\" type=\"checkbox\" name=\"{name}\"{disabled} />"
+            )
         }
         FieldType::Number => {
             format!(
-                "<input class=\"kv-control\" type=\"number\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
+                "<input class=\"form-control kv-control\" type=\"number\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
             )
         }
         FieldType::Date => {
             format!(
-                "<input class=\"kv-control\" type=\"date\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
+                "<input class=\"form-control kv-control\" type=\"date\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
             )
         }
         FieldType::File => {
             format!(
-                "<input class=\"kv-control\" type=\"file\" name=\"{name}\"{disabled}{required_attr} />"
+                "<input class=\"form-control kv-control\" type=\"file\" name=\"{name}\"{disabled}{required_attr} />"
             )
         }
         _ => format!(
-            "<input class=\"kv-control\" type=\"text\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
+            "<input class=\"form-control kv-control\" type=\"text\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
         ),
     };
 
     let suffix = props
         .suffix
         .as_deref()
-        .map(|s| format!("<span class=\"kv-suffix\">{}</span>", escape_html(s)))
+        .map(|s| {
+            format!(
+                "<span class=\"input-group-text kv-suffix\">{}</span>",
+                escape_html(s)
+            )
+        })
         .unwrap_or_default();
+    let control_html = if suffix.is_empty() {
+        control
+    } else {
+        format!("<div class=\"input-group\">{control}{suffix}</div>")
+    };
 
     format!(
-        "<div class=\"kv-field\"><label class=\"kv-label\">{label_html}{required_mark}</label>{control}{suffix}</div>"
+        "<div class=\"mb-3 kv-field\"><label class=\"form-label kv-label\">{label_html}{required_mark}</label>{control_html}</div>"
     )
 }
 
@@ -161,7 +185,7 @@ fn options_for<'a>(props: &'a FieldProps, field_def: Option<&'a FieldDef>) -> &'
     }
 }
 
-/// 渲染数据表格：表头 + 空态（demo 暂无真实数据）。
+/// 渲染数据表格：`table-responsive`（移动端横向滚动）+ 表头 + 空态。
 fn render_table(ir: &ProjectIr, props: &TableProps, children: &[Node]) -> String {
     let head: String = children.iter().map(|c| render_node(ir, c, "")).collect();
     let empty = if children.is_empty() {
@@ -174,21 +198,23 @@ fn render_table(ir: &ProjectIr, props: &TableProps, children: &[Node]) -> String
     };
     let model_name = escape_html(&props.model);
     format!(
-        "<div class=\"kv-table-wrap\" data-model=\"{model_name}\"><table class=\"kv-table\"><thead><tr>{head}</tr></thead><tbody>{empty}</tbody></table></div>"
+        "<div class=\"table-responsive kv-table-wrap\" data-model=\"{model_name}\">\
+         <table class=\"table table-hover kv-table\"><thead><tr>{head}</tr></thead>\
+         <tbody>{empty}</tbody></table></div>"
     )
 }
 
-/// 渲染统计卡。
+/// 渲染统计卡（Tabler `card`）。
 fn render_stat_card(props: &StatCardProps) -> String {
     let data = props.data.as_deref().map(escape_html).unwrap_or_default();
     let unit = props.unit.as_deref().map(escape_html).unwrap_or_default();
-    let color = escape_html(props.color.as_deref().unwrap_or("blue"));
     let unit_html = if unit.is_empty() {
         String::new()
     } else {
-        format!("<span class=\"kv-stat-unit\">{unit}</span>")
+        format!("<span class=\"text-secondary kv-stat-unit\">{unit}</span>")
     };
     format!(
-        "<div class=\"kv-stat kv-stat-{color}\"><span class=\"kv-stat-data\">{data}</span>{unit_html}</div>"
+        "<div class=\"card kv-stat\"><div class=\"card-body text-center\">\
+         <div class=\"display-4 fw-bold kv-stat-data\">{data}</div>{unit_html}</div></div>"
     )
 }

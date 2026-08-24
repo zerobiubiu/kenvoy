@@ -105,3 +105,15 @@
   - `kenvoy/src/cli_auth.rs` + 子命令：`kv user add|list`、`kv role add|list`、`kv contact add|list`、`kv department add|list`（读 `kenvoy.toml [database].url`）
 - 冒烟（真实 PG 容器）：HTTP 注册/登录/分配角色后 `me` 显示等级 50；通讯录关联账号、无账号人员；登出后会话失效（401）；CLI 全流程（部门/角色/用户含角色分配/通讯录）
 - 已知限制：HTTP auth 端点尚未做权限分级（任何能连 dev 服务的人可注册/管理）；页面级/字段级鉴权与 `DataFilter` 未实现（下一阶段）；`register` 未做密码强度/账号唯一性业务校验（DB 唯一约束兜底）
+
+### 执行验证记录（2026-08-23，Tabler 组件 + 移动端 + 静态构建增强）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过
+- 实现：
+  - 引入 Tabler v1.3.0（MIT）：`crates/kengine-html/assets/tabler.min.css`（526KB，含 CSS 变量）；`kengine-html` 导出 `TABLER_CSS` / `RUNTIME_JS` 常量（`include_str!`）
+  - 渲染类名切换为 Tabler/Bootstrap：`row` / `col-md-{span}`（移动端全宽、md 断点分栏）、`card`+`card-body`+`card-title`、`form-control` / `form-select` / `form-check-input`、`table table-hover` + `table-responsive`（移动端横向滚动）、`btn btn-primary`（运行时提交按钮）；保留 `kv-*` 语义类与 `data-*` 属性
+  - 运行时 JS 从 `dev.rs` 提取为 `assets/runtime.js`（dev 与 build 共用），表单提交失败时弹出校验错误
+  - dev：新增 `/assets/tabler.min.css` 路由；build：输出 `assets/tabler.min.css` / `__kenvoy/runtime.js` / `__kenvoy/ir.json`，页面注入运行时脚本
+- 冒烟：页面含 Tabler 类名与栅格、CSS 200、build 产物完整
+- 已知限制：Tabler 图标字体未引入（图标显示为占位）；`public_path` 前缀未作用于 CSS/runtime 引用（build 默认根路径）；具体业务组件（日期范围、上传、图表、流程查看器）与 DSL 级自定义组件未实现

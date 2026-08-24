@@ -84,6 +84,7 @@ pub async fn run(
         .route("/", get(index))
         .route("/__kenvoy/version", get(version))
         .route("/__kenvoy/runtime.js", get(runtime_js))
+        .route("/assets/tabler.min.css", get(tabler_css))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
         .nest(
             "/__kenvoy/auth",
@@ -309,59 +310,25 @@ fn inject_dev_scripts(html: &str, version: u64) -> String {
     html.replace("</body>", &format!("{scripts}</body>"))
 }
 
-/// 客户端运行时 JS：表格数据渲染 + 表单提交（走 `/__kenvoy/data` API）。
-const RUNTIME_JS: &str = r#"
-(function () {
-  function escapeHtml(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
-    });
-  }
-  // 表格数据渲染
-  document.querySelectorAll("table[data-model]").forEach(function (table) {
-    var model = encodeURIComponent(table.getAttribute("data-model"));
-    var cols = Array.prototype.map.call(
-      table.querySelectorAll("th[data-field]"),
-      function (th) { return th.getAttribute("data-field"); }
-    );
-    fetch("/__kenvoy/data/" + model).then(function (r) { return r.json(); }).then(function (rows) {
-      var tbody = table.querySelector("tbody");
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td class="kv-empty" colspan="' + cols.length + '">暂无数据</td></tr>';
-        return;
-      }
-      tbody.innerHTML = rows.map(function (row) {
-        return "<tr>" + cols.map(function (c) {
-          return "<td>" + escapeHtml(row[c]) + "</td>";
-        }).join("") + "</tr>";
-      }).join("");
-    });
-  });
-  // 表单提交
-  document.querySelectorAll("form[data-model]").forEach(function (form) {
-    var model = encodeURIComponent(form.getAttribute("data-model"));
-    var submit = document.createElement("button");
-    submit.type = "submit";
-    submit.className = "kv-submit";
-    submit.textContent = "提交";
-    form.appendChild(submit);
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var data = {};
-      new FormData(form).forEach(function (v, k) { data[k] = v; });
-      fetch("/__kenvoy/data/" + model, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).then(function () { location.reload(); });
-    });
-  });
-})();
-"#;
-
 /// 返回客户端运行时 JS。
-async fn runtime_js() -> Html<&'static str> {
-    Html(RUNTIME_JS)
+async fn runtime_js() -> Response {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        kengine_html::RUNTIME_JS,
+    )
+        .into_response()
+}
+
+/// 返回 Tabler 样式。
+async fn tabler_css() -> Response {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        kengine_html::TABLER_CSS,
+    )
+        .into_response()
 }
 
 /// 列表数据：`GET /__kenvoy/data/{model}`。
@@ -625,6 +592,7 @@ mod tests {
             .route("/", get(index))
             .route("/__kenvoy/version", get(version))
             .route("/__kenvoy/runtime.js", get(runtime_js))
+            .route("/assets/tabler.min.css", get(tabler_css))
             .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
             .route("/{*path}", get(page_or_static))
             .with_state(state);

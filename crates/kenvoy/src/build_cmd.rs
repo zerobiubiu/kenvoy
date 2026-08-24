@@ -38,6 +38,11 @@ pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Resul
     let mut count = 0;
     for page in &ir.pages {
         let html = render_page(&ir, page);
+        // 静态产物注入客户端运行时（表格数据由宿主集成时通过 `__kenvoy/ir.json` 等接入）
+        let html = html.replace(
+            "</body>",
+            "<script src=\"/__kenvoy/runtime.js\"></script></body>",
+        );
         let rel = page.path.trim_start_matches('/');
         if rel.is_empty() {
             std::fs::write(out_dir.join("index.html"), html)?;
@@ -53,6 +58,22 @@ pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Resul
         let index = build_index(&ir);
         std::fs::write(out_dir.join("index.html"), index)?;
     }
+
+    // 样式与运行时资源
+    std::fs::create_dir_all(out_dir.join("assets"))?;
+    std::fs::write(
+        out_dir.join("assets/tabler.min.css"),
+        kengine_html::TABLER_CSS,
+    )?;
+    std::fs::create_dir_all(out_dir.join("__kenvoy"))?;
+    std::fs::write(
+        out_dir.join("__kenvoy/runtime.js"),
+        kengine_html::RUNTIME_JS,
+    )?;
+    std::fs::write(
+        out_dir.join("__kenvoy/ir.json"),
+        serde_json::to_string_pretty(&ir)?,
+    )?;
 
     copy_public(dir, &out_dir, cfg.build.public_path.as_deref())?;
 

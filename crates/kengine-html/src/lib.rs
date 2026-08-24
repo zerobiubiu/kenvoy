@@ -10,11 +10,19 @@ use kengine::ir::{Page, ProjectIr};
 
 use crate::escape::escape_html;
 
+/// Tabler 样式（MIT，v1.3.0），供 dev / build 输出到 `/assets/tabler.min.css`。
+pub const TABLER_CSS: &str = include_str!("../assets/tabler.min.css");
+
+/// 客户端运行时 JS（表格数据渲染 + 表单提交），供 dev / build 输出。
+pub const RUNTIME_JS: &str = include_str!("../assets/runtime.js");
+
 /// 渲染完整 HTML 文档（含布局链嵌套与页面内容）。
 ///
 /// `Page.layout_chain` 外层在前：根布局最先渲染，`Slot` 逐层注入内层布局，
 /// 最内层 `Slot` 注入页面内容。链中缺失的布局会被跳过（防御性处理，
 /// 正常情况下由 [`kengine::build_project`] 保证完整）。
+///
+/// 样式引用 `/assets/tabler.min.css`，由 dev 服务器 / build 产物提供。
 #[must_use]
 pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
     let title = escape_html(page.title.as_deref().unwrap_or(&page.path));
@@ -22,7 +30,10 @@ pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
     format!(
         "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
-         <title>{title}</title>\n<style>{STYLE}</style>\n</head>\n<body>\n{body}\n</body>\n</html>\n"
+         <title>{title}</title>\n\
+         <link rel=\"stylesheet\" href=\"/assets/tabler.min.css\">\n\
+         <style>\n.kv-form .form-label{{font-weight:600}}\n.kv-empty{{text-align:center;color:#6c757d}}\n.kv-custom{{border:1px dashed #ced4da;border-radius:8px;padding:8px;margin:8px}}\n</style>\n\
+         </head>\n<body>\n{body}\n</body>\n</html>\n"
     )
 }
 
@@ -37,30 +48,6 @@ fn render_body(ir: &ProjectIr, page: &Page) -> String {
     }
     inner
 }
-
-/// 内置极简样式。
-const STYLE: &str = r#"
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;color:#1f2328;background:#f6f8fa}
-.kv-row{display:flex;flex-wrap:wrap;gap:12px;padding:12px}
-.kv-col{flex:1 1 auto;min-width:0}
-.kv-section{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:16px;margin:12px}
-.kv-section-title{margin:0 0 12px;font-size:16px}
-.kv-form{display:flex;flex-direction:column;gap:12px}
-.kv-field{display:flex;align-items:center;gap:8px}
-.kv-label{width:110px;font-size:14px;flex:none}
-.kv-control{border:1px solid #d0d7de;border-radius:6px;padding:6px 8px;font-size:14px;flex:1}
-.kv-suffix{font-size:13px;color:#6e7781}
-.kv-table-wrap{margin:12px}
-.kv-table{width:100%;border-collapse:collapse;background:#fff}
-.kv-table th,.kv-table td{border:1px solid #d8dee4;padding:8px 12px;text-align:left;font-size:14px}
-.kv-table th{background:#f6f8fa}
-.kv-empty{text-align:center;color:#6e7781}
-.kv-stat{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:16px;text-align:center;margin:12px}
-.kv-stat-data{font-size:28px;font-weight:600;display:block}
-.kv-stat-unit{font-size:13px;color:#6e7781}
-.kv-text{font-size:14px}
-.kv-custom{border:1px dashed #d0d7de;border-radius:8px;padding:8px;margin:8px}
-"#;
 
 #[cfg(test)]
 mod tests {
