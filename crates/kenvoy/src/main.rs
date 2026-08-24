@@ -74,7 +74,26 @@ async fn main() -> anyhow::Result<()> {
             let name = config::resolve_name(&dir, &cfg, None);
             let host = cfg.server.host.as_deref().unwrap_or("127.0.0.1");
             let port = port.or(cfg.server.port).unwrap_or(5173);
-            dev::run(&dir, host, port, &name, cfg.project.description.clone()).await?;
+            let db = match &cfg.database.url {
+                Some(url) => match kengine_db::connect(url).await {
+                    Ok(pool) => match kengine_db::migrate(&pool).await {
+                        Ok(()) => {
+                            println!("已连接 PostgreSQL 并完成迁移");
+                            Some(pool)
+                        }
+                        Err(err) => {
+                            eprintln!("数据库迁移失败（使用内存模式）：{err}");
+                            None
+                        }
+                    },
+                    Err(err) => {
+                        eprintln!("连接数据库失败（使用内存模式）：{err}");
+                        None
+                    }
+                },
+                None => None,
+            };
+            dev::run(&dir, host, port, &name, cfg.project.description.clone(), db).await?;
         }
         Some(Commands::Init { name, title }) => {
             let target =

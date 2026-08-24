@@ -181,12 +181,12 @@ cargo install kenvoy
 - [x] 表达式引擎 `kengine::expr`（中文标识符、`{{ }}` 绑定、`empty()` / `非空`）
 - [x] 表单校验执行 `kengine::validation`
 - [x] 审批流状态机 `kengine::workflow`（推进/退回/条件/更新/通知）
-- [x] demo 客户端交互：表单提交 + 表格数据（dev 内存数据 API）
+- [x] demo 客户端交互：表单提交 + 表格数据（dev 数据 API）
+- [x] PostgreSQL 18+ 持久化（`kengine-db`：模型动态建表 + CRUD、用户/角色/部门/通讯录/会话/文件元数据表；dev 数据 API 接入 PG，表单校验接入提交）
 
 ### 规划中
 
-- [ ] PostgreSQL 18+ 持久化（模型数据 → PG 表；`storage_object` 文件元数据）
-- [ ] S3 对象存储抽象与文件上传（`public/` 不可运行时写入）
+- [ ] S3 对象存储抽象与文件上传（`public/` 不可运行时写入；`storage_object` 元数据表已就绪）
 - [ ] 用户与权限系统（`auth/` 原生：users / roles / departments / sessions；页面级 + 字段级鉴权；`DataFilter` 行级过滤）
 - [ ] 组件库扩展（日期范围、上传、图表、流程查看器；参考 [Tabler](https://github.com/tabler/tabler)）；DSL 级自定义组件（`<Component>` 内联 + `module/`）
 - [ ] 移动端自适应（`kv-col` 断点）

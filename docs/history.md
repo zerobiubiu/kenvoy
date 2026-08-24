@@ -82,3 +82,15 @@
 - 测试：expr 9 个、validation 4 个、workflow 4 个；golden fixture/示例申请页加入校验规则
 - 文档：新增 `docs/04-storage.md`（PG 18+ + S3）；`docs/03-project-structure.md` 增加 `auth/` 用户管理；README 路线图重排
 - 已知限制：校验/状态机为纯逻辑，尚未接入 dev 数据 API 与渲染器（下一阶段接 PG 持久化时一并接入）；`auth/` 用户系统未实现
+
+### 执行验证记录（2026-08-23，PostgreSQL 持久化）
+
+- 环境：Docker 容器 `kenvoy-pg18`（`postgres:18`，端口 5433，`postgres://kenvoy:kenvoy@127.0.0.1:5433/kenvoy`）
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`；PG 集成测试经 `KENVOY_TEST_DATABASE_URL` 连接容器
+- 结果：全部通过（kengine-db 5 个集成测试：模型中文列 CRUD、缺字段默认值、用户登录/会话、角色等级/通讯录、storage_object 元数据）
+- 实现：
+  - 新增 `crates/kengine-db`（PG 18+）：`schema`（8 张系统表迁移：users / roles / user_roles / departments / contacts / sessions / storage_object）、`models`（IR 模型动态建表 + insert/list，中文列名）、`users`（argon2 密码、会话 token、角色等级、通讯录含无账号人员）、`storage`（S3 元数据）
+  - `kenvoy` 接入：`kenvoy.toml` 增 `[database].url`；dev 数据 API 切 PG（连接失败回退内存模式）；POST 时执行表单校验（`<Validation>`，失败 400）
+  - 修复：handler 持锁跨 await 导致 Future 非 Send（clone 模型定义后释放锁）；校验对空值比较错误跳过（如 `结束日期 >= 开始日期` 字段未填时不阻断提交）
+- 冒烟：非法提交 400（只报对应错误）；合法提交 200 入库；重启服务器后数据保留（PG 持久化）
+- 已知限制：dev 服务器若未配置数据库连接回退内存模式；模型字段类型映射简化（date/select/user 等存 TEXT）；用户/通讯录/鉴权 API 尚未暴露 HTTP 端点（下一阶段 auth）

@@ -13,11 +13,14 @@ use axum::extract::{Json, Path as AxumPath, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use kengine::ir::ProjectIr;
+use kengine::ir::{Node, Page, ProjectIr, Validation};
+use kengine::validation;
 use kengine::{SourceFile, build_project};
+use kengine_db::ModelStore;
 use kengine_html::render_page;
 use notify::Watcher;
-use serde_json::Value;
+use serde_json::{Value, json};
+use sqlx::PgPool;
 
 /// 构建状态：解析后的 `IR` + 版本号（用于自动刷新）。
 struct BuildState {
@@ -36,7 +39,9 @@ struct AppState {
     description: Option<String>,
     /// 当前构建状态。
     build: Arc<RwLock<BuildState>>,
-    /// 内存数据存储（模型名 → 记录列表，demo 用）。
+    /// PostgreSQL 连接池（配置 `[database].url` 时启用；否则回退内存模式）。
+    db: Option<PgPool>,
+    /// 内存数据存储（模型名 → 记录列表，无数据库时的降级模式）。
     data: Arc<Mutex<std::collections::HashMap<String, Vec<Value>>>>,
 }
 
@@ -47,15 +52,11 @@ pub async fn run(
     port: u16,
     project_name: &str,
     description: Option<String>,
+    db: Option<PgPool>,
 ) -> anyhow::Result<()> {
     let build_state = Arc::new(RwLock::new(
         build(dir, project_name).with_context(|| format!("构建项目失败：{}", dir.display()))?,
     ));
-    spawn_watcher(
-        dir.to_path_buf(),
-        project_name.to_string(),
-        build_state.clone(),
-    );
     spawn_watcher(
         dir.to_path_buf(),
         project_name.to_string(),
@@ -75,6 +76,7 @@ pub async fn run(
         dir: dir.to_path_buf(),
         description,
         build: build_state,
+        db,
         data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     let app = Router::new()
@@ -358,29 +360,130 @@ async fn runtime_js() -> Html<&'static str> {
 }
 
 /// 列表数据：`GET /__kenvoy/data/{model}`。
-async fn list_data(
-    State(state): State<AppState>,
-    AxumPath(model): AxumPath<String>,
-) -> Json<Vec<Value>> {
-    let records = state
-        .data
-        .lock()
-        .expect("读取数据失败")
-        .get(&model)
-        .cloned()
-        .unwrap_or_default();
-    Json(records)
+async fn list_data(State(state): State<AppState>, AxumPath(model): AxumPath<String>) -> Response {
+    if let Some(pool) = &state.db {
+        let model_def = {
+            let build = state.build.read().expect("读取状态失败");
+            let Some(m) = build.ir.models.get(&model) else {
+                return (StatusCode::NOT_FOUND, "模型不存在").into_response();
+            };
+            m.clone()
+        };
+        let store = ModelStore::new(pool);
+        if let Err(err) = store.ensure(&model_def).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+        match store.list(&model_def).await {
+            Ok(rows) => Json(rows).into_response(),
+            Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+        }
+    } else {
+        let records = state
+            .data
+            .lock()
+            .expect("读取数据失败")
+            .get(&model)
+            .cloned()
+            .unwrap_or_default();
+        Json(records).into_response()
+    }
 }
 
 /// 创建数据：`POST /__kenvoy/data/{model}`。
+///
+/// 启用数据库时先执行表单校验（`<Validation>` 规则），失败返回 400。
 async fn create_data(
     State(state): State<AppState>,
     AxumPath(model): AxumPath<String>,
     Json(payload): Json<Value>,
-) -> Json<Value> {
-    let mut data = state.data.lock().expect("写入数据失败");
-    data.entry(model).or_default().push(payload.clone());
-    Json(payload)
+) -> Response {
+    if let Some(pool) = &state.db {
+        let (model_def, validations) = {
+            let build = state.build.read().expect("读取状态失败");
+            let Some(m) = build.ir.models.get(&model) else {
+                return (StatusCode::NOT_FOUND, "模型不存在").into_response();
+            };
+            (m.clone(), collect_validations(&build.ir.pages, &model))
+        };
+        let data_map: std::collections::HashMap<String, Value> = payload
+            .as_object()
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
+        let expr_data: std::collections::HashMap<String, kengine::expr::Value> = data_map
+            .iter()
+            .map(|(k, v)| (k.clone(), json_to_expr_value(v)))
+            .collect();
+        let errors = validation::validate(&validations, &expr_data);
+        if !errors.is_empty() {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
+        }
+        let store = ModelStore::new(pool);
+        if let Err(err) = store.ensure(&model_def).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+        match store.insert(&model_def, &data_map).await {
+            Ok(_) => Json(payload).into_response(),
+            Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+        }
+    } else {
+        let mut data = state.data.lock().expect("写入数据失败");
+        data.entry(model).or_default().push(payload.clone());
+        Json(payload).into_response()
+    }
+}
+
+/// `serde_json` 值 → 表达式引擎值。
+fn json_to_expr_value(v: &Value) -> kengine::expr::Value {
+    match v {
+        Value::Null => kengine::expr::Value::Null,
+        Value::Bool(b) => kengine::expr::Value::Bool(*b),
+        Value::Number(n) => kengine::expr::Value::Number(n.as_f64().unwrap_or(0.0)),
+        Value::String(s) => kengine::expr::Value::String(s.clone()),
+        Value::Array(a) => kengine::expr::Value::Array(a.iter().map(json_to_expr_value).collect()),
+        Value::Object(o) => kengine::expr::Value::Object(
+            o.iter()
+                .map(|(k, v)| (k.clone(), json_to_expr_value(v)))
+                .collect(),
+        ),
+    }
+}
+
+/// 收集页面树中引用指定模型的所有表单校验规则（按失败提示去重）。
+fn collect_validations(pages: &[Page], model_name: &str) -> Vec<Validation> {
+    let mut out = Vec::new();
+    for page in pages {
+        collect_node_validations(&page.content, model_name, &mut out);
+    }
+    out.sort_by_key(|v| v.message.clone());
+    out.dedup_by_key(|v| v.message.clone());
+    out
+}
+
+fn collect_node_validations(node: &Node, model_name: &str, out: &mut Vec<Validation>) {
+    match node {
+        Node::Form { props, children } => {
+            if props.model == model_name {
+                out.extend(props.validations.iter().cloned());
+            }
+            for child in children {
+                collect_node_validations(child, model_name, out);
+            }
+        }
+        Node::Row { children, .. }
+        | Node::Col { children, .. }
+        | Node::Section { children, .. }
+        | Node::Custom { children, .. } => {
+            for child in children {
+                collect_node_validations(child, model_name, out);
+            }
+        }
+        Node::Slot
+        | Node::Field { .. }
+        | Node::Table { .. }
+        | Node::Column { .. }
+        | Node::StatCard { .. }
+        | Node::Text { .. } => {}
+    }
 }
 
 /// 简易 HTML 转义（索引页标题/路径）。
@@ -510,6 +613,7 @@ mod tests {
             dir: dir.clone(),
             description: None,
             build: build_state,
+            db: None,
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()

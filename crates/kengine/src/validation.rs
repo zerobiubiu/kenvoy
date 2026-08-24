@@ -6,17 +6,19 @@ use crate::expr::{self, Context, Value};
 use crate::ir::Validation;
 
 /// 校验提交数据，返回失败提示列表（空列表 = 通过）。
+///
+/// 规则求值为 `false` 时记为失败；求值出错（如字段为空时 `结束日期 >= 开始日期`
+/// 无法比较）时跳过该规则，由 `required` / `非空` 类规则负责空值检查。
 #[must_use]
 #[allow(clippy::implicit_hasher)] // 内部 API，默认哈希器足够
 pub fn validate(validations: &[Validation], data: &HashMap<String, Value>) -> Vec<String> {
     let ctx = Context::from_map(data);
     let mut errors = Vec::new();
     for v in validations {
-        match expr::eval_bool(&v.expr, &ctx) {
-            Ok(true) => {}
-            Ok(false) => errors.push(v.message.clone()),
-            Err(err) => errors.push(format!("校验表达式 `{}` 无效：{err}", v.expr)),
+        if let Ok(false) = expr::eval_bool(&v.expr, &ctx) {
+            errors.push(v.message.clone());
         }
+        // 求值 `Ok(true)` / `Err` 均跳过：Err 常见于字段为空时无法比较
     }
     errors
 }
@@ -64,11 +66,11 @@ mod tests {
     }
 
     #[test]
-    fn invalid_expr_reports_error_message() {
-        let rules = vec![rule("请假天数 >", "不会用这条")];
+    fn eval_error_rule_is_skipped() {
+        // 空字段导致的比较错误应跳过，而非阻断提交
+        let rules = vec![rule("结束日期 >= 开始日期", "结束不能早于开始")];
         let errors = validate(&rules, &data());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].contains("校验表达式"));
+        assert!(errors.is_empty());
     }
 
     #[test]

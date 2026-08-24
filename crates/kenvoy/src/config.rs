@@ -1,6 +1,6 @@
 //! `kenvoy.toml` 项目配置读取。
 //!
-//! 对应目标项目结构的 `kenvoy.toml`（类似 `Cargo.toml`）：`[project]` / `[server]` / `[build]`。
+//! 对应目标项目结构的 `kenvoy.toml`（类似 `Cargo.toml`）：`[project]` / `[server]` / `[build]` / `[database]`。
 
 use std::path::Path;
 
@@ -18,6 +18,16 @@ pub struct KenvoyConfig {
     /// `[build]` 段。
     #[serde(default)]
     pub build: BuildConfig,
+    /// `[database]` 段。
+    #[serde(default)]
+    pub database: DatabaseConfig,
+}
+
+/// `[database]` 段（PostgreSQL 18+）。
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct DatabaseConfig {
+    /// 连接串（如 `postgres://kenvoy:kenvoy@127.0.0.1:5433/kenvoy`）。
+    pub url: Option<String>,
 }
 
 /// `[project]` 段。

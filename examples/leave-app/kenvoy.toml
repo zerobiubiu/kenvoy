@@ -4,3 +4,6 @@ description = "企业请假管理数字化平台"
 
 [server]
 port = 5173
+
+[database]
+url = "postgres://kenvoy:kenvoy@127.0.0.1:5433/kenvoy"
