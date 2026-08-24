@@ -17,6 +17,9 @@ use crate::config::{self, KenvoyConfig};
 use crate::dev;
 
 /// 执行构建。DB 可用时附带导出静态数据快照。
+///
+/// # Errors
+/// SQL 失败、文件写入失败、I/O 错误时返回。
 pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Result<()> {
     let project_name = config::resolve_name(dir, cfg, None);
     let ir = dev::build_ir(dir, &project_name, cfg.project.locale.as_deref())?;
@@ -51,7 +54,7 @@ pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) ->
 
     let mut count = 0;
     for page in &ir.pages {
-        let html = kengine_html::render_page_with_prefix(&ir, page, &prefix);
+        let html = kengine::html::render_page_with_prefix(&ir, page, &prefix);
         // 静态产物注入客户端运行时（表格数据由宿主集成时通过 `__kenvoy/ir.json` 等接入）
         let html = html.replace(
             "</body>",
@@ -75,14 +78,17 @@ pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) ->
 
     // 样式、图标与运行时资源
     std::fs::create_dir_all(root.join("assets"))?;
-    std::fs::write(root.join("assets/tabler.min.css"), kengine_html::TABLER_CSS)?;
-    std::fs::write(root.join("assets/icons.css"), kengine_html::ICONS_CSS)?;
+    std::fs::write(
+        root.join("assets/tabler.min.css"),
+        kengine::html::TABLER_CSS,
+    )?;
+    std::fs::write(root.join("assets/icons.css"), kengine::html::ICONS_CSS)?;
     std::fs::write(
         root.join("assets/tabler-icons.woff2"),
-        kengine_html::TABLER_ICONS_WOFF2,
+        kengine::html::TABLER_ICONS_WOFF2,
     )?;
     std::fs::create_dir_all(root.join("__kenvoy"))?;
-    std::fs::write(root.join("__kenvoy/runtime.js"), kengine_html::RUNTIME_JS)?;
+    std::fs::write(root.join("__kenvoy/runtime.js"), kengine::html::RUNTIME_JS)?;
     std::fs::write(
         root.join("__kenvoy/ir.json"),
         serde_json::to_string_pretty(&ir)?,
@@ -104,16 +110,16 @@ pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) ->
 
 /// 导出各模型数据快照（`__kenvoy/data/{模型}.json`，公开内容，注意隐私）。
 async fn export_static_data(url: &str, ir: &kengine::ir::ProjectIr, root: &Path) -> Result<usize> {
-    let pool = kengine_db::connect(url).await.context("连接数据库失败")?;
-    kengine_db::migrate(&pool).await.context("数据库迁移失败")?;
+    let pool = crate::db::connect(url).await.context("连接数据库失败")?;
+    crate::db::migrate(&pool).await.context("数据库迁移失败")?;
     let data_dir = root.join("__kenvoy/data");
     std::fs::create_dir_all(&data_dir)?;
     let mut count = 0;
     for model in ir.models.values() {
-        kengine_db::models::ensure_model_table(&pool, model)
+        crate::db::models::ensure_model_table(&pool, model)
             .await
             .context("确保模型表失败")?;
-        let rows = kengine_db::models::list_records(&pool, model)
+        let rows = crate::db::models::list_records(&pool, model)
             .await
             .context("读取模型数据失败")?;
         std::fs::write(

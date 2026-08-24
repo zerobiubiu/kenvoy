@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
-use crate::DbError;
+use crate::db::DbError;
 
 /// 存储对象元数据。
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

@@ -5,6 +5,9 @@ use std::path::Path;
 use anyhow::Result;
 
 /// 在指定目录创建项目骨架（拒绝覆盖已有项目）。
+///
+/// # Errors
+/// 目录已存在、I/O 失败时返回。
 pub fn run(dir: &Path, title: Option<&str>) -> Result<()> {
     if dir.join("kenvoy.toml").exists() || dir.join("apps").exists() {
         anyhow::bail!("{} 已存在 Kenvoy 项目，拒绝初始化", dir.display());

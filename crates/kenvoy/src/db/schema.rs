@@ -4,7 +4,7 @@
 
 use sqlx::PgPool;
 
-use crate::DbError;
+use crate::db::DbError;
 
 /// schema 版本。
 pub const SCHEMA_VERSION: &str = "1.0";

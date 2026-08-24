@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Component name="进度徽章">
+  <Section title="{{title}}">
+    <Slot />
+  </Section>
+</Component>

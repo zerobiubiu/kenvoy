@@ -11,12 +11,12 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use kengine::ir::{
+use crate::ir::{
     FieldDef, FieldProps, FieldType, Model, Node, ProjectIr, StatCardProps, TableProps,
 };
 use serde_json::Value;
 
-use crate::escape::escape_html;
+use crate::html::escape::escape_html;
 
 /// 自定义组件展开的最大嵌套深度（防相互引用导致无限递归）。
 const MAX_COMPONENT_DEPTH: u32 = 8;
@@ -143,7 +143,7 @@ pub(crate) fn render_node(
 /// 文本内容：`i18n` 键命中翻译表（项目默认语言）时取翻译，否则原值（含 `{{名}}` 绑定）。
 fn translate(
     ir: &ProjectIr,
-    props: &kengine::ir::TextProps,
+    props: &crate::ir::TextProps,
     bind: &BTreeMap<String, Value>,
 ) -> String {
     if let Some(key) = &props.i18n
@@ -156,7 +156,7 @@ fn translate(
 }
 
 /// 渲染流程查看器：节点步骤条（节点名 + 审批人）。
-fn render_flow_viewer(ir: &ProjectIr, props: &kengine::ir::FlowViewerProps) -> String {
+fn render_flow_viewer(ir: &ProjectIr, props: &crate::ir::FlowViewerProps) -> String {
     let Some(flow) = ir.flows.iter().find(|f| f.name == props.flow) else {
         return format!(
             "<div class=\"kv-flow-viewer\" data-flow=\"{}\">流程不存在</div>",

@@ -1,26 +1,26 @@
-//! kengine-html — `IR` → HTML 渲染器（纯函数，无 I/O）。
+//! kengine HTML 渲染器 — `IR` → HTML（纯函数，无 I/O）。
 //!
-//! 将 [`kengine::ir::ProjectIr`] 渲染为可打开的 HTML 文档。
+//! 将 [`crate::ir::ProjectIr`] 渲染为可打开的 HTML 文档。
 //! 定位为长期 SSR / 边缘渲染核心；客户端运行时（如 Leptos）在此基础上做水合（hydration）。
 
 mod escape;
 mod render;
 
-use kengine::ir::{Page, ProjectIr};
+use crate::ir::{Page, ProjectIr};
 
-use crate::escape::escape_html;
+use crate::html::escape::escape_html;
 
 /// Tabler 样式（MIT，v1.3.0），供 dev / build 输出到 `/assets/tabler.min.css`。
-pub const TABLER_CSS: &str = include_str!("../assets/tabler.min.css");
+pub const TABLER_CSS: &str = include_str!("../../assets/tabler.min.css");
 
 /// Tabler 图标子集样式（`@font-face` + 常用 `.ti-*`），供 dev / build 输出到 `/assets/icons.css`。
-pub const ICONS_CSS: &str = include_str!("../assets/icons.css");
+pub const ICONS_CSS: &str = include_str!("../../assets/icons.css");
 
 /// Tabler 图标字体（woff2，MIT，Tabler Icons v2.47），供 dev / build 输出到 `/assets/tabler-icons.woff2`。
-pub const TABLER_ICONS_WOFF2: &[u8] = include_bytes!("../assets/tabler-icons.woff2");
+pub const TABLER_ICONS_WOFF2: &[u8] = include_bytes!("../../assets/tabler-icons.woff2");
 
 /// 客户端运行时 JS（表格数据渲染 + 表单提交），供 dev / build 输出。
-pub const RUNTIME_JS: &str = include_str!("../assets/runtime.js");
+pub const RUNTIME_JS: &str = include_str!("../../assets/runtime.js");
 
 /// 渲染完整 HTML 文档（含布局链嵌套与页面内容）。
 ///
@@ -34,7 +34,7 @@ pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
 ///
 /// `Page.layout_chain` 外层在前：根布局最先渲染，`Slot` 逐层注入内层布局，
 /// 最内层 `Slot` 注入页面内容。链中缺失的布局会被跳过（防御性处理，
-/// 正常情况下由 [`kengine::build_project`] 保证完整）。
+/// 正常情况下由 [`crate::build_project`] 保证完整）。
 #[must_use]
 pub fn render_page_with_prefix(ir: &ProjectIr, page: &Page, prefix: &str) -> String {
     let asset = |path: &str| format!("{prefix}{path}");
@@ -69,7 +69,7 @@ fn render_body(ir: &ProjectIr, page: &Page) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kengine::{SourceFile, build_project};
+    use crate::{SourceFile, build_project};
 
     fn build(files: &[(&str, &str)]) -> ProjectIr {
         let files: Vec<SourceFile> = files

@@ -17,7 +17,5 @@ warnings = "warn"
 pedantic = "warn"
 
 [workspace.dependencies]
+# `kenvoy` 的 features（db / s3）由其 Cargo.toml 直接声明
 kengine = { path = "crates/kengine", version = "0.1" }
-kengine-html = { path = "crates/kengine-html", version = "0.1" }
-kengine-db = { path = "crates/kengine-db", version = "0.1" }
-kengine-s3 = { path = "crates/kengine-s3", version = "0.1" }

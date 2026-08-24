@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Row};
 use uuid::Uuid;
 
-use crate::DbError;
+use crate::db::DbError;
 
 /// 用户账号。
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

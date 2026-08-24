@@ -4,13 +4,13 @@
 //! 用户与角色管理（账号等级）、部门、通讯录（含「人事新增人员但不需要账号」与账号关联）。
 //! 管理端点（用户/角色/部门/通讯录、审核）要求登录；注册模式与密码强度由 `kenvoy.toml [auth]` 配置。
 
+use crate::db::UserStore;
+use crate::db::users::User;
 use axum::Router;
 use axum::extract::{Json, Path, State};
 use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use kengine_db::UserStore;
-use kengine_db::users::User;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -92,7 +92,7 @@ async fn require_admin(
 
 async fn user_detail_json(
     store: &UserStore<'_>,
-    user: &kengine_db::users::User,
+    user: &crate::db::users::User,
 ) -> Result<Value, String> {
     let roles = store.user_roles(user.id).await.map_err(|e| e.to_string())?;
     let level = store.user_level(user.id).await.map_err(|e| e.to_string())?;

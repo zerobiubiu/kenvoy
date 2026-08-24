@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use sqlx::types::Json;
 use sqlx::{PgPool, Row};
 
-use crate::DbError;
+use crate::db::DbError;
 
 /// 业务表名：`kv_<模型名>`（中文模型名可直接作标识符，PG 支持 Unicode）。
 #[must_use]

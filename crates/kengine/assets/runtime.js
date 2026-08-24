@@ -28,12 +28,16 @@
     box.innerHTML =
       '<div class="card" style="width:340px;max-width:90vw">' +
       '<div class="card-body">' +
-      '<h3 class="card-title mb-3">登录 Kenvoy</h3>' +
+      '<h3 class="card-title mb-3" id="kv-login-title">登录 Kenvoy</h3>' +
       '<div id="kv-login-err" class="alert alert-danger py-1 px-2" style="display:none;font-size:.85rem"></div>' +
-      '<div class="mb-3"><input id="kv-login-user" class="form-control" placeholder="用户名" autocomplete="username"></div>' +
-      '<div class="mb-3"><input id="kv-login-pass" class="form-control" type="password" placeholder="密码" autocomplete="current-password"></div>' +
+      '<div id="kv-login-fields"><div class="mb-3"><input id="kv-login-user" class="form-control" placeholder="用户名" autocomplete="username"></div>' +
+      '<div class="mb-3"><input id="kv-login-pass" class="form-control" type="password" placeholder="密码" autocomplete="current-password"></div></div>' +
       '<button id="kv-login-btn" class="btn btn-primary w-100">登 录</button>' +
-      '<button id="kv-logout-btn" class="btn btn-outline-secondary w-100 mt-2" style="display:none">退出登录</button>' +
+      '<div class="d-flex justify-content-between mt-2">' +
+      '<button id="kv-login-switch" class="btn btn-link btn-sm p-0" type="button">注册账号</button>' +
+      '<button id="kv-login-forgot" class="btn btn-link btn-sm p-0" type="button">忘记密码</button>' +
+      '</div>' +
+      '<button id="kv-logout-btn" class="btn btn-outline-secondary w-100 mt-3" style="display:none">退出登录</button>' +
       "</div></div>";
     document.body.appendChild(box);
   }
@@ -51,8 +55,45 @@
     }
     err.style.display = "none";
     pendingAfterLogin = onLogin;
+    setLoginMode(getLoginMode());
     box.style.display = "flex";
-    document.getElementById("kv-login-user").focus();
+    var focusEl = document.getElementById(getLoginMode() === "register" ? "kv-login-user" : "kv-login-user");
+    if (focusEl) focusEl.focus();
+  }
+
+  // 登录界面模式：'login' / 'register' / 'forgot'
+  function getLoginMode() {
+    return document.getElementById("kv-login-box").getAttribute("data-mode") || "login";
+  }
+  function setLoginMode(mode) {
+    var box = document.getElementById("kv-login-box");
+    box.setAttribute("data-mode", mode);
+    var title = document.getElementById("kv-login-title");
+    var btn = document.getElementById("kv-login-btn");
+    var fields = document.getElementById("kv-login-fields");
+    var pass = document.getElementById("kv-login-pass");
+    if (mode === "register") {
+      title.textContent = "注册 Kenvoy 账号";
+      btn.textContent = "注 册";
+      // 注册多一个“显示名”字段
+      if (!document.getElementById("kv-login-display")) {
+        var wrap = document.createElement("div");
+        wrap.className = "mb-3";
+        wrap.innerHTML = '<input id="kv-login-display" class="form-control" placeholder="显示名">';
+        fields.insertBefore(wrap, pass.parentNode);
+      }
+    } else if (mode === "forgot") {
+      title.textContent = "重置密码";
+      btn.textContent = "发送重置链接";
+      var disp = document.getElementById("kv-login-display");
+      if (disp) disp.parentNode.removeChild(disp);
+    } else {
+      title.textContent = "登录 Kenvoy";
+      btn.textContent = "登 录";
+      var disp2 = document.getElementById("kv-login-display");
+      if (disp2) disp2.parentNode.removeChild(disp2);
+    }
+    err.style.display = "none";
   }
 
   function hideLogin() {
@@ -89,6 +130,52 @@
       err.textContent = e.message;
       err.style.display = "block";
     });
+  }
+
+  // 注册：调 `POST /__kenvoy/auth/register`；需数据库允许（open/review 模式）。
+  // hr 模式（关闭公开注册）将收到 403。
+  function doRegister() {
+    var username = document.getElementById("kv-login-user").value.trim();
+    var display = (document.getElementById("kv-login-display") || { value: "" }).value.trim();
+    var password = document.getElementById("kv-login-pass").value;
+    var err = document.getElementById("kv-login-err");
+    if (!username || !password || !display) {
+      err.textContent = "请填写用户名、显示名和密码";
+      err.style.display = "block";
+      return;
+    }
+    fetch("/__kenvoy/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password: password, display_name: display }),
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) throw new Error((d.errors || [d]).join("\n") || "注册失败（HTTP " + r.status + "）");
+        return d;
+      });
+    }).then(function () {
+      // 注册成功后自动尝试登录
+      setLoginMode("login");
+      document.getElementById("kv-login-pass").value = password;
+      doLogin();
+    }).catch(function (e) {
+      err.textContent = e.message;
+      err.style.display = "block";
+    });
+  }
+
+  // 忘记密码：占位实现（需要邮箱发送链路，后续接入）
+  function doForgot() {
+    var username = document.getElementById("kv-login-user").value.trim();
+    var err = document.getElementById("kv-login-err");
+    if (!username) {
+      err.textContent = "请输入用户名（联系管理员重置或后续接入邮箱重置）";
+      err.style.display = "block";
+      return;
+    }
+    err.style.display = "block";
+    err.className = "alert alert-info py-1 px-2";
+    err.textContent = "重置密码请联系管理员（邮箱重置链路未启用）";
   }
 
   function doLogout() {
@@ -237,10 +324,22 @@
   });
 
   // ---- 登录 / 登出 / Enter 事件 ----
+  // ---- 事件绑定（登录 / 登出 / Enter / 模式切换） ----
   ensureLoginBox();
   document.addEventListener("click", function (ev) {
-    if (ev.target && ev.target.id === "kv-login-btn") doLogin();
+    if (ev.target && ev.target.id === "kv-login-btn") {
+      var mode = getLoginMode();
+      if (mode === "register") doRegister();
+      else if (mode === "forgot") doforgot();
+      else doLogin();
+    }
     if (ev.target && ev.target.id === "kv-logout-btn") doLogout();
+    if (ev.target && ev.target.id === "kv-login-switch") {
+      setLoginMode(getLoginMode() === "register" ? "login" : "register");
+    }
+    if (ev.target && ev.target.id === "kv-login-forgot") {
+      setLoginMode("forgot");
+    }
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Enter" && document.getElementById("kv-login-box") &&

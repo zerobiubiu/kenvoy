@@ -1083,57 +1083,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "kengine-db"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "chrono",
- "kengine",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.20",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "kengine-html"
-version = "0.1.0"
-dependencies = [
- "kengine",
- "serde_json",
-]
-
-[[package]]
-name = "kengine-s3"
-version = "0.1.0"
-dependencies = [
- "rust-s3",
- "serde",
- "thiserror 2.0.20",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "kenvoy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "argon2",
  "axum",
+ "chrono",
  "clap",
  "kengine",
- "kengine-db",
- "kengine-html",
- "kengine-s3",
  "notify",
+ "rust-s3",
  "serde",
  "serde_json",
  "sqlx",
+ "thiserror 2.0.20",
  "tokio",
  "toml",
  "tower",
+ "uuid",
 ]
 
 [[package]]

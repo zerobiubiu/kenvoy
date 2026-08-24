@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
+use crate::db::UserStore;
 use anyhow::{Context, Result};
-use kengine_db::UserStore;
 use sqlx::PgPool;
 
 use crate::config;
@@ -16,12 +16,12 @@ async fn connect(dir: &Path) -> Result<PgPool> {
         .url
         .as_deref()
         .context("kenvoy.toml 未配置 [database].url")?;
-    let pool = kengine_db::connect(url).await?;
-    kengine_db::migrate(&pool).await?;
+    let pool = crate::db::connect(url).await?;
+    crate::db::migrate(&pool).await?;
     Ok(pool)
 }
 
-async fn find_role(store: &UserStore<'_>, name: &str) -> Result<kengine_db::users::Role> {
+async fn find_role(store: &UserStore<'_>, name: &str) -> Result<crate::db::users::Role> {
     store
         .list_roles()
         .await?
@@ -51,6 +51,10 @@ async fn find_dept(store: &UserStore<'_>, name: &str) -> Result<i64> {
 }
 
 /// 创建用户（可选分配角色）。
+/// 添加用户（CLI）。
+///
+/// # Errors
+/// 数据库错误、用户名冲突、密码强度不符时返回。
 pub async fn user_add(
     dir: &Path,
     username: &str,
@@ -77,6 +81,10 @@ pub async fn user_add(
 }
 
 /// 列出用户（含角色与账号等级）。
+/// 列出用户（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn user_list(dir: &Path) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
@@ -94,6 +102,10 @@ pub async fn user_list(dir: &Path) -> Result<()> {
 }
 
 /// 创建角色（账号等级）。
+/// 创建角色（CLI）。
+///
+/// # Errors
+/// 数据库错误、角色名重复时返回。
 pub async fn role_add(dir: &Path, name: &str, level: i32, description: Option<&str>) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
@@ -103,6 +115,10 @@ pub async fn role_add(dir: &Path, name: &str, level: i32, description: Option<&s
 }
 
 /// 列出角色。
+/// 列出角色（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn role_list(dir: &Path) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
@@ -119,6 +135,10 @@ pub async fn role_list(dir: &Path) -> Result<()> {
 }
 
 /// 新增通讯录人员（可无账号；`--user` 关联账号）。
+/// 新增通讯录人员（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn contact_add(
     dir: &Path,
     name: &str,
@@ -152,6 +172,10 @@ pub async fn contact_add(
 }
 
 /// 列出通讯录。
+/// 列出通讯录（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn contact_list(dir: &Path, keyword: Option<&str>) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
@@ -171,6 +195,10 @@ pub async fn contact_list(dir: &Path, keyword: Option<&str>) -> Result<()> {
 }
 
 /// 创建部门。
+/// 创建部门（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn dept_add(dir: &Path, name: &str, parent: Option<&str>) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
@@ -184,6 +212,10 @@ pub async fn dept_add(dir: &Path, name: &str, parent: Option<&str>) -> Result<()
 }
 
 /// 列出部门。
+/// 列出部门（CLI）。
+///
+/// # Errors
+/// 数据库错误时返回。
 pub async fn dept_list(dir: &Path) -> Result<()> {
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);

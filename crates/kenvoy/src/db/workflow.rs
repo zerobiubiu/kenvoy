@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Row};
 
-use crate::DbError;
+use crate::db::DbError;
 
 /// 审批流实例。
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -99,5 +99,39 @@ impl<'a> FlowStore<'a> {
         .execute(self.pool)
         .await?;
         Ok(())
+    }
+
+    /// 撤回：`running` → `withdrawn`（仅发起人可调用，dev 层校验）。
+    ///
+    /// # Errors
+    /// SQL 失败或实例不存在时返回 [`DbError`]。
+    pub async fn withdraw(&self, id: i64) -> Result<(), DbError> {
+        let row = sqlx::query(
+            "UPDATE kv_flow_instance SET status = 'withdrawn', updated_at = now() \
+             WHERE id = $1 AND status = 'running'",
+        )
+        .bind(id)
+        .execute(self.pool)
+        .await?;
+        if row.rows_affected() == 0 {
+            return Err(DbError::NotFound("实例不存在或已结束".to_string()));
+        }
+        Ok(())
+    }
+
+    /// 加签：另起一个 flow 实例，从指定节点开始（由 dev 层校验审批流配置）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn add_sign(
+        &self,
+        flow: &str,
+        model: &str,
+        record_id: i64,
+        current_node: &str,
+        created_by: Option<i64>,
+    ) -> Result<i64, DbError> {
+        self.create(flow, model, record_id, current_node, created_by)
+            .await
     }
 }

@@ -1,6 +1,12 @@
-//! kengine — core engine library for kenvoy.
+//! kengine — Kenvoy 核心引擎。
 //!
-//! 对外暴露最小可用 API，供 `kenvoy` 及下游 crate 复用。
+//! 纯逻辑（无 I/O）：
+//! - `ir` / `parse` — DSL XML → IR 中间表示与 golden 测试
+//! - `expr` / `validation` / `workflow` / `password` — 表达式引擎 / 表单校验 / 审批流状态机 / 密码策略
+//! - `html`（feature `html`，默认开）— IR → HTML 渲染器（SSR / 边缘渲染），内嵌 Tabler CSS + 图标 + 运行时
+//!
+//! 解析部分（`ir`/`parse`/`expr`/`validation`/`workflow`/`password`）在最小依赖下即可用；
+//! 启用 `html` 带来渲染能力。无运行时副作用，便于未来 WASM 目标。
 
 pub mod expr;
 pub mod ir;
@@ -9,6 +15,9 @@ pub mod validation;
 pub mod workflow;
 
 mod parse;
+
+#[cfg(feature = "html")]
+pub mod html;
 
 pub use parse::{ParseError, SourceFile, build_project};
 

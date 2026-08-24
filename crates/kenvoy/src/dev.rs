@@ -7,21 +7,21 @@ use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 
+use crate::db::models::FilterCond;
+use crate::db::users::User;
+use crate::db::{FlowStore, ModelStore, StorageStore, UserStore};
+use crate::s3::ObjectStore;
 use anyhow::Context;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, Json, Multipart, Path as AxumPath, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post, put};
+use kengine::html::render_page;
 use kengine::ir::{DataFilterRule, Flow as IrFlow, Node, Page, ProjectIr, RoleFilter, Validation};
 use kengine::validation;
 use kengine::workflow::{self, Decision};
 use kengine::{SourceFile, build_project};
-use kengine_db::models::FilterCond;
-use kengine_db::users::User;
-use kengine_db::{FlowStore, ModelStore, StorageStore, UserStore};
-use kengine_html::render_page;
-use kengine_s3::ObjectStore;
 use notify::Watcher;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -79,6 +79,12 @@ pub struct DevOptions<'a> {
 }
 
 /// 启动开发服务器。
+///
+/// # Panics
+/// 状态锁读失败时（`expect`）会 panic。
+///
+/// # Errors
+/// 绑定端口失败时返回。
 pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
     let dir = opts.dir;
     let host = opts.host;
@@ -139,6 +145,14 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         .route(
             "/__kenvoy/flow/{flow}/records/{record_id}/step",
             post(step_flow),
+        )
+        .route(
+            "/__kenvoy/flow/{flow}/records/{record_id}/withdraw",
+            post(withdraw_flow),
+        )
+        .route(
+            "/__kenvoy/flow/{flow}/records/{record_id}/add-sign",
+            post(add_sign_flow),
         )
         .route(
             "/__kenvoy/flow/{flow}/records/{record_id}",
@@ -208,6 +222,11 @@ fn collect_source_files(dir: &Path, out: &mut Vec<SourceFile>) -> std::io::Resul
         if i18n_dir.is_dir() {
             walk_dir(&i18n_dir, dir, out)?;
         }
+    }
+    // 外部库 `packages/` 目录：每个子目录可包含 XML 文件（与 module/ 类似）
+    let packages_dir = dir.join("packages");
+    if packages_dir.is_dir() {
+        walk_dir(&packages_dir, dir, out)?;
     }
     Ok(())
 }
@@ -405,7 +424,7 @@ async fn runtime_js() -> Response {
             header::CONTENT_TYPE,
             "application/javascript; charset=utf-8",
         )],
-        kengine_html::RUNTIME_JS,
+        kengine::html::RUNTIME_JS,
     )
         .into_response()
 }
@@ -414,7 +433,7 @@ async fn runtime_js() -> Response {
 async fn tabler_css() -> Response {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-        kengine_html::TABLER_CSS,
+        kengine::html::TABLER_CSS,
     )
         .into_response()
 }
@@ -423,7 +442,7 @@ async fn tabler_css() -> Response {
 async fn icons_css() -> Response {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-        kengine_html::ICONS_CSS,
+        kengine::html::ICONS_CSS,
     )
         .into_response()
 }
@@ -432,7 +451,7 @@ async fn icons_css() -> Response {
 async fn tabler_icons_woff2() -> Response {
     (
         [(header::CONTENT_TYPE, "font/woff2")],
-        kengine_html::TABLER_ICONS_WOFF2,
+        kengine::html::TABLER_ICONS_WOFF2,
     )
         .into_response()
 }
@@ -459,10 +478,10 @@ async fn connect_store(storage: &StorageConfig) -> Option<ObjectStore> {
     }
 }
 
-/// `[storage]` 配置齐全时转换为 `kengine_s3::S3Config`，否则返回 `None`。
-fn s3_config(cfg: &StorageConfig) -> Option<kengine_s3::S3Config> {
+/// `[storage]` 配置齐全时转换为 `crate::s3::S3Config`，否则返回 `None`。
+fn s3_config(cfg: &StorageConfig) -> Option<crate::s3::S3Config> {
     let s = cfg;
-    Some(kengine_s3::S3Config {
+    Some(crate::s3::S3Config {
         endpoint: s.endpoint.clone()?,
         region: s.region.clone()?,
         bucket: s.bucket.clone()?,
@@ -667,7 +686,9 @@ async fn list_data(
                 FilterDecision::Conditions(g) => g,
             }
         };
-        // 用户查询条件：仅接受模型字段或 `id`（并入每组权限条件 AND）
+        // 用户查询条件：仅接受模型字段或 `id`（并入每组权限条件 AND）。
+        // 值支持 `{{currentUser.*}}` 绑定，运行时替换为当前用户上下文。
+        let ctx = user_context(&user);
         let user_conds: Vec<FilterCond> = params
             .filter
             .as_deref()
@@ -675,7 +696,7 @@ async fn list_data(
             .into_iter()
             .flatten()
             .filter(|(f, _)| f == "id" || model_def.fields.iter().any(|m| m.name == *f))
-            .map(|(f, v)| FilterCond::eq(&f, &v))
+            .map(|(f, v)| FilterCond::eq(&f, &resolve_binding(&v, &ctx)))
             .collect();
         if !user_conds.is_empty() {
             if groups.is_empty() {
@@ -792,7 +813,7 @@ async fn stats_data(
     if let Err(err) = store.ensure(&model_def).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
     }
-    match kengine_db::models::stats_group(pool, &model_def, group, stat).await {
+    match crate::db::models::stats_group(pool, &model_def, group, stat).await {
         Ok(rows) => Json(rows).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
@@ -1263,6 +1284,122 @@ struct FlowStepReq {
     action: String,
 }
 
+/// 流程撤回：`POST /__kenvoy/flow/{flow}/records/{record_id}/withdraw`。
+///
+/// 仅发起人可调用；`running` → `withdrawn`。
+async fn withdraw_flow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((flow_name, record_id)): AxumPath<(String, i64)>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (user, _roles) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let model_name = flow_model_in_ir(&state, &flow_name).unwrap_or_default();
+    if model_name.is_empty() {
+        return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+    }
+    let flow_store = FlowStore::new(pool);
+    let instance = match flow_store.latest_by_record(&model_name, record_id).await {
+        Ok(Some(i)) => i,
+        Ok(None) => return (StatusCode::NOT_FOUND, "流程未启动").into_response(),
+        Err(err) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    if instance.created_by != Some(user.id) {
+        return (StatusCode::FORBIDDEN, "仅发起人可撤回").into_response();
+    }
+    match flow_store.withdraw(instance.id).await {
+        Ok(()) => Json(json!({ "instanceId": instance.id, "status": "withdrawn" })).into_response(),
+        Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
+    }
+}
+
+/// 流程加签：`POST /__kenvoy/flow/{flow}/records/{record_id}/add-sign`（body `{"node":"节点名"}`）。
+///
+/// 另起一个实例从指定节点开始，常用于“请主管加签法律审查”。
+async fn add_sign_flow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((flow_name, record_id)): AxumPath<(String, i64)>,
+    Json(req): Json<AddSignReq>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (user, roles) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    // 仅当前流程的 running 实例的发起人或审批人可加签
+    let model_name = flow_model_in_ir(&state, &flow_name).unwrap_or_default();
+    if model_name.is_empty() {
+        return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+    }
+    let (flow, model_def) = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(flow) = build.ir.flows.iter().find(|f| f.name == flow_name).cloned() else {
+            return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+        };
+        let Some(m) = build.ir.models.get(&model_name).cloned() else {
+            return (StatusCode::NOT_FOUND, "触发模型不存在").into_response();
+        };
+        (flow, m)
+    };
+    let flow_store = FlowStore::new(pool);
+    if let Ok(Some(inst)) = flow_store.latest_by_record(&model_name, record_id).await
+        && inst.status == "running"
+    {
+        let allowed = inst.created_by == Some(user.id)
+            || flow
+                .nodes
+                .iter()
+                .any(|n| n.name == inst.current_node && approver_allows(n, &roles));
+        if !allowed {
+            return (StatusCode::FORBIDDEN, "无加签权限").into_response();
+        }
+    }
+    let Some(node) = flow.nodes.iter().find(|n| n.name == req.node) else {
+        return (StatusCode::BAD_REQUEST, "节点不存在").into_response();
+    };
+    if !approver_allows(node, &roles) {
+        return (StatusCode::FORBIDDEN, "当前用户不是该节点审批人").into_response();
+    }
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    match flow_store
+        .add_sign(&flow.name, &model_name, record_id, &req.node, Some(user.id))
+        .await
+    {
+        Ok(id) => Json(json!({ "instanceId": id, "currentNode": req.node, "status": "running" }))
+            .into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct AddSignReq {
+    node: String,
+}
+
+fn flow_model_in_ir(state: &AppState, flow_name: &str) -> Option<String> {
+    let build = state.build.read().expect("读取状态失败");
+    build
+        .ir
+        .flows
+        .iter()
+        .find(|f| f.name == flow_name)
+        .and_then(|f| f.trigger.as_deref().and_then(|t| t.split('.').next()))
+        .map(str::to_string)
+}
+
 /// 流程实例状态：`GET /__kenvoy/flow/{flow}/records/{record_id}`。
 async fn get_flow_instance(
     State(state): State<AppState>,
@@ -1568,11 +1705,12 @@ mod tests {
                 .iter()
                 .any(|f| f.path == "apps/leave/apply/page.kenvoy.xml")
         );
-        // 仅收集 `apps/` 与 `I8n/` 目录下的 XML（module/ 也有）
+        // 收集 `apps/` / `module/` / `I8n/` / `packages/` 下的 XML
         assert!(files.iter().all(|f| {
             f.path.starts_with("apps/")
                 || f.path.starts_with("I8n/")
                 || f.path.starts_with("module/")
+                || f.path.starts_with("packages/")
         }));
         assert!(files.iter().any(|f| f.path == "I8n/zh/strings.kenvoy.xml"));
     }

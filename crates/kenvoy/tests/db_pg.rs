@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use kengine::ir::{FieldDef, FieldType, Model};
-use kengine_db::{ModelStore, StorageStore, UserStore, connect, migrate};
+use kenvoy::db::{ModelStore, StorageStore, UserStore, connect, migrate};
 use serde_json::json;
 use sqlx::PgPool;
 
