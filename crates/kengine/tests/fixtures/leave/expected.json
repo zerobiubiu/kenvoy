@@ -152,6 +152,54 @@
             ]
           }
         ]
+      },
+      "flows": [
+        "请假审批流"
+      ],
+      "publish": {
+        "allowRoles": [
+          "普通员工",
+          "部门主管",
+          "管理员"
+        ],
+        "fields": [
+          {
+            "field": "附件",
+            "readRoles": [
+              "普通员工",
+              "部门主管",
+              "管理员"
+            ],
+            "writeRoles": [
+              "普通员工",
+              "管理员"
+            ]
+          }
+        ],
+        "roles": [
+          {
+            "name": "普通员工",
+            "extends": null,
+            "permissions": [
+              "请假管理.申请.查看",
+              "请假管理.申请.创建"
+            ]
+          },
+          {
+            "name": "部门主管",
+            "extends": "普通员工",
+            "permissions": [
+              "请假管理.审批.操作"
+            ]
+          },
+          {
+            "name": "管理员",
+            "extends": null,
+            "permissions": [
+              "*"
+            ]
+          }
+        ]
       }
     },
     {
@@ -187,6 +235,218 @@
       }
     }
   ],
-  "flows": [],
-  "permissions": {}
+  "flows": [
+    {
+      "name": "请假审批流",
+      "trigger": "请假单.提交申请",
+      "nodes": [
+        {
+          "name": "部门主管审批",
+          "approver": "部门主管",
+          "kind": "normal",
+          "onApprove": [
+            {
+              "kind": "if",
+              "expr": "请假天数 <= 3",
+              "target": null,
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": [
+                {
+                  "kind": "next",
+                  "expr": null,
+                  "target": "人事备案",
+                  "users": [],
+                  "model": null,
+                  "field": null,
+                  "value": null,
+                  "to": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "if",
+              "expr": "请假天数 > 3",
+              "target": null,
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": [
+                {
+                  "kind": "next",
+                  "expr": null,
+                  "target": "人事总监审批",
+                  "users": [],
+                  "model": null,
+                  "field": null,
+                  "value": null,
+                  "to": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "notify",
+              "expr": null,
+              "target": null,
+              "users": [
+                "申请人"
+              ],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            }
+          ],
+          "onReject": [
+            {
+              "kind": "back",
+              "expr": null,
+              "target": "发起人",
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            },
+            {
+              "kind": "notify",
+              "expr": null,
+              "target": null,
+              "users": [
+                "申请人"
+              ],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "人事总监审批",
+          "approver": "角色.人事总监",
+          "kind": "normal",
+          "onApprove": [
+            {
+              "kind": "next",
+              "expr": null,
+              "target": "人事备案",
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            },
+            {
+              "kind": "notify",
+              "expr": null,
+              "target": null,
+              "users": [
+                "申请人",
+                "部门主管"
+              ],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            }
+          ],
+          "onReject": [
+            {
+              "kind": "back",
+              "expr": null,
+              "target": "部门主管审批",
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            },
+            {
+              "kind": "notify",
+              "expr": null,
+              "target": null,
+              "users": [
+                "申请人",
+                "部门主管"
+              ],
+              "model": null,
+              "field": null,
+              "value": null,
+              "to": null,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "人事备案",
+          "approver": "角色.HR",
+          "kind": "notify",
+          "onComplete": [
+            {
+              "kind": "update",
+              "expr": null,
+              "target": null,
+              "users": [],
+              "model": "请假单",
+              "field": "审批状态",
+              "value": "已通过",
+              "to": null,
+              "children": []
+            },
+            {
+              "kind": "send_message",
+              "expr": null,
+              "target": null,
+              "users": [],
+              "model": null,
+              "field": null,
+              "value": "您的请假申请已通过",
+              "to": "申请人",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": {
+    "roles": [
+      {
+        "name": "普通员工",
+        "extends": null,
+        "permissions": [
+          "请假管理.申请.查看",
+          "请假管理.申请.创建"
+        ]
+      },
+      {
+        "name": "管理员",
+        "extends": null,
+        "permissions": [
+          "*"
+        ]
+      },
+      {
+        "name": "部门主管",
+        "extends": "普通员工",
+        "permissions": [
+          "请假管理.审批.操作"
+        ]
+      }
+    ]
+  }
 }

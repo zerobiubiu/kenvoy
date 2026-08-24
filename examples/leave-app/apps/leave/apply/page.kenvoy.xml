@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Page>
+  <Import src="./flow.kenvoy.xml" as="请假审批流" />
+  <Import src="./publish.kenvoy.xml" as="权限配置" />
   <Title>填写请假单</Title>
   <Content>
     <Row>

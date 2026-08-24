@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Publish>
+  <Roles>
+    <Role name="普通员工">
+      <Permissions>
+        <Permission>请假管理.申请.查看</Permission>
+        <Permission>请假管理.申请.创建</Permission>
+      </Permissions>
+    </Role>
+    <Role name="部门主管" extends="普通员工">
+      <Permissions>
+        <Permission>请假管理.审批.操作</Permission>
+      </Permissions>
+    </Role>
+    <Role name="管理员">
+      <Permissions>
+        <Permission>*</Permission>
+      </Permissions>
+    </Role>
+  </Roles>
+  <Access>
+    <Allow roles="普通员工,部门主管,管理员" />
+    <Field name="附件">
+      <Read roles="普通员工,部门主管,管理员" />
+      <Write roles="普通员工,管理员" />
+    </Field>
+  </Access>
+</Publish>

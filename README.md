@@ -173,8 +173,8 @@ cargo install kenvoy
 ## 状态与路线图
 
 - [x] Workspace 骨架（kengine 库 + kenvoy CLI + kengine-html）
-- [x] `kengine`：XML 解析子集（`<Layout>` / `<Page>` / `<Models>`）
-- [ ] `kengine`：`flow` / `publish` 解析
+- [x] `kengine`：XML 解析子集（`<Layout>` / `<Page>` / `<Models>` / `<Flow>` / `<Publish>`）
+- [x] `kengine`：`flow` / `publish` 解析与页面 `<Import>` 引入机制
 - [x] `kenvoy` CLI：`kv dev`（扫描 apps/ → 解析 → 渲染 → 热更新预览）
 - [x] `kenvoy` CLI：`kv init` / `kv build`
 - [ ] `kenvoy` CLI：`kv deploy`（需闭源 KenvoySpace，暂未开放）

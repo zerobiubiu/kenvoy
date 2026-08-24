@@ -10,7 +10,10 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::ir::{IR_VERSION, Layout, Model, Node, Page, Permissions, ProjectIr, ProjectMeta};
+use crate::ir::{
+    Flow, IR_VERSION, Layout, Model, Node, Page, Permissions, ProjectIr, ProjectMeta,
+    Role as IrRole,
+};
 
 /// 一个待解析的源文件（无 I/O：由调用方读取内容）。
 #[derive(Debug, Clone)]
@@ -107,6 +110,32 @@ pub enum ParseError {
         /// 重复的页面路径。
         path: String,
     },
+    /// 页面引入了不存在的文件。
+    #[error("{from}: 引入的文件 `{src}` 不存在")]
+    ImportNotFound {
+        /// 引入来源（页面路径）。
+        from: String,
+        /// 引入路径。
+        src: String,
+    },
+    /// 引入路径非法。
+    #[error("{from}: 引入路径 `{src}` 非法（不支持 `..`）")]
+    ImportInvalid {
+        /// 引入来源（页面路径）。
+        from: String,
+        /// 引入路径。
+        src: String,
+    },
+    /// 引入的文件根元素既不是 `<Flow>` 也不是 `<Publish>`。
+    #[error("{from}: 引入的文件 `{src}` 根元素 <{root}> 不受支持")]
+    UnknownImportType {
+        /// 引入来源（页面路径）。
+        from: String,
+        /// 引入路径。
+        src: String,
+        /// 根元素名。
+        root: String,
+    },
 }
 
 impl ParseError {
@@ -138,6 +167,10 @@ enum Role {
     Layout,
     /// 页面文件（`page.kenvoy.xml`）。
     Page,
+    /// 审批流文件（`flow.kenvoy.xml`，由页面显式引入）。
+    Flow,
+    /// 权限文件（`publish.kenvoy.xml`，由页面显式引入）。
+    Publish,
 }
 
 /// 解析一组源文件，构建完整 `IR`。
@@ -151,6 +184,7 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
     let mut models: BTreeMap<String, Model> = BTreeMap::new();
     let mut layouts: BTreeMap<String, Layout> = BTreeMap::new();
     let mut pages: Vec<Page> = Vec::new();
+    let mut flow_registry: BTreeMap<String, Flow> = BTreeMap::new();
 
     for file in files {
         let Some((role, dir)) = classify(&file.path) else {
@@ -178,11 +212,14 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
                 layouts.insert(layout.path.clone(), layout);
             }
             Role::Page => {
-                let page = doc::parse_page(&dir, root)?;
+                let page = doc::parse_page(&dir, root, files, &mut flow_registry)?;
                 if pages.iter().any(|p| p.path == page.path) {
                     return Err(ParseError::DuplicatePage { path: page.path });
                 }
                 pages.push(page);
+            }
+            Role::Flow | Role::Publish => {
+                // 仅由页面 `<Import>` 显式引入，顶层不收集
             }
         }
     }
@@ -197,6 +234,17 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
 
     validate_models(&pages, &models)?;
 
+    let flows: Vec<Flow> = flow_registry.into_values().collect();
+    let mut role_map: BTreeMap<String, IrRole> = BTreeMap::new();
+    for publish in pages.iter().filter_map(|p| p.publish.as_ref()) {
+        for role in &publish.roles {
+            role_map
+                .entry(role.name.clone())
+                .or_insert_with(|| role.clone());
+        }
+    }
+    let roles: Vec<IrRole> = role_map.into_values().collect();
+
     Ok(ProjectIr {
         version: IR_VERSION.to_string(),
         project: ProjectMeta {
@@ -206,8 +254,8 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
         models,
         layouts,
         pages,
-        flows: Vec::new(),
-        permissions: Permissions::default(),
+        flows,
+        permissions: Permissions { roles },
     })
 }
 
@@ -221,6 +269,8 @@ fn classify(path: &str) -> Option<(Role, String)> {
         "layout.kenvoy.xml" => Role::Layout,
         "page.kenvoy.xml" => Role::Page,
         "models.kenvoy.xml" => Role::Models,
+        "flow.kenvoy.xml" => Role::Flow,
+        "publish.kenvoy.xml" => Role::Publish,
         _ => return None,
     };
     let dir = dir.strip_prefix("apps")?;
@@ -230,6 +280,24 @@ fn classify(path: &str) -> Option<(Role, String)> {
         dir.to_string()
     };
     Some((role, dir_path))
+}
+
+/// 将页面 `<Import src>` 解析为项目内文件路径。
+///
+/// `src` 相对页面所在目录（如 `./flow.kenvoy.xml` → `apps/leave/apply/flow.kenvoy.xml`）；
+/// 含 `..` 或空路径返回 `None`。
+pub(crate) fn resolve_import_path(page_dir: &str, src: &str) -> Option<String> {
+    let src = src.replace('\\', "/");
+    let src = src.strip_prefix("./").unwrap_or(&src);
+    if src.is_empty() || src.contains("..") {
+        return None;
+    }
+    let base = if page_dir == "/" {
+        "apps".to_string()
+    } else {
+        format!("apps{page_dir}")
+    };
+    Some(format!("{base}/{src}"))
 }
 
 /// 解析页面布局链（外层在前）：根 → 各级目录 → 页面目录自身（若存在 layout）。
@@ -349,7 +417,31 @@ mod tests {
             Some((Role::Models, "/leave".to_string()))
         );
         assert_eq!(classify("README.md"), None);
-        assert_eq!(classify("apps/leave/apply/flow.kenvoy.xml"), None);
+        assert_eq!(
+            classify("apps/leave/apply/flow.kenvoy.xml"),
+            Some((Role::Flow, "/leave/apply".to_string()))
+        );
+        assert_eq!(
+            classify("apps/leave/apply/publish.kenvoy.xml"),
+            Some((Role::Publish, "/leave/apply".to_string()))
+        );
+    }
+
+    #[test]
+    fn resolve_import_paths() {
+        assert_eq!(
+            resolve_import_path("/leave/apply", "./flow.kenvoy.xml"),
+            Some("apps/leave/apply/flow.kenvoy.xml".to_string())
+        );
+        assert_eq!(
+            resolve_import_path("/leave/apply", "flow.kenvoy.xml"),
+            Some("apps/leave/apply/flow.kenvoy.xml".to_string())
+        );
+        assert_eq!(
+            resolve_import_path("/", "./publish.kenvoy.xml"),
+            Some("apps/publish.kenvoy.xml".to_string())
+        );
+        assert_eq!(resolve_import_path("/leave", "../flow.kenvoy.xml"), None);
     }
 
     #[test]

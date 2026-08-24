@@ -78,11 +78,15 @@
   "path": "/请假管理/申请",
   "title": "填写请假单",
   "layoutChain": ["/", "/请假管理"],
-  "content": { "type": "Row", "children": [] }
+  "content": { "type": "Row", "children": [] },
+  "flows": ["请假审批流"],
+  "publish": { "allowRoles": ["普通员工"], "fields": [], "roles": [] }
 }
 ```
 
 `layoutChain` 由 kengine **在解析期算好**（外层在前），渲染器按序嵌套渲染：根 layout 的 Slot → 下一层 layout → … → 最内层 Slot → 页面 `content`。
+
+`flows` 为页面显式引入的审批流名（索引到顶层 `flows`）；`publish` 为页面权限配置。
 
 ### 3.4 Node（组件树）—— 统一结构
 
@@ -96,6 +100,60 @@
 ```
 
 demo 组件类型：`Row / Col / Section / Slot / Form / Field / Table / Column / StatCard / Text`，外加 `Custom` 兜底。
+
+### 3.5 Flow（审批流）—— 页面显式引入
+
+```json
+{
+  "name": "请假审批流",
+  "trigger": "请假单.提交申请",
+  "nodes": [
+    {
+      "name": "部门主管审批",
+      "approver": "部门主管",
+      "kind": "normal",
+      "onApprove": [
+        { "kind": "if", "expr": "请假天数 <= 3",
+          "children": [ { "kind": "next", "target": "人事备案" } ] },
+        { "kind": "notify", "users": ["申请人"] }
+      ],
+      "onReject": [ { "kind": "back", "target": "发起人" } ],
+      "onComplete": []
+    }
+  ]
+}
+```
+
+动作 `kind`：`next` / `back` / `notify` / `update` / `send_message` / `if`（条件分支，`expr` + `children`）。节点 `kind`：`normal` / `notify`。
+
+### 3.6 Publish（权限）—— 页面显式引入
+
+```json
+{
+  "allowRoles": ["普通员工", "部门主管"],
+  "fields": [
+    { "field": "附件", "readRoles": ["普通员工"], "writeRoles": ["普通员工"] }
+  ],
+  "roles": [
+    { "name": "部门主管", "extends": "普通员工", "permissions": ["请假管理.审批.操作"] }
+  ]
+}
+```
+
+顶层 `permissions.roles` 为所有页面 publish 角色的合并注册表（按名去重）。
+
+### 3.7 页面引入（Import）
+
+`flow` / `publish` 文件只出现在 page 同级目录，且必须被页面显式引入：
+
+```xml
+<Page>
+  <Import src="./flow.kenvoy.xml" as="请假审批流" />
+  <Import src="./publish.kenvoy.xml" as="权限配置" />
+</Page>
+```
+
+`src` 相对页面目录解析（如 `/leave/apply` + `./flow.kenvoy.xml` → `apps/leave/apply/flow.kenvoy.xml`），含 `..` 拒绝（`ImportInvalid`）；文件缺失报 `ImportNotFound`；根元素非 `<Flow>` / `<Publish>` 报 `UnknownImportType`。
 
 **Table 节点（含数据源）**
 

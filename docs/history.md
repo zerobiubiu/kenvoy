@@ -53,3 +53,11 @@
 - 实现：新增 `crates/kenvoy/src/config.rs`（`kenvoy.toml` 读取：`[project]` name/description、`[server]` host/port、`[build]` output/public_path）、`init.rs`（`kv init` 骨架：apps/ + 根布局 + dashboard + kenvoy.toml + .gitignore，拒绝覆盖已有项目）、`build_cmd.rs`（`kv build` 静态产物：每页 `<path>/index.html` + 索引页 + `public/` 拷贝，支持 `public_path` 子目录）；`kv deploy` 占位（需闭源 KenvoySpace）；dev 服务器支持配置 host/port/name/description（索引页显示描述）
 - 冒烟测试：`kv init` 生成骨架；`kv build` 产出 dist（3 页面 + 静态资源）；`kv dev` 读取配置端口 5173 且索引页显示项目描述
 - 已知限制：`kv deploy` 未实现（闭源）；`public_path` 仅影响构建产物目录，dev 服务器仍从根路径提供 `public/`
+
+### 执行验证记录（2026-08-23，flow / publish 解析与页面引入）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine 15 个单元测试 + golden 更新）
+- 实现：`IR` 新增 `Flow` / `FlowNode` / `FlowAction`（`next/back/notify/update/send_message/if`）、`Publish` / `FieldAccess` / `Role`；`Page` 新增 `flows`（引入的流程名）与 `publish`；`parse` 新增 `<Flow>` / `<Publish>` 解析与页面 `<Import>` 引入（`src` 相对页面目录解析，`ImportNotFound` / `ImportInvalid` / `UnknownImportType`）；顶层 `flows` 汇总引入流程，`permissions.roles` 合并各页面角色（按名去重）
+- 测试：golden fixture 新增 `flow.kenvoy.xml` / `publish.kenvoy.xml` 并由申请页引入（3 节点审批流 + 3 角色）；`examples/leave-app` 同步
+- 已知限制：XML 属性值中 `<` 需转义为 `&lt;`（XML 规范）；`DataFilter` 尚未解析；审批流引擎（状态机执行）未实现；publish 仅解析不参与渲染/鉴权

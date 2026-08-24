@@ -128,6 +128,12 @@ pub struct Page {
     pub layout_chain: Vec<String>,
     /// 页面内容节点树。
     pub content: Node,
+    /// 显式引入的审批流名（索引到 `ProjectIr.flows`）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flows: Vec<String>,
+    /// 页面权限配置（`publish.kenvoy.xml`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publish: Option<Publish>,
 }
 
 /// 组件树节点：内置组件为类型化变体，用户 DSL 组件走 [`Node::Custom`]。
@@ -339,18 +345,163 @@ pub struct TextProps {
     pub value: String,
 }
 
-/// 审批流（demo 占位，结构后续补充）。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+/// 审批流（由页面 `<Import>` 显式引入）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Flow {
     /// 流程名。
     pub name: String,
+    /// 触发入口（如 `请假单.提交申请`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<String>,
+    /// 流程节点。
+    #[serde(default)]
+    pub nodes: Vec<FlowNode>,
 }
 
-/// 权限（demo 占位，结构后续补充）。
+/// 审批流节点。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowNode {
+    /// 节点名。
+    pub name: String,
+    /// 审批人（用户/角色表达式，知会节点可为空）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approver: Option<String>,
+    /// 节点类型。
+    #[serde(default)]
+    pub kind: FlowNodeKind,
+    /// 通过分支动作。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub on_approve: Vec<FlowAction>,
+    /// 驳回分支动作。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub on_reject: Vec<FlowAction>,
+    /// 完成后动作（知会节点）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub on_complete: Vec<FlowAction>,
+}
+
+/// 审批节点类型。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowNodeKind {
+    /// 普通审批节点。
+    #[default]
+    Normal,
+    /// 知会节点。
+    Notify,
+}
+
+/// 审批流动作。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FlowAction {
+    /// 动作类型。
+    pub kind: FlowActionKind,
+    /// 条件表达式（`If` 分支）。
+    pub expr: Option<String>,
+    /// 目标节点（next / back）。
+    pub target: Option<String>,
+    /// 通知用户。
+    pub users: Vec<String>,
+    /// 更新模型名（update）。
+    pub model: Option<String>,
+    /// 更新字段（update）。
+    pub field: Option<String>,
+    /// 更新值 / 消息内容（`update` / `send_message`）。
+    pub value: Option<String>,
+    /// 消息接收人（`send_message`）。
+    pub to: Option<String>,
+    /// 条件分支内的子动作（if）。
+    pub children: Vec<FlowAction>,
+}
+
+impl FlowAction {
+    /// 创建指定类型的动作。
+    #[must_use]
+    pub fn new(kind: FlowActionKind) -> Self {
+        Self {
+            kind,
+            expr: None,
+            target: None,
+            users: Vec::new(),
+            model: None,
+            field: None,
+            value: None,
+            to: None,
+            children: Vec::new(),
+        }
+    }
+}
+
+impl Default for FlowAction {
+    fn default() -> Self {
+        Self::new(FlowActionKind::Next)
+    }
+}
+
+/// 审批流动作类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowActionKind {
+    /// 流转到下一节点。
+    Next,
+    /// 退回（目标节点或发起人）。
+    Back,
+    /// 发送通知。
+    Notify,
+    /// 更新模型字段。
+    Update,
+    /// 发送消息。
+    SendMessage,
+    /// 条件分支。
+    If,
+}
+
+/// 页面权限配置（`publish.kenvoy.xml`）。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Permissions {}
+pub struct Publish {
+    /// 允许访问该页面的角色。
+    pub allow_roles: Vec<String>,
+    /// 字段级读写控制。
+    pub fields: Vec<FieldAccess>,
+    /// 角色定义（含继承与权限清单）。
+    pub roles: Vec<Role>,
+}
+
+/// 字段访问控制。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldAccess {
+    /// 字段名。
+    pub field: String,
+    /// 可读角色。
+    pub read_roles: Vec<String>,
+    /// 可写角色。
+    pub write_roles: Vec<String>,
+}
+
+/// 角色定义。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Role {
+    /// 角色名。
+    pub name: String,
+    /// 继承的角色名。
+    pub extends: Option<String>,
+    /// 权限清单。
+    pub permissions: Vec<String>,
+}
+
+/// 权限（全局角色注册表，由各页面 `publish` 文件合并）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Permissions {
+    /// 全部角色定义（按名去重）。
+    pub roles: Vec<Role>,
+}
 
 #[cfg(test)]
 mod tests {
@@ -534,10 +685,70 @@ mod tests {
                         },
                     }],
                 },
+                flows: vec!["请假审批流".into()],
+                publish: Some(Publish {
+                    allow_roles: vec!["普通员工".into()],
+                    fields: vec![FieldAccess {
+                        field: "审批意见".into(),
+                        read_roles: vec!["部门主管".into()],
+                        write_roles: Vec::new(),
+                    }],
+                    roles: vec![Role {
+                        name: "普通员工".into(),
+                        extends: None,
+                        permissions: vec!["请假申请.查看".into()],
+                    }],
+                }),
             }],
             flows: vec![],
             permissions: Permissions::default(),
         };
         let _ = round_trip_json(&ir);
+    }
+
+    #[test]
+    fn flow_and_publish_round_trip() {
+        let mut next = FlowAction::new(FlowActionKind::Next);
+        next.target = Some("人事备案".into());
+        let mut back = FlowAction::new(FlowActionKind::Back);
+        back.target = Some("发起人".into());
+        let mut notify = FlowAction::new(FlowActionKind::Notify);
+        notify.users = vec!["申请人".into()];
+        let mut update = FlowAction::new(FlowActionKind::Update);
+        update.model = Some("请假单".into());
+        update.field = Some("审批状态".into());
+        update.value = Some("已通过".into());
+        let mut condition = FlowAction::new(FlowActionKind::If);
+        condition.expr = Some("请假天数 <= 3".into());
+        condition.children = vec![next.clone()];
+
+        let flow = Flow {
+            name: "请假审批流".into(),
+            trigger: Some("请假单.提交申请".into()),
+            nodes: vec![FlowNode {
+                name: "部门主管审批".into(),
+                approver: Some("部门主管".into()),
+                kind: FlowNodeKind::Normal,
+                on_approve: vec![condition, next],
+                on_reject: vec![back],
+                on_complete: vec![notify, update],
+            }],
+        };
+        let _ = round_trip_json(&flow);
+
+        let publish = Publish {
+            allow_roles: vec!["普通员工".into(), "部门主管".into()],
+            fields: vec![FieldAccess {
+                field: "审批意见".into(),
+                read_roles: vec!["部门主管".into()],
+                write_roles: vec!["部门主管".into()],
+            }],
+            roles: vec![Role {
+                name: "部门主管".into(),
+                extends: Some("普通员工".into()),
+                permissions: vec!["请假管理.审批.操作".into()],
+            }],
+        };
+        let _ = round_trip_json(&publish);
     }
 }
