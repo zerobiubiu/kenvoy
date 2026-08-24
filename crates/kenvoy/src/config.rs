@@ -21,6 +21,24 @@ pub struct KenvoyConfig {
     /// `[database]` 段。
     #[serde(default)]
     pub database: DatabaseConfig,
+    /// `[storage]` 段。
+    #[serde(default)]
+    pub storage: StorageConfig,
+}
+
+/// `[storage]` 段（S3 对象存储：文件本体存放处，元数据在 PostgreSQL）。
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct StorageConfig {
+    /// 存储服务端点（如 `http://127.0.0.1:9000`）。
+    pub endpoint: Option<String>,
+    /// 区域。
+    pub region: Option<String>,
+    /// 默认 Bucket。
+    pub bucket: Option<String>,
+    /// 访问密钥。
+    pub access_key: Option<String>,
+    /// 秘密密钥。
+    pub secret_key: Option<String>,
 }
 
 /// `[database]` 段（PostgreSQL 18+）。
@@ -103,7 +121,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("创建临时目录失败");
         std::fs::write(
             dir.join("kenvoy.toml"),
-            "[project]\nname = \"请假管理\"\n\n[server]\nport = 8080\n\n[build]\noutput = \"out\"\n",
+            "[project]\nname = \"请假管理\"\n\n[server]\nport = 8080\n\n[build]\noutput = \"out\"\n\n[storage]\nendpoint = \"http://127.0.0.1:9000\"\nbucket = \"kenvoy-dev\"\n",
         )
         .expect("写入配置失败");
 
@@ -111,6 +129,12 @@ mod tests {
         assert_eq!(cfg.project.name.as_deref(), Some("请假管理"));
         assert_eq!(cfg.server.port, Some(8080));
         assert_eq!(cfg.build.output.as_deref(), Some("out"));
+        assert_eq!(
+            cfg.storage.endpoint.as_deref(),
+            Some("http://127.0.0.1:9000")
+        );
+        assert_eq!(cfg.storage.bucket.as_deref(), Some("kenvoy-dev"));
+        assert_eq!(cfg.storage.region, None);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

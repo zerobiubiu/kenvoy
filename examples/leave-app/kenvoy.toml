@@ -7,3 +7,10 @@ port = 5173
 
 [database]
 url = "postgres://kenvoy:kenvoy@127.0.0.1:5433/kenvoy"
+
+[storage]
+endpoint = "http://127.0.0.1:9000"
+region = "us-east-1"
+bucket = "kenvoy-dev"
+access_key = "minioadmin"
+secret_key = "minioadmin"

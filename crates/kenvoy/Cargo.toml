@@ -15,9 +15,10 @@ categories = ["command-line-utilities"]
 kengine = { workspace = true }
 kengine-html = { workspace = true }
 kengine-db = { workspace = true }
+kengine-s3 = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1"
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 notify = "7"
 toml = "0.8"

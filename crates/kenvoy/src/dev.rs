@@ -9,19 +9,22 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 
 use anyhow::Context;
 use axum::Router;
-use axum::extract::{Json, Path as AxumPath, State};
+use axum::extract::{Json, Multipart, Path as AxumPath, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use kengine::ir::{DataFilterRule, Node, Page, ProjectIr, RoleFilter, Validation};
 use kengine::validation;
 use kengine::{SourceFile, build_project};
 use kengine_db::users::User;
-use kengine_db::{ModelStore, UserStore};
+use kengine_db::{ModelStore, StorageStore, UserStore};
 use kengine_html::render_page;
+use kengine_s3::ObjectStore;
 use notify::Watcher;
 use serde_json::{Value, json};
 use sqlx::PgPool;
+
+use crate::config::StorageConfig;
 
 /// 构建状态：解析后的 `IR` + 版本号（用于自动刷新）。
 struct BuildState {
@@ -42,6 +45,8 @@ struct AppState {
     build: Arc<RwLock<BuildState>>,
     /// PostgreSQL 连接池（配置 `[database].url` 时启用；否则回退内存模式）。
     db: Option<PgPool>,
+    /// 对象存储（配置 `[storage]` 时启用；否则文件上传不可用）。
+    store: Option<ObjectStore>,
     /// 内存数据存储（模型名 → 记录列表，无数据库时的降级模式）。
     data: Arc<Mutex<std::collections::HashMap<String, Vec<Value>>>>,
 }
@@ -53,6 +58,7 @@ pub async fn run(
     port: u16,
     project_name: &str,
     description: Option<String>,
+    storage: &StorageConfig,
     db: Option<PgPool>,
 ) -> anyhow::Result<()> {
     let build_state = Arc::new(RwLock::new(
@@ -74,11 +80,13 @@ pub async fn run(
         .collect();
 
     let db_for_auth = db.clone();
+    let store = connect_store(storage).await;
     let state = AppState {
         dir: dir.to_path_buf(),
         description,
         build: build_state,
         db,
+        store,
         data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     let app = Router::new()
@@ -87,6 +95,8 @@ pub async fn run(
         .route("/__kenvoy/runtime.js", get(runtime_js))
         .route("/assets/tabler.min.css", get(tabler_css))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
+        .route("/__kenvoy/file", post(upload_file))
+        .route("/__kenvoy/file/{id}", get(download_file))
         .nest(
             "/__kenvoy/auth",
             crate::auth::router().with_state(crate::auth::AuthState { db: db_for_auth }),
@@ -330,6 +340,156 @@ async fn tabler_css() -> Response {
         kengine_html::TABLER_CSS,
     )
         .into_response()
+}
+
+/// `[storage]` 配置齐全时连接对象存储并确保 Bucket 存在；失败仅告警（不阻断 dev 服务）。
+async fn connect_store(storage: &StorageConfig) -> Option<ObjectStore> {
+    let cfg = s3_config(storage)?;
+    let store = match ObjectStore::connect(&cfg) {
+        Ok(store) => store,
+        Err(err) => {
+            eprintln!("对象存储配置无效（文件上传未启用）：{err}");
+            return None;
+        }
+    };
+    match store.ensure_bucket().await {
+        Ok(()) => {
+            println!("已连接对象存储（bucket: {}）", store.bucket_name());
+            Some(store)
+        }
+        Err(err) => {
+            eprintln!("对象存储启动失败（文件上传未启用）：{err}");
+            None
+        }
+    }
+}
+
+/// `[storage]` 配置齐全时转换为 `kengine_s3::S3Config`，否则返回 `None`。
+fn s3_config(cfg: &StorageConfig) -> Option<kengine_s3::S3Config> {
+    let s = cfg;
+    Some(kengine_s3::S3Config {
+        endpoint: s.endpoint.clone()?,
+        region: s.region.clone()?,
+        bucket: s.bucket.clone()?,
+        access_key: s.access_key.clone()?,
+        secret_key: s.secret_key.clone()?,
+    })
+}
+
+/// 上传文件：`POST /__kenvoy/file`（multipart，字段名 `file`）。
+///
+/// 需登录；文件本体写入 S3，元数据写入 `storage_object`，返回 `{ id, objectKey, fileName }`。
+/// 元数据写入失败时删除已上传对象，保持 S3 与元数据一致。
+async fn upload_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "文件存储需要配置 PostgreSQL（kenvoy.toml [database].url）",
+        )
+            .into_response();
+    };
+    let Some(store) = &state.store else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "文件存储未配置（kenvoy.toml [storage]）",
+        )
+            .into_response();
+    };
+    if let Err(resp) = auth_user(&state, &headers).await {
+        return resp;
+    }
+    let field = match multipart.next_field().await {
+        Ok(Some(f)) => f,
+        Ok(None) => return (StatusCode::BAD_REQUEST, "缺少文件字段").into_response(),
+        Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
+    };
+    let file_name = field.file_name().unwrap_or("未命名").to_string();
+    let content_type = field
+        .content_type()
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let data = match field.bytes().await {
+        Ok(d) => d,
+        Err(err) => {
+            return (StatusCode::BAD_REQUEST, format!("读取文件内容失败：{err}")).into_response();
+        }
+    };
+    if data.is_empty() {
+        return (StatusCode::BAD_REQUEST, "文件内容为空").into_response();
+    }
+    let key = ObjectStore::object_key(&file_name);
+    let etag = match store.put(&key, &data, &content_type).await {
+        Ok(e) => e,
+        Err(err) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    let id = match StorageStore::new(pool)
+        .create(
+            store.bucket_name(),
+            &key,
+            &file_name,
+            Some(&content_type),
+            i64::try_from(data.len()).unwrap_or(i64::MAX),
+            etag.as_deref(),
+        )
+        .await
+    {
+        Ok(id) => id,
+        Err(err) => {
+            let _ = store.delete(&key).await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    Json(json!({ "id": id, "objectKey": key, "fileName": file_name })).into_response()
+}
+
+/// 下载文件：`GET /__kenvoy/file/{id}`。
+///
+/// 需登录；按元数据中的 Content-Type 返回文件本体。
+async fn download_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(id): AxumPath<String>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "文件存储需要配置 PostgreSQL（kenvoy.toml [database].url）",
+        )
+            .into_response();
+    };
+    let Some(store) = &state.store else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "文件存储未配置（kenvoy.toml [storage]）",
+        )
+            .into_response();
+    };
+    if let Err(resp) = auth_user(&state, &headers).await {
+        return resp;
+    }
+    let obj = match StorageStore::new(pool).get(&id).await {
+        Ok(Some(o)) => o,
+        Ok(None) => return (StatusCode::NOT_FOUND, "文件不存在").into_response(),
+        Err(err) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    let bytes = match store.get(&obj.object_key).await {
+        Ok(b) => b,
+        Err(err) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    let ctype = obj
+        .content_type
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+    ([(header::CONTENT_TYPE, ctype)], bytes).into_response()
 }
 
 /// 列表数据：`GET /__kenvoy/data/{model}`。
@@ -741,6 +901,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)] // 端到端路由验收用例，逐段断言可读性优先
     async fn dev_server_serves_pages_and_static() {
         use axum::body::{Body, to_bytes};
         use axum::http::Request;
@@ -753,6 +914,7 @@ mod tests {
             description: None,
             build: build_state,
             db: None,
+            store: None,
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()
@@ -853,5 +1015,45 @@ mod tests {
         )
         .unwrap();
         assert!(body.contains("年假"));
+    }
+
+    #[tokio::test]
+    async fn upload_without_storage_returns_503() {
+        use axum::body::{Body, to_bytes};
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let dir = example_dir();
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
+        let state = AppState {
+            dir: dir.clone(),
+            description: None,
+            build: build_state,
+            db: None,
+            store: None,
+            data: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        };
+        let app = Router::new()
+            .route("/__kenvoy/file", post(upload_file))
+            .with_state(state);
+
+        let body = "----kv\r\n\
+            Content-Disposition: form-data; name=\"file\"; filename=\"t.txt\"\r\n\
+            Content-Type: text/plain\r\n\r\n\
+            hello\r\n\
+            ----kv--\r\n";
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/__kenvoy/file")
+                    .header("content-type", "multipart/form-data; boundary=kv")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let _ = to_bytes(res.into_body(), usize::MAX).await.unwrap();
     }
 }

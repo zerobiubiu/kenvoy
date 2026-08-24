@@ -128,3 +128,17 @@
   - `dev` 数据 API：要求 Bearer token 登录（401）；`GET` 按当前用户角色解析 `DataFilter`（无规则→全量、无匹配角色→403、`<All/>`→全量、否则 `{{currentUser.*}}` 绑定后 AND 过滤）；`POST` 校验字段写权限（`publish.fields.write_roles`，无权限→403）；`currentUser.*` 表达式上下文（id/username/displayName/email）
 - 冒烟（真实 PG）：无 token 401；普通员工仅见自己的记录；管理员全量；写受限字段 403；正常写入 200
 - 已知限制：多角色命中 `DataFilter` 时取首个匹配条件（未做 OR 合并）；字段读权限未在 SSR 渲染层应用（仅写入侧校验）；`DataFilter` 仅支持相等条件
+
+### 执行验证记录（2026-08-25，S3 文件存储收尾：配置 + 上传/下载端点 + 运行时）
+
+- 环境：本地 Windows，Rust 1.98；Docker 容器 `kenvoy-minio`（MinIO，127.0.0.1:9000）与 `kenvoy-pg18`（PostgreSQL 18，127.0.0.1:5433）
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine-s3 3 个 MinIO 集成测试；kenvoy 19 个测试含未配置存储 503 用例）
+- 实现：
+  - `kenvoy.toml` 新增 `[storage]` 段（endpoint/region/bucket/access_key/secret_key），`config.rs` 读取
+  - `dev` 新增 `POST /__kenvoy/file`（multipart 上传：登录鉴权 → S3 put → `storage_object` 元数据，元数据失败回滚删对象）与 `GET /__kenvoy/file/{id}`（登录鉴权 → 元数据 → S3 get，按存储 Content-Type 返回，未知 ID 404）
+  - `kengine-s3`：`put` 返回 ETag（取响应头）；暴露 `bucket_name()`
+  - `runtime.js`：`<input type="file">` 选中文件时先上传 `/__kenvoy/file`，payload 中写入文件 ID（失败 alert 中断提交）
+  - 示例项目 `examples/leave-app/kenvoy.toml` 增加本地 MinIO 配置
+- 冒烟（真实 PG + MinIO，`--noproxy` 绕过本地代理）：注册/登录 → 上传 200（返回 id+objectKey）→ 下载 200 且内容与 Content-Type 一致 → 无 token 401 → 未知 ID 404 → 重启 dev 服务器后同 ID 仍可下载（元数据在 PG、文件在 MinIO，持久化成立）
+- 已知限制：下载不设 Content-Disposition（文件名由前端处理）；无大小上限/类型白名单；`storage_object.bucket` 记录实际桶名，下载固定走默认桶；`public/` 不可运行时写入的约束不变

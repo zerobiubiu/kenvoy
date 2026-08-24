@@ -1,11 +1,11 @@
 # demo 最小闭环实现清单
 
 > 文档类型：🔧 开发指导
-> 状态：🔧 待执行
-> 影响范围：`crates/kengine`、`crates/kengine-html`（待建）、`crates/kenvoy`
+> 状态：✅ 已执行
+> 影响范围：`crates/kengine`、`crates/kengine-html`、`crates/kenvoy`
 > 前置文档：[01-ir-contract.md](./01-ir-contract.md)
 > 替代文档：无
-> 生效版本：—
+> 生效版本：0.1
 
 ## 目标
 

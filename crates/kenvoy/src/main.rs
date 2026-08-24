@@ -204,7 +204,16 @@ async fn main() -> anyhow::Result<()> {
                 },
                 None => None,
             };
-            dev::run(&dir, host, port, &name, cfg.project.description.clone(), db).await?;
+            dev::run(
+                &dir,
+                host,
+                port,
+                &name,
+                cfg.project.description.clone(),
+                &cfg.storage,
+                db,
+            )
+            .await?;
         }
         Some(Commands::Init { name, title }) => {
             let target =

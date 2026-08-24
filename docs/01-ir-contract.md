@@ -1,11 +1,11 @@
 # IR 契约设计 v0.1
 
 > 文档类型：📋 接口契约
-> 状态：🔧 待执行
-> 影响范围：`kengine`（解析引擎）、`kengine-html`（渲染器，待建）、`kenvoy` CLI
+> 状态：✅ 已执行
+> 影响范围：`kengine`（解析引擎）、`kengine-html`（渲染器）、`kenvoy` CLI
 > 前置文档：无
 > 替代文档：无
-> 生效版本：kengine 0.2.0（目标）
+> 生效版本：kengine 0.1.0
 
 ## 1. 设计原则
 

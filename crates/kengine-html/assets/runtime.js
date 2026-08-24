@@ -35,17 +35,41 @@
     form.appendChild(submit);
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
-      var data = {};
-      new FormData(form).forEach(function (v, k) { data[k] = v; });
-      fetch("/__kenvoy/data/" + model, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).then(function (r) {
-        if (!r.ok) {
-          return r.json().then(function (e) { alert((e.errors || [e]).join("\n")); });
+      // 有选中文件的 file 控件先上传到 /__kenvoy/file，payload 中写入文件 id
+      var uploads = Array.prototype.map.call(
+        form.querySelectorAll('input[type="file"]'),
+        function (input) {
+          if (!input.files || !input.files.length) return Promise.resolve(null);
+          var fd = new FormData();
+          fd.append("file", input.files[0]);
+          return fetch("/__kenvoy/file", { method: "POST", body: fd })
+            .then(function (r) {
+              if (!r.ok) return r.json().then(function (e) { throw new Error((e.errors || [e]).join("\n")); });
+              return r.json();
+            })
+            .then(function (j) { return { name: input.name, id: j.id }; })
+            .catch(function (e) { return { error: e.message }; });
         }
-        location.reload();
+      );
+      Promise.all(uploads).then(function (results) {
+        var failed = results.filter(function (r) { return r && r.error; });
+        if (failed.length) {
+          alert("文件上传失败：" + failed[0].error);
+          return;
+        }
+        var data = {};
+        new FormData(form).forEach(function (v, k) { if (!(v instanceof File)) data[k] = v; });
+        results.forEach(function (r) { if (r) data[r.name] = r.id; });
+        fetch("/__kenvoy/data/" + model, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }).then(function (r) {
+          if (!r.ok) {
+            return r.json().then(function (e) { alert((e.errors || [e]).join("\n")); });
+          }
+          location.reload();
+        });
       });
     });
   });

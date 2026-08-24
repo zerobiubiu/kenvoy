@@ -40,10 +40,11 @@ async fn put_and_get_round_trip() {
     };
     let key = ObjectStore::object_key("hello.txt");
     let content = b"hello kenvoy s3".to_vec();
-    store
+    let etag = store
         .put(&key, &content, "text/plain")
         .await
         .expect("上传失败");
+    assert!(etag.is_some(), "MinIO 应返回 ETag");
     let got = store.get(&key).await.expect("下载失败");
     assert_eq!(got, content);
     store.delete(&key).await.expect("删除失败");

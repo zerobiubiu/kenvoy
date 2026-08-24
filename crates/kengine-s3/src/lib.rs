@@ -107,15 +107,31 @@ impl ObjectStore {
         format!("uploads/{uid}/{safe}")
     }
 
-    /// 上传对象。
+    /// 上传对象，返回 `ETag`（响应头缺失时为 `None`）。
     ///
     /// # Errors
     /// 上传失败时返回 [`S3Error`]。
-    pub async fn put(&self, key: &str, data: &[u8], content_type: &str) -> Result<(), S3Error> {
-        self.bucket
+    pub async fn put(
+        &self,
+        key: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<Option<String>, S3Error> {
+        let resp = self
+            .bucket
             .put_object_with_content_type(key, data, content_type)
             .await?;
-        Ok(())
+        Ok(resp
+            .headers()
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("etag"))
+            .map(|(_, v)| v.clone()))
+    }
+
+    /// 默认 Bucket 名称。
+    #[must_use]
+    pub fn bucket_name(&self) -> &str {
+        &self.name
     }
 
     /// 下载对象。

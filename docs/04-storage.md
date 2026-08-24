@@ -1,11 +1,11 @@
 # 存储架构：PostgreSQL + S3
 
 > 文档类型：📋 接口契约
-> 状态：🔧 待执行
+> 状态：✅ 已执行
 > 影响范围：数据持久化（模型数据）、文件上传、用户/权限数据
 > 前置文档：[03-project-structure.md](./03-project-structure.md)
 > 替代文档：无
-> 生效版本：—
+> 生效版本：0.1
 
 ## 1. 架构总览
 
@@ -67,5 +67,24 @@ S3 Object Storage
 ## 5. 落地范围（当前状态）
 
 - 表达式引擎、审批流状态机、表单校验：已实现（纯逻辑，见 `kengine` 的 `expr` / `workflow` / `validation` 模块）
-- PostgreSQL 持久化：待实现（模型数据 → PG 18 表；用户/权限系统表）
-- S3 文件存储：待实现（`storage_object` 元数据 + S3 客户端抽象）
+- PostgreSQL 持久化：已实现（模型数据 → PG 18 表；用户/角色/通讯录/会话/存储元数据系统表，见 `kengine-db`）
+- S3 文件存储：已实现（`kengine-s3` 对象存储抽象 + `storage_object` 元数据 + dev 上传/下载端点）
+
+## 6. HTTP 端点（dev 服务器）
+
+| 端点 | 方法 | 说明 |
+| :--- | :--- | :--- |
+| `/__kenvoy/file` | POST | multipart 上传（字段名 `file`），需登录；文件写入 S3，元数据写入 `storage_object`，返回 `{ id, objectKey, fileName }` |
+| `/__kenvoy/file/{id}` | GET | 下载文件本体，需登录；按元数据 Content-Type 返回，未知 ID 返回 404 |
+
+配置：`kenvoy.toml` 的 `[storage]`（endpoint / region / bucket / access_key / secret_key）；`[database]` 未配置或 `[storage]` 未配置时上传/下载返回 503。
+
+## 执行验证记录（2026-08-25，S3 存储收尾）
+
+- 环境：本地 Windows，Rust 1.98；Docker 容器 `kenvoy-minio`（MinIO，127.0.0.1:9000，minioadmin/minioadmin）
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（含 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine-s3 3 个 MinIO 集成测试；kenvoy 19 个测试含未配置存储 503 用例）
+- 实现：`[storage]` 配置段；`POST /__kenvoy/file` / `GET /__kenvoy/file/{id}`（登录鉴权、元数据写入失败回滚删对象）；`runtime.js` 文件控件上传 → payload 携带文件 ID；ETag 取自上传响应头
+- 冒烟：真实 MinIO + PG 容器上传/下载/重启持久化验证通过
+- 验证结论：✅ 通过
+- 已知限制：下载不设 Content-Disposition（前端按需处理文件名）；未做大小上限/类型白名单；`storage_object.bucket` 记录实际桶名，下载固定走默认桶
