@@ -7,6 +7,7 @@ pub mod models;
 pub mod schema;
 pub mod storage;
 pub mod users;
+pub mod workflow;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use thiserror::Error;
@@ -15,6 +16,7 @@ pub use models::ModelStore;
 pub use schema::{SCHEMA_VERSION, migrate};
 pub use storage::StorageStore;
 pub use users::UserStore;
+pub use workflow::FlowStore;
 
 /// 数据库层错误。
 #[derive(Debug, Error)]

@@ -4,7 +4,7 @@
   <Root>
     <Row>
       <Section title="导航">
-        <Text value="Kenvoy 请假管理平台" />
+        <Text i18n="app.name" value="Kenvoy 请假管理平台" />
       </Section>
       <Slot />
       <Section title="页脚">

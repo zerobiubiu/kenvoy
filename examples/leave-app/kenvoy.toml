@@ -1,6 +1,7 @@
 [project]
 name = "请假管理"
 description = "企业请假管理数字化平台"
+locale = "zh"
 
 [server]
 port = 5173

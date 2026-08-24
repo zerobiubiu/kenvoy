@@ -20,10 +20,23 @@
       </Col>
     </Row>
     <Row>
-      <Col span="12">
+      <Col span="8">
+        <Section title="请假类型分布">
+          <!-- 柱状图：运行时按模型字段分组统计渲染 -->
+          <Chart model="请假单" field="请假类型" stat="count" />
+        </Section>
+      </Col>
+      <Col span="4">
         <进度卡 title="审批进度">
           <Text value="待我审批：2 单" />
         </进度卡>
+      </Col>
+    </Row>
+    <Row>
+      <Col span="12">
+        <Section title="请假审批流程">
+          <FlowViewer flow="请假审批流" />
+        </Section>
       </Col>
     </Row>
   </Content>

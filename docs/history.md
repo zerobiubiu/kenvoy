@@ -179,3 +179,20 @@
   - **multipart 上限配置化**：配置 `[storage].max_size_mb` 时表单解析上限 = 上限 + 2MB 缓冲（业务层 413 语义优先）；未配置时默认 512MB（不再有 2MB 隐藏瓶颈，限制决策归业务层）
 - 冒烟（真实 PG + MinIO）：level 0 用户访问管理端点 403、level 90 管理员 200；未配置上传限制时 3MB 文件上传 200（此前 2MB 即被 axum 默认上限拦为 400）
 - 验证结论：✅ 通过；`kv deploy` 保持占位（闭源 KenvoySpace）
+
+### 执行验证记录（2026-08-25，登录流程 + 审批流运行时 + 表格查询 + 图表/i18n/静态快照）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（83 个测试）
+- 实现：
+  1. **前端登录流程**：`runtime.js` 全重写——统一 `kvFetch`（自动附带 Bearer token、401 时弹登录模态框、登录成功重试原请求）、localStorage 会话、登出口（页面加载可点）；表格/表单/上传统一走 kvFetch
+  2. **数据 API 增删**：`PUT/DELETE /__kenvoy/data/{model}/{id}`（登录、字段写权限、表单校验与创建一致）
+  3. **审批流运行时**：`kv_flow_instance` 表；`POST /flow/{flow}/records/{id}/start|step` + `GET` 状态查询；审批人校验（`approver` 为角色名，可带 `角色.` 前缀，不匹配 403）；`<If>` 条件分支由状态机求值；知会节点自动推进；副作用（`<Update>` 模型字段落库、通知/消息回显）
+  4. **表格查询**：`<Filter field value>` / `<Sort field order>` 解析（表层元数据，不参与组件树）；表格输出 `data-filter/data-sort/data-page-size`；`GET /__kenvoy/data` 支持 `filter`（`f:v,f2:v2`，并入权限条件 AND）/`sort`/`pageSize`（仅模型字段，`id` 特例）；File 类型列输出 `data-type="file"` 渲染下载链接
+  5. **统计图表**：`<Chart model field stat>` 内置组件；`GET /__kenvoy/stats/{model}?group=&stat=count|sum|avg`（分组统计）；运行时渲染 SVG 柱状图
+  6. **流程查看器**：`<FlowViewer flow>` 内置组件，SSR 渲染节点步骤条
+  7. **i18n**：`I8n/<语言>/strings.kenvoy.xml`（`<Strings><String key value>`）；`[project].locale` 指定默认语言；`<Text i18n="key">` 渲染时替换
+  8. **静态站数据**：`kv build` 配置 `[database].url` 时导出 `__kenvoy/data/{模型}.json` 快照；运行时数据 API 不可用时降级读取
+- 修复：`LIMIT $1` 与条件占位符冲突（编号接在条件后、bind 顺序一致）；`id`/数值/布尔字段比较值显式 `::BIGINT`/`::DOUBLE PRECISION`/`::BOOLEAN` cast（TEXT 参数与数值列比较 500）；`ensure_model_table` 系统列（created_at/updated_at）补 ALTER；`pageSize` query 字段名 rename；stats `count(*)` CAST DOUBLE PRECISION；PG 集成测试迁移并发竞态（`MIGRATE_LOCK`）
+- 冒烟（真实 PG + MinIO）：登录/越权 403/审核闭环不变；流程 start → 主管审批（≤3 天自动走到知会节点并 done；>3 天条件分支到人事总监 running）；PUT 落库验证、DELETE 204；stats 返回分组统计；build 导出快照 + i18n 替换 + Chart/FlowViewer 容器 + data-sort 输出
+- 已知限制：`<Filter>` 值为静态（无 `{{}}` 绑定）；`runtime.js` 登录模态框无注册/忘记密码入口（open 模式注册走 API）；审批流无撤回/加签；`kv_flow_instance` 未关联 `storage_object` 等资源清理

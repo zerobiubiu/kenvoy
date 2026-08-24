@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Strings>
+  <String key="app.name" value="Kenvoy 请假管理" />
+  <String key="nav.dashboard" value="工作台" />
+  <String key="footer.copyright" value="© 2026 KenvoySpace" />
+</Strings>

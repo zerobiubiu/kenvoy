@@ -150,6 +150,14 @@ pub enum ParseError {
         /// 重复的组件名。
         name: String,
     },
+    /// 页面引用了未定义的流程。
+    #[error("{from}: 引用的流程 `{flow}` 未定义（未由页面引入或不存在）")]
+    FlowNotFound {
+        /// 引用来源（页面路径）。
+        from: String,
+        /// 流程名。
+        flow: String,
+    },
 }
 
 impl ParseError {
@@ -187,6 +195,8 @@ enum Role {
     Publish,
     /// 自定义组件文件（`module/` 目录，根元素 `<Component>`）。
     Module,
+    /// 翻译表文件（`I8n/<语言>/` 目录，根元素 `<Strings>`）。
+    I18n,
 }
 
 /// 解析一组源文件，构建完整 `IR`。
@@ -202,6 +212,7 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
     let mut pages: Vec<Page> = Vec::new();
     let mut flow_registry: BTreeMap<String, Flow> = BTreeMap::new();
     let mut components: BTreeMap<String, ComponentDef> = BTreeMap::new();
+    let mut translations: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
 
     for file in files {
         let Some((role, dir)) = classify(&file.path) else {
@@ -242,6 +253,10 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
                 }
                 components.insert(def.name.clone(), def);
             }
+            Role::I18n => {
+                let (locale, strings) = doc::parse_strings(&file.path, root)?;
+                translations.entry(locale).or_default().extend(strings);
+            }
             Role::Flow | Role::Publish => {
                 // 仅由页面 `<Import>` 显式引入，顶层不收集
             }
@@ -258,6 +273,8 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
 
     validate_models(&pages, &models)?;
     validate_components(&components, &models)?;
+    validate_flows(&pages, &flow_registry)?;
+    validate_charts(&pages, &models)?;
 
     let flows: Vec<Flow> = flow_registry.into_values().collect();
     let mut role_map: BTreeMap<String, IrRole> = BTreeMap::new();
@@ -275,6 +292,7 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
         project: ProjectMeta {
             name: project_name.to_string(),
             description: None,
+            locale: None,
         },
         models,
         layouts,
@@ -282,16 +300,25 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
         flows,
         permissions: Permissions { roles },
         components,
+        translations,
     })
 }
 
 /// 依据文件路径识别角色与「apps 内目录路径」。
 ///
 /// 例如 `apps/leave/apply/page.kenvoy.xml` → (`Page`, `/leave/apply`)；
-/// `module/` 目录（全局或应用私有）下的 `*.kenvoy.xml` → `Module`。
+/// `module/` 目录（全局或应用私有）下的 `*.kenvoy.xml` → `Module`；
+/// `I8n/` 目录（不区分大小写）下的 `*.kenvoy.xml` → `I18n`，目录名即语言。
 fn classify(path: &str) -> Option<(Role, String)> {
     let norm = path.replace('\\', "/");
+    let lower = norm.to_ascii_lowercase();
     let (dir, file) = norm.rsplit_once('/')?;
+    if lower.contains("/i8n/") || lower.starts_with("i8n/") {
+        if file.ends_with(".kenvoy.xml") {
+            return Some((Role::I18n, String::new()));
+        }
+        return None;
+    }
     if norm.contains("/module/") || norm.starts_with("module/") {
         if file.ends_with(".kenvoy.xml") {
             return Some((Role::Module, String::new()));
@@ -373,6 +400,101 @@ fn validate_components(
     Ok(())
 }
 
+/// 校验页面引用的流程存在。
+fn validate_flows(pages: &[Page], flows: &BTreeMap<String, Flow>) -> Result<(), ParseError> {
+    for page in pages {
+        if let Some(viewer) = find_flow_viewers(&page.content) {
+            for flow in viewer {
+                if !flows.contains_key(&flow) {
+                    return Err(ParseError::FlowNotFound {
+                        from: page.path.clone(),
+                        flow,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 收集页面树中的 `<FlowViewer>` 引用的流程名。
+fn find_flow_viewers(node: &Node) -> Option<Vec<String>> {
+    let mut out = Vec::new();
+    collect_flow_viewers(node, &mut out);
+    (!out.is_empty()).then_some(out)
+}
+
+fn collect_flow_viewers(node: &Node, out: &mut Vec<String>) {
+    match node {
+        Node::FlowViewer { props } => out.push(props.flow.clone()),
+        Node::Row { children, .. }
+        | Node::Col { children, .. }
+        | Node::Section { children, .. }
+        | Node::Form { children, .. }
+        | Node::Table { children, .. }
+        | Node::Custom { children, .. } => {
+            for child in children {
+                collect_flow_viewers(child, out);
+            }
+        }
+        Node::Slot
+        | Node::Field { .. }
+        | Node::Column { .. }
+        | Node::StatCard { .. }
+        | Node::Text { .. }
+        | Node::Chart { .. } => {}
+    }
+}
+
+/// 校验 `<Chart>` 引用的模型与字段存在。
+fn validate_charts(pages: &[Page], models: &BTreeMap<String, Model>) -> Result<(), ParseError> {
+    for page in pages {
+        validate_chart_node(&page.content, models, &page.path)?;
+    }
+    Ok(())
+}
+
+fn validate_chart_node(
+    node: &Node,
+    models: &BTreeMap<String, Model>,
+    from: &str,
+) -> Result<(), ParseError> {
+    match node {
+        Node::Chart { props } => {
+            let Some(m) = models.get(&props.model) else {
+                return Err(ParseError::ModelNotFound {
+                    from: from.to_string(),
+                    model: props.model.clone(),
+                });
+            };
+            if !m.fields.iter().any(|f| f.name == props.field) {
+                return Err(ParseError::FieldNotFound {
+                    from: from.to_string(),
+                    model: props.model.clone(),
+                    field: props.field.clone(),
+                });
+            }
+        }
+        Node::Row { children, .. }
+        | Node::Col { children, .. }
+        | Node::Section { children, .. }
+        | Node::Form { children, .. }
+        | Node::Table { children, .. }
+        | Node::Custom { children, .. } => {
+            for child in children {
+                validate_chart_node(child, models, from)?;
+            }
+        }
+        Node::Slot
+        | Node::Field { .. }
+        | Node::Column { .. }
+        | Node::StatCard { .. }
+        | Node::Text { .. }
+        | Node::FlowViewer { .. } => {}
+    }
+    Ok(())
+}
+
 /// 递归校验节点树：`Form` / `Table` 引用的模型必须存在，`Field` 字段必须属于当前模型。
 fn validate_node(
     node: &Node,
@@ -425,7 +547,12 @@ fn validate_node(
                 validate_node(child, models, from, current_model)?;
             }
         }
-        Node::Slot | Node::Column { .. } | Node::StatCard { .. } | Node::Text { .. } => {}
+        Node::Slot
+        | Node::Column { .. }
+        | Node::StatCard { .. }
+        | Node::Text { .. }
+        | Node::Chart { .. }
+        | Node::FlowViewer { .. } => {}
     }
     Ok(())
 }

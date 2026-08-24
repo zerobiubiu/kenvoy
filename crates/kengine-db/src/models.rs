@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 use kengine::ir::{FieldType, FilterOp, Model};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::types::Json;
 use sqlx::{PgPool, Row};
 
@@ -30,6 +30,7 @@ pub async fn ensure_model_table(pool: &PgPool, model: &Model) -> Result<(), DbEr
         cols.push(format!("\"{}\" {}", field.name, sql_type(field.field_type)));
     }
     cols.push("created_at TIMESTAMPTZ NOT NULL DEFAULT now()".to_string());
+    cols.push("updated_at TIMESTAMPTZ NOT NULL DEFAULT now()".to_string());
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS \"{table}\" ({})",
         cols.join(", ")
@@ -42,6 +43,14 @@ pub async fn ensure_model_table(pool: &PgPool, model: &Model) -> Result<(), DbEr
             field.name,
             sql_type(field.field_type)
         );
+        sqlx::query(&alter).execute(pool).await?;
+    }
+    // 系统列演进（旧表缺列时补充）
+    for (col, def) in [
+        ("created_at", "TIMESTAMPTZ NOT NULL DEFAULT now()"),
+        ("updated_at", "TIMESTAMPTZ NOT NULL DEFAULT now()"),
+    ] {
+        let alter = format!("ALTER TABLE \"{table}\" ADD COLUMN IF NOT EXISTS \"{col}\" {def}");
         sqlx::query(&alter).execute(pool).await?;
     }
     Ok(())
@@ -115,7 +124,106 @@ pub async fn insert_record(
     Ok(row.try_get("id")?)
 }
 
-/// 列出模型全部记录（含 `id` / `created_at`），按 `id` 升序。
+/// 更新记录的部分字段（`data` 中出现且属于模型定义的字段）。
+///
+/// 返回 `false` 表示记录不存在。
+///
+/// # Panics
+/// 当 `data` 中出现模型定义之外的字段名时（内部调用保证不会发生）panic。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+#[allow(clippy::implicit_hasher)] // 内部 API，默认哈希器足够
+pub async fn update_record(
+    pool: &PgPool,
+    model: &Model,
+    id: i64,
+    data: &HashMap<String, Value>,
+) -> Result<bool, DbError> {
+    let table = table_name(&model.name);
+    let mut sets: Vec<String> = Vec::new();
+    let mut fields: Vec<(String, FieldType)> = Vec::new();
+    for field in &model.fields {
+        if data.contains_key(&field.name) {
+            sets.push(format!("\"{}\" = ${}", field.name, sets.len() + 1));
+            fields.push((field.name.clone(), field.field_type));
+        }
+    }
+    if sets.is_empty() {
+        return Ok(true); // 无可更新字段，幂等成功
+    }
+    sets.push("updated_at = now()".to_string());
+    let sql = format!(
+        "UPDATE \"{table}\" SET {} WHERE id = ${}",
+        sets.join(", "),
+        fields.len() + 1
+    );
+    let mut query = sqlx::query(&sql);
+    for (name, ft) in &fields {
+        let val = data.get(name).expect("字段存在性已检查");
+        query = match ft {
+            FieldType::Number => query.bind(val.as_f64().unwrap_or(0.0)),
+            FieldType::Boolean => query.bind(val.as_bool().unwrap_or(false)),
+            _ => match val {
+                Value::Null => query.bind(Option::<String>::None),
+                other => query.bind(other.as_str().map(str::to_string)),
+            },
+        };
+    }
+    let row = query.bind(id).execute(pool).await?;
+    Ok(row.rows_affected() > 0)
+}
+
+/// 删除记录，返回 `false` 表示记录不存在。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+pub async fn delete_record(pool: &PgPool, model: &Model, id: i64) -> Result<bool, DbError> {
+    let table = table_name(&model.name);
+    let row = sqlx::query(&format!("DELETE FROM \"{table}\" WHERE id = $1"))
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(row.rows_affected() > 0)
+}
+
+/// 分组统计：`SELECT 字段, count|sum|avg(字段) FROM 模型 GROUP BY 字段`。
+///
+/// 返回 `[{ "group": 分组值, "value": 统计值 }]`（按统计值降序）。
+/// `stat` 仅支持 `count` / `sum` / `avg`。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+pub async fn stats_group(
+    pool: &PgPool,
+    model: &Model,
+    field: &str,
+    stat: &str,
+) -> Result<Vec<Value>, DbError> {
+    let table = table_name(&model.name);
+    let agg = match stat {
+        "sum" => "sum",
+        "avg" => "avg",
+        _ => "count",
+    };
+    let agg_sql = if agg == "count" {
+        "CAST(count(*) AS DOUBLE PRECISION)".to_string()
+    } else {
+        format!("CAST({agg}(\"{field}\") AS DOUBLE PRECISION)")
+    };
+    let sql = format!(
+        "SELECT \"{field}\" AS grp, {agg_sql} AS val FROM \"{table}\" \
+         WHERE \"{field}\" IS NOT NULL GROUP BY \"{field}\" ORDER BY val DESC"
+    );
+    let rows = sqlx::query(&sql).fetch_all(pool).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let group: String = row.try_get("grp")?;
+        let value: f64 = row.try_get("val")?;
+        out.push(json!({ "group": group, "value": value }));
+    }
+    Ok(out)
+}
 ///
 /// # Errors
 /// SQL 执行失败时返回 [`DbError`]。
@@ -158,14 +266,18 @@ impl FilterCond {
     }
 }
 
-/// 列出模型记录，支持行级过滤（`groups` 之间 OR 连接，组内 AND）。
+/// 列出模型记录，支持行级过滤（`groups` 之间 OR 连接，组内 AND）与排序、分页。
+///
+/// `order_by` 为 `(字段, asc|desc)` 列表（字段必须为模型字段，否则忽略该条）。
 ///
 /// # Errors
 /// SQL 执行失败时返回 [`DbError`]。
-pub async fn list_records_filtered(
+pub async fn list_records_query(
     pool: &PgPool,
     model: &Model,
     groups: &[Vec<FilterCond>],
+    order_by: &[(String, String)],
+    limit: Option<i64>,
 ) -> Result<Vec<Value>, DbError> {
     let table = table_name(&model.name);
     let mut sql = format!("SELECT to_jsonb(t) FROM \"{table}\" t");
@@ -176,21 +288,67 @@ pub async fn list_records_filtered(
             let mut and_clauses = Vec::with_capacity(group.len());
             for c in group {
                 n += 1;
-                and_clauses.push(format!("t.\"{}\" {} ${n}", c.field, c.sql_op()));
+                // 值按字段类型显式 cast（`id` 为 BIGSERIAL；数字/布尔字段同理），
+                // 避免 TEXT 参数与数值列比较类型不匹配
+                let cast = if c.field == "id" {
+                    "::BIGINT"
+                } else {
+                    match model
+                        .fields
+                        .iter()
+                        .find(|f| f.name == c.field)
+                        .map(|f| f.field_type)
+                    {
+                        Some(FieldType::Number) => "::DOUBLE PRECISION",
+                        Some(FieldType::Boolean) => "::BOOLEAN",
+                        _ => "",
+                    }
+                };
+                and_clauses.push(format!("t.\"{}\" {} ${n}{cast}", c.field, c.sql_op()));
             }
             or_clauses.push(format!("({})", and_clauses.join(" AND ")));
         }
         let _ = write!(sql, " WHERE {}", or_clauses.join(" OR "));
     }
-    sql.push_str(" ORDER BY t.id");
+    if !order_by.is_empty() {
+        let mut orders = Vec::with_capacity(order_by.len());
+        for (field, dir) in order_by {
+            let dir = if dir == "desc" { "DESC" } else { "ASC" };
+            if model.fields.iter().any(|f| &f.name == field) {
+                orders.push(format!("t.\"{field}\" {dir}"));
+            }
+        }
+        if !orders.is_empty() {
+            let _ = write!(sql, " ORDER BY {}", orders.join(", "));
+        }
+    }
+    if !sql.contains(" ORDER BY ") {
+        sql.push_str(" ORDER BY t.id");
+    }
+    // `LIMIT` 占位符接在全部条件占位符之后，避免与 `$1` 冲突
+    let _ = write!(sql, " LIMIT ${}", n + 1);
     let mut query = sqlx::query_as::<_, (Json<Value>,)>(&sql);
+    // bind 顺序与占位符编号一致：先条件值（$1..$n），再 limit（${n+1}）
     for group in groups {
         for c in group {
             query = query.bind(&c.value);
         }
     }
+    query = query.bind(limit.unwrap_or(500).clamp(1, 5000));
     let rows = query.fetch_all(pool).await?;
     Ok(rows.into_iter().map(|(json,)| json.0).collect())
+}
+
+/// 列出模型记录，支持行级过滤（`groups` 之间 OR 连接，组内 AND）。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+pub async fn list_records_filtered(
+    pool: &PgPool,
+    model: &Model,
+    groups: &[Vec<FilterCond>],
+) -> Result<Vec<Value>, DbError> {
+    list_records_query(pool, model, groups, &[], None).await
 }
 
 /// 列出模型记录，支持 AND 相等过滤（旧接口兼容）。
@@ -277,5 +435,40 @@ impl<'a> ModelStore<'a> {
         groups: &[Vec<FilterCond>],
     ) -> Result<Vec<Value>, DbError> {
         list_records_filtered(self.pool, model, groups).await
+    }
+
+    /// 按条件 + 排序 + 分页列出记录。
+    ///
+    /// # Errors
+    /// 见 [`list_records_query`]。
+    pub async fn list_query(
+        &self,
+        model: &Model,
+        groups: &[Vec<FilterCond>],
+        order_by: &[(String, String)],
+        limit: Option<i64>,
+    ) -> Result<Vec<Value>, DbError> {
+        list_records_query(self.pool, model, groups, order_by, limit).await
+    }
+
+    /// 更新记录部分字段。
+    ///
+    /// # Errors
+    /// 见 [`update_record`]。
+    pub async fn update(
+        &self,
+        model: &Model,
+        id: i64,
+        data: &HashMap<String, Value>,
+    ) -> Result<bool, DbError> {
+        update_record(self.pool, model, id, data).await
+    }
+
+    /// 删除记录。
+    ///
+    /// # Errors
+    /// 见 [`delete_record`]。
+    pub async fn delete(&self, model: &Model, id: i64) -> Result<bool, DbError> {
+        delete_record(self.pool, model, id).await
     }
 }

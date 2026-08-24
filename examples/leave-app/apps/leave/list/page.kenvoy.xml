@@ -3,6 +3,7 @@
   <Title>我的申请</Title>
   <Content>
     <Table model="请假单" pageSize="20">
+      <Sort field="请假天数" order="desc" />
       <Column field="请假类型" label="类型" />
       <Column field="开始日期" label="开始" />
       <Column field="结束日期" label="结束" />

@@ -36,6 +36,9 @@ pub struct ProjectIr {
     /// 用户自定义组件（页面内 `<Component>` + `module/` 目录），按组件名索引。
     #[serde(default)]
     pub components: BTreeMap<String, ComponentDef>,
+    /// 国际化翻译表（locale → 键 → 文本），解析自 `I8n/` 目录。
+    #[serde(default)]
+    pub translations: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// 项目元信息。
@@ -47,6 +50,9 @@ pub struct ProjectMeta {
     /// 项目描述。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// 默认语言（`I8n/` 目录名，如 `zh`；渲染时按此语言替换 `i18n` 键）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
 }
 
 /// 数据模型。
@@ -209,6 +215,16 @@ pub enum Node {
         #[serde(default)]
         props: TextProps,
     },
+    /// 流程图查看器（静态展示流程节点步骤）。
+    FlowViewer {
+        #[serde(default)]
+        props: FlowViewerProps,
+    },
+    /// 统计图表（柱状图：按模型字段分组统计，运行时拉取数据渲染）。
+    Chart {
+        #[serde(default)]
+        props: ChartProps,
+    },
     /// 用户 DSL 自定义组件。
     ///
     /// serde 内部标签（`type`）占用 JSON 的 `type` 字段，因此组件名放在
@@ -223,6 +239,26 @@ pub enum Node {
         #[serde(default)]
         children: Vec<Node>,
     },
+}
+
+/// 统计图表属性（柱状图：按模型字段分组统计，运行时拉取数据渲染）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChartProps {
+    /// 数据源模型名。
+    pub model: String,
+    /// 分组统计字段。
+    pub field: String,
+    /// 统计方式：`count`（默认）/ `sum` / `avg`。
+    pub stat: String,
+}
+
+/// 流程图查看器属性。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FlowViewerProps {
+    /// 流程名（索引到 `ProjectIr.flows`）。
+    pub flow: String,
 }
 
 /// 行布局属性（demo 占位，后续可扩展 gap / align 等）。
@@ -358,6 +394,9 @@ pub struct StatCardProps {
 pub struct TextProps {
     /// 文本内容。
     pub value: String,
+    /// i18n 翻译键（`ProjectIr.translations`，命中时替换 `value`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub i18n: Option<String>,
 }
 
 /// 审批流（由页面 `<Import>` 显式引入）。
@@ -653,6 +692,7 @@ mod tests {
             Node::Text {
                 props: TextProps {
                     value: "hello".into(),
+                    i18n: None,
                 },
             },
             Node::Custom {
@@ -704,6 +744,7 @@ mod tests {
             project: ProjectMeta {
                 name: "请假管理".into(),
                 description: Some("企业请假管理数字化平台".into()),
+                locale: None,
             },
             models: BTreeMap::from([(
                 "请假单".to_string(),
@@ -788,6 +829,7 @@ mod tests {
                     },
                 },
             )]),
+            translations: BTreeMap::new(),
         };
         let _ = round_trip_json(&ir);
     }

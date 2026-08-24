@@ -90,6 +90,36 @@ pub(crate) fn parse_layout(
     })
 }
 
+/// 解析 `<Strings>` 文档（`I8n/<语言>/` 目录），返回（语言, 键→文本）。
+pub(crate) fn parse_strings(
+    path: &str,
+    root: roxmltree::Node<'_, '_>,
+) -> Result<(String, BTreeMap<String, String>), ParseError> {
+    if root.tag_name().name() != "Strings" {
+        return Err(ParseError::InvalidModuleRoot {
+            path: path.to_string(),
+            root: root.tag_name().name().to_string(),
+        });
+    }
+    // 语言取自目录名：`I8n/zh/strings.kenvoy.xml` → `zh`
+    let locale = path
+        .replace('\\', "/")
+        .split('/')
+        .nth(1)
+        .unwrap_or("")
+        .to_string();
+    let mut strings = BTreeMap::new();
+    for child in root.children().filter(roxmltree::Node::is_element) {
+        if child.tag_name().name() != "String" {
+            continue;
+        }
+        let key = required_attr(path, child, "String", "key")?;
+        let value = required_attr(path, child, "String", "value")?;
+        strings.insert(key, value);
+    }
+    Ok((locale, strings))
+}
+
 /// 解析 `<Component>` 文档（`module/` 目录下的组件定义文件）。
 pub(crate) fn parse_component_file(
     path: &str,

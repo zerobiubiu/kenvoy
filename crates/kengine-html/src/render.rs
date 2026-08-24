@@ -103,8 +103,18 @@ pub(crate) fn render_node(
         }
         Node::StatCard { props } => render_stat_card(props, bind),
         Node::Text { props } => {
-            let body = escape_html(&bind_str(&props.value, bind));
+            let body = escape_html(&translate(ir, props, bind));
             format!("<span class=\"kv-text\">{body}</span>")
+        }
+        Node::FlowViewer { props } => render_flow_viewer(ir, props),
+        Node::Chart { props } => {
+            // 柱状图容器：数据由客户端运行时经 `/__kenvoy/stats/{model}` 拉取渲染
+            format!(
+                "<div class=\"kv-chart\" data-model=\"{}\" data-field=\"{}\" data-stat=\"{}\"></div>",
+                escape_html(&props.model),
+                escape_html(&props.field),
+                escape_html(&props.stat)
+            )
         }
         Node::Custom {
             component,
@@ -128,6 +138,51 @@ pub(crate) fn render_node(
             )
         }
     }
+}
+
+/// 文本内容：`i18n` 键命中翻译表（项目默认语言）时取翻译，否则原值（含 `{{名}}` 绑定）。
+fn translate(
+    ir: &ProjectIr,
+    props: &kengine::ir::TextProps,
+    bind: &BTreeMap<String, Value>,
+) -> String {
+    if let Some(key) = &props.i18n
+        && let Some(locale) = ir.project.locale.as_deref()
+        && let Some(text) = ir.translations.get(locale).and_then(|m| m.get(key))
+    {
+        return bind_str(text, bind);
+    }
+    bind_str(&props.value, bind)
+}
+
+/// 渲染流程查看器：节点步骤条（节点名 + 审批人）。
+fn render_flow_viewer(ir: &ProjectIr, props: &kengine::ir::FlowViewerProps) -> String {
+    let Some(flow) = ir.flows.iter().find(|f| f.name == props.flow) else {
+        return format!(
+            "<div class=\"kv-flow-viewer\" data-flow=\"{}\">流程不存在</div>",
+            escape_html(&props.flow)
+        );
+    };
+    let steps: Vec<String> = flow
+        .nodes
+        .iter()
+        .map(|n| {
+            let name = escape_html(&n.name);
+            let approver = n
+                .approver
+                .as_deref()
+                .map(|a| format!("<span class=\"kv-flow-approver\">{}</span>", escape_html(a)))
+                .unwrap_or_default();
+            format!(
+                "<li class=\"kv-flow-step\"><span class=\"kv-flow-name\">{name}</span>{approver}</li>"
+            )
+        })
+        .collect();
+    let steps = steps.join("");
+    format!(
+        "<div class=\"kv-flow-viewer\" data-flow=\"{}\"><ol class=\"kv-flow-list\">{steps}</ol></div>",
+        escape_html(&props.flow)
+    )
 }
 
 /// `{{名}}` 绑定替换：命中实例 props 时替换为属性值，否则原样保留。
@@ -251,6 +306,8 @@ fn options_for<'a>(props: &'a FieldProps, field_def: Option<&'a FieldDef>) -> &'
 }
 
 /// 渲染数据表格：`table-responsive`（移动端横向滚动）+ 表头 + 空态。
+///
+/// 表格元数据（模型 / 行过滤 / 排序 / 分页）以 `data-*` 属性输出，供客户端运行时组装查询。
 fn render_table(
     ir: &ProjectIr,
     props: &TableProps,
@@ -260,7 +317,27 @@ fn render_table(
 ) -> String {
     let head: String = children
         .iter()
-        .map(|c| render_node(ir, c, "", bind, depth))
+        .map(|c| match c {
+            Node::Column { props: col } => {
+                let label = col
+                    .label
+                    .as_deref()
+                    .map_or_else(|| col.field.clone(), str::to_string);
+                // File 类型列输出 `data-type="file"`，运行时渲染下载链接
+                let is_file = ir.models.get(&props.model).is_some_and(|m| {
+                    m.fields
+                        .iter()
+                        .any(|f| f.name == col.field && f.field_type == FieldType::File)
+                });
+                let type_attr = if is_file { " data-type=\"file\"" } else { "" };
+                format!(
+                    "<th class=\"kv-th\" data-field=\"{}\"{type_attr}>{}</th>",
+                    escape_html(&col.field),
+                    escape_html(&label)
+                )
+            }
+            other => render_node(ir, other, "", bind, depth),
+        })
         .collect();
     let empty = if children.is_empty() {
         String::new()
@@ -271,11 +348,46 @@ fn render_table(
         )
     };
     let model_name = escape_html(&props.model);
+    // 过滤条件 `字段:值,字段2:值2`；排序 `字段:asc,字段2:desc`
+    let filter_attr = props
+        .filter
+        .iter()
+        .map(|(k, v)| format!("{k}:{}", v_to_str(v)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sort_attr = props
+        .sort
+        .iter()
+        .map(|(k, v)| format!("{k}:{}", v_to_str(v)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let filter_html = if filter_attr.is_empty() {
+        String::new()
+    } else {
+        format!(" data-filter=\"{}\"", escape_html(&filter_attr))
+    };
+    let sort_html = if sort_attr.is_empty() {
+        String::new()
+    } else {
+        format!(" data-sort=\"{}\"", escape_html(&sort_attr))
+    };
+    let page_html = props
+        .page_size
+        .map(|p| format!(" data-page-size=\"{p}\""))
+        .unwrap_or_default();
     format!(
-        "<div class=\"table-responsive kv-table-wrap\" data-model=\"{model_name}\">\
+        "<div class=\"table-responsive kv-table-wrap\" data-model=\"{model_name}\"{filter_html}{sort_html}{page_html}>\
          <table class=\"table table-hover kv-table\"><thead><tr>{head}</tr></thead>\
          <tbody>{empty}</tbody></table></div>"
     )
+}
+
+/// `serde_json` 值 → 纯文本（过滤/排序属性用）。
+fn v_to_str(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
 }
 
 /// 渲染统计卡（Tabler `card`）。

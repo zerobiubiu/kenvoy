@@ -87,6 +87,20 @@ pub const MIGRATIONS: &[&str] = &[
         created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     )
     ",
+    // 审批流实例（运行时状态：当前节点与状态）
+    r"
+    CREATE TABLE IF NOT EXISTS kv_flow_instance (
+        id           BIGSERIAL PRIMARY KEY,
+        flow         TEXT NOT NULL,
+        model        TEXT NOT NULL,
+        record_id    BIGINT NOT NULL,
+        current_node TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'running',
+        created_by   BIGINT REFERENCES users(id) ON DELETE SET NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    ",
 ];
 
 /// 执行全部迁移（幂等）。

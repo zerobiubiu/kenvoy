@@ -107,6 +107,8 @@ pub struct ProjectConfig {
     pub name: Option<String>,
     /// 项目描述。
     pub description: Option<String>,
+    /// 默认语言（`I8n/` 目录名，如 `zh`；`Text` 的 `i18n` 键按此语言替换）。
+    pub locale: Option<String>,
 }
 
 /// `[server]` 段。
@@ -224,6 +226,7 @@ mod tests {
             project: ProjectConfig {
                 name: Some("配置名".into()),
                 description: None,
+                locale: None,
             },
             ..KenvoyConfig::default()
         };

@@ -22,10 +22,16 @@ fn uniq() -> u128 {
         .as_nanos()
 }
 
+/// 迁移串行锁：多个测试并行执行 `migrate` 时，并发 `CREATE TABLE IF NOT EXISTS`
+/// 可能触发 `pg_class` 唯一键竞态（新表首次创建时）。
+static MIGRATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn setup_pool() -> Option<PgPool> {
     let url = db_url()?;
     let pool = connect(&url).await.expect("连接失败");
+    let guard = MIGRATE_LOCK.lock().await;
     migrate(&pool).await.expect("迁移失败");
+    drop(guard);
     Some(pool)
 }
 

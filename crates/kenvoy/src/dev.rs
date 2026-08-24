@@ -12,13 +12,14 @@ use axum::Router;
 use axum::extract::{DefaultBodyLimit, Json, Multipart, Path as AxumPath, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post};
-use kengine::ir::{DataFilterRule, Node, Page, ProjectIr, RoleFilter, Validation};
+use axum::routing::{get, post, put};
+use kengine::ir::{DataFilterRule, Flow as IrFlow, Node, Page, ProjectIr, RoleFilter, Validation};
 use kengine::validation;
+use kengine::workflow::{self, Decision};
 use kengine::{SourceFile, build_project};
 use kengine_db::models::FilterCond;
 use kengine_db::users::User;
-use kengine_db::{ModelStore, StorageStore, UserStore};
+use kengine_db::{FlowStore, ModelStore, StorageStore, UserStore};
 use kengine_html::render_page;
 use kengine_s3::ObjectStore;
 use notify::Watcher;
@@ -67,6 +68,8 @@ pub struct DevOptions<'a> {
     pub project_name: &'a str,
     /// 项目描述。
     pub description: Option<String>,
+    /// 默认语言（`I8n/` 目录名）。
+    pub locale: Option<String>,
     /// `[storage]` 配置。
     pub storage: &'a StorageConfig,
     /// `[auth]` 配置。
@@ -86,11 +89,13 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
     let auth = opts.auth;
     let db = opts.db;
     let build_state = Arc::new(RwLock::new(
-        build(dir, project_name).with_context(|| format!("构建项目失败：{}", dir.display()))?,
+        build(dir, project_name, opts.locale.as_deref())
+            .with_context(|| format!("构建项目失败：{}", dir.display()))?,
     ));
     spawn_watcher(
         dir.to_path_buf(),
         project_name.to_string(),
+        opts.locale.clone(),
         build_state.clone(),
     );
 
@@ -123,6 +128,23 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         .route("/assets/tabler-icons.woff2", get(tabler_icons_woff2))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
         .route(
+            "/__kenvoy/data/{model}/{id}",
+            put(update_data).delete(delete_data),
+        )
+        .route("/__kenvoy/stats/{model}", get(stats_data))
+        .route(
+            "/__kenvoy/flow/{flow}/records/{record_id}/start",
+            post(start_flow),
+        )
+        .route(
+            "/__kenvoy/flow/{flow}/records/{record_id}/step",
+            post(step_flow),
+        )
+        .route(
+            "/__kenvoy/flow/{flow}/records/{record_id}",
+            get(get_flow_instance),
+        )
+        .route(
             "/__kenvoy/file",
             post(upload_file).layer(DefaultBodyLimit::max(upload_body_limit(storage))),
         )
@@ -152,15 +174,20 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
 }
 
 /// 扫描 `apps/` 并解析为 `IR`（供 `dev` / `build` 复用）。
-pub(crate) fn build_ir(dir: &Path, project_name: &str) -> anyhow::Result<ProjectIr> {
+pub(crate) fn build_ir(
+    dir: &Path,
+    project_name: &str,
+    locale: Option<&str>,
+) -> anyhow::Result<ProjectIr> {
     let mut files = Vec::new();
     collect_source_files(dir, &mut files)?;
-    Ok(build_project(&files, project_name)?)
+    let mut ir = build_project(&files, project_name)?;
+    ir.project.locale = locale.map(str::to_string);
+    Ok(ir)
 }
 
-/// 扫描 `apps/` 并构建 `IR`。
-fn build(dir: &Path, project_name: &str) -> anyhow::Result<BuildState> {
-    let ir = build_ir(dir, project_name)?;
+fn build(dir: &Path, project_name: &str, locale: Option<&str>) -> anyhow::Result<BuildState> {
+    let ir = build_ir(dir, project_name, locale)?;
     Ok(BuildState { ir, version: 0 })
 }
 
@@ -174,6 +201,13 @@ fn collect_source_files(dir: &Path, out: &mut Vec<SourceFile>) -> std::io::Resul
     let module_dir = dir.join("module");
     if module_dir.is_dir() {
         walk_dir(&module_dir, dir, out)?;
+    }
+    // 国际化 `I8n/` 目录（区分大小写兼容：i18n / I8n）
+    for name in ["I8n", "i18n"] {
+        let i18n_dir = dir.join(name);
+        if i18n_dir.is_dir() {
+            walk_dir(&i18n_dir, dir, out)?;
+        }
     }
     Ok(())
 }
@@ -198,7 +232,12 @@ fn walk_dir(dir: &Path, base: &Path, out: &mut Vec<SourceFile>) -> std::io::Resu
 }
 
 /// 启动文件监听：XML 变更（或目录结构增删）→ 合并事件 → 重建 `IR`。
-fn spawn_watcher(dir: PathBuf, project_name: String, state: Arc<RwLock<BuildState>>) {
+fn spawn_watcher(
+    dir: PathBuf,
+    project_name: String,
+    locale: Option<String>,
+    state: Arc<RwLock<BuildState>>,
+) {
     let (tx, rx) = mpsc::channel::<()>();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         if let Ok(event) = res {
@@ -230,19 +269,19 @@ fn spawn_watcher(dir: PathBuf, project_name: String, state: Arc<RwLock<BuildStat
             while rx.try_recv().is_ok() {}
             std::thread::sleep(std::time::Duration::from_millis(200));
             while rx.try_recv().is_ok() {}
-            rebuild(&dir, &project_name, &state);
+            rebuild(&dir, &project_name, locale.as_deref(), &state);
         }
     });
 }
 
 /// 重建 `IR`：成功则替换并递增版本；失败则保留旧版本并打印错误。
-fn rebuild(dir: &Path, project_name: &str, state: &RwLock<BuildState>) {
+fn rebuild(dir: &Path, project_name: &str, locale: Option<&str>, state: &RwLock<BuildState>) {
     let next_version = state
         .read()
         .expect("读取状态失败")
         .version
         .saturating_add(1);
-    match build(dir, project_name) {
+    match build(dir, project_name, locale) {
         Ok(new_state) => {
             let mut s = state.write().expect("写入状态失败");
             s.ir = new_state.ir;
@@ -594,11 +633,13 @@ async fn download_file(
 
 /// 列表数据：`GET /__kenvoy/data/{model}`。
 ///
-/// 启用数据库时要求登录（Bearer token），并按 `DataFilter` 做行级过滤。
+/// 启用数据库时要求登录（Bearer token），并按 `DataFilter` 做行级过滤；
+/// 支持查询参数：`filter`（`字段:值,字段2:值2`，与权限条件 AND）、`sort`（`字段:asc`）、`pageSize`。
 async fn list_data(
     State(state): State<AppState>,
     headers: HeaderMap,
     AxumPath(model): AxumPath<String>,
+    axum::extract::Query(params): axum::extract::Query<DataListQuery>,
 ) -> Response {
     if let Some(pool) = &state.db {
         let (user, roles) = match auth_user(&state, &headers).await {
@@ -616,7 +657,7 @@ async fn list_data(
         if let Err(err) = store.ensure(&model_def).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
         }
-        let groups = {
+        let mut groups = {
             let build = state.build.read().expect("读取状态失败");
             match resolve_data_filter(&build.ir, &model, &roles, &user) {
                 FilterDecision::AllowAll => Vec::new(),
@@ -626,7 +667,37 @@ async fn list_data(
                 FilterDecision::Conditions(g) => g,
             }
         };
-        match store.list_filtered(&model_def, &groups).await {
+        // 用户查询条件：仅接受模型字段或 `id`（并入每组权限条件 AND）
+        let user_conds: Vec<FilterCond> = params
+            .filter
+            .as_deref()
+            .map(parse_filter_pairs)
+            .into_iter()
+            .flatten()
+            .filter(|(f, _)| f == "id" || model_def.fields.iter().any(|m| m.name == *f))
+            .map(|(f, v)| FilterCond::eq(&f, &v))
+            .collect();
+        if !user_conds.is_empty() {
+            if groups.is_empty() {
+                groups = vec![user_conds];
+            } else {
+                for g in &mut groups {
+                    g.extend(user_conds.iter().cloned());
+                }
+            }
+        }
+        let order_by: Vec<(String, String)> = params
+            .sort
+            .as_deref()
+            .map(parse_sort_pairs)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(f, _)| model_def.fields.iter().any(|m| m.name == *f))
+            .collect();
+        match store
+            .list_query(&model_def, &groups, &order_by, params.page_size)
+            .await
+        {
             Ok(rows) => {
                 let rows = {
                     let build = state.build.read().expect("读取状态失败");
@@ -646,6 +717,93 @@ async fn list_data(
             .unwrap_or_default();
         Json(records).into_response()
     }
+}
+
+/// 数据列表查询参数。
+#[derive(serde::Deserialize)]
+struct DataListQuery {
+    /// `字段:值,字段2:值2`。
+    filter: Option<String>,
+    /// `字段:asc,字段2:desc`。
+    sort: Option<String>,
+    /// 每页条数（缺省 500，上限 5000）。
+    #[serde(rename = "pageSize")]
+    page_size: Option<i64>,
+}
+
+/// 解析 `字段:值,字段2:值2`。
+fn parse_filter_pairs(s: &str) -> Vec<(String, String)> {
+    s.split(',')
+        .filter(|p| !p.is_empty())
+        .filter_map(|p| {
+            let (f, v) = p.split_once(':')?;
+            (!f.is_empty()).then(|| (f.trim().to_string(), v.to_string()))
+        })
+        .collect()
+}
+
+/// 解析 `字段:asc,字段2:desc`（未知方向回退 `asc`）。
+fn parse_sort_pairs(s: &str) -> Vec<(String, String)> {
+    s.split(',')
+        .filter(|p| !p.is_empty())
+        .filter_map(|p| {
+            let (f, v) = p.split_once(':')?;
+            let dir = if v.eq_ignore_ascii_case("desc") {
+                "desc"
+            } else {
+                "asc"
+            };
+            (!f.is_empty()).then(|| (f.trim().to_string(), dir.to_string()))
+        })
+        .collect()
+}
+
+/// 分组统计：`GET /__kenvoy/stats/{model}?group=字段&stat=count|sum|avg`（需登录）。
+async fn stats_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(model): AxumPath<String>,
+    axum::extract::Query(params): axum::extract::Query<StatsQuery>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    if let Err(r) = auth_user(&state, &headers).await {
+        return r;
+    }
+    let Some(group) = params.group.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "缺少 group 参数").into_response();
+    };
+    let stat = params.stat.as_deref().unwrap_or("count");
+    if !matches!(stat, "count" | "sum" | "avg") {
+        return (StatusCode::BAD_REQUEST, "stat 仅支持 count/sum/avg").into_response();
+    }
+    let model_def = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(m) = build.ir.models.get(&model) else {
+            return (StatusCode::NOT_FOUND, "模型不存在").into_response();
+        };
+        if !m.fields.iter().any(|f| f.name == group) {
+            return (StatusCode::BAD_REQUEST, "group 字段不属于该模型").into_response();
+        }
+        m.clone()
+    };
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    match kengine_db::models::stats_group(pool, &model_def, group, stat).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct StatsQuery {
+    /// 分组字段。
+    group: Option<String>,
+    /// 统计方式（缺省 `count`）。
+    stat: Option<String>,
 }
 
 /// 创建数据：`POST /__kenvoy/data/{model}`。
@@ -710,6 +868,429 @@ async fn create_data(
         let mut data = state.data.lock().expect("写入数据失败");
         data.entry(model).or_default().push(payload.clone());
         Json(payload).into_response()
+    }
+}
+
+/// 更新数据：`PUT /__kenvoy/data/{model}/{id}`（与创建相同的鉴权与校验）。
+async fn update_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((model, id)): AxumPath<(String, i64)>,
+    Json(payload): Json<Value>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (_, roles) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let (model_def, validations) = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(m) = build.ir.models.get(&model) else {
+            return (StatusCode::NOT_FOUND, "模型不存在").into_response();
+        };
+        (m.clone(), collect_validations(&build.ir.pages, &model))
+    };
+    let data_map: std::collections::HashMap<String, Value> = payload
+        .as_object()
+        .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    let expr_data: std::collections::HashMap<String, kengine::expr::Value> = data_map
+        .iter()
+        .map(|(k, v)| (k.clone(), json_to_expr_value(v)))
+        .collect();
+    let errors = validation::validate(&validations, &expr_data);
+    if !errors.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
+    }
+    let denied: Vec<&String> = data_map
+        .keys()
+        .filter(|k| {
+            let build = state.build.read().expect("读取状态失败");
+            !field_write_allowed(&build.ir, k, &roles)
+        })
+        .collect();
+    if !denied.is_empty() {
+        let names: Vec<&str> = denied.iter().map(|s| s.as_str()).collect();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "errors": [format!("无字段写入权限：{}", names.join(", "))] })),
+        )
+            .into_response();
+    }
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    match store.update(&model_def, id, &data_map).await {
+        Ok(true) => Json(payload).into_response(),
+        Ok(false) => (StatusCode::NOT_FOUND, "记录不存在").into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+/// 删除数据：`DELETE /__kenvoy/data/{model}/{id}`。
+async fn delete_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((model, id)): AxumPath<(String, i64)>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    if let Err(r) = auth_user(&state, &headers).await {
+        return r;
+    }
+    let model_def = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(m) = build.ir.models.get(&model) else {
+            return (StatusCode::NOT_FOUND, "模型不存在").into_response();
+        };
+        m.clone()
+    };
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    match store.delete(&model_def, id).await {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => (StatusCode::NOT_FOUND, "记录不存在").into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+/// 流程起点（`flow.trigger` 首段为模型名，如 `请假单.提交申请`）。
+fn flow_model(flow: &IrFlow) -> Option<&str> {
+    flow.trigger.as_deref().and_then(|t| t.split('.').next())
+}
+
+/// 审批人校验：节点 `approver`（可带 `角色.` 前缀）匹配当前用户角色；未声明则放行。
+fn approver_allows(node: &kengine::ir::FlowNode, roles: &[String]) -> bool {
+    let Some(approver) = node.approver.as_deref() else {
+        return true;
+    };
+    let role = approver.strip_prefix("角色.").unwrap_or(approver);
+    roles.iter().any(|r| r == role)
+}
+
+/// 应用状态机副作用：模型字段更新落库。
+async fn apply_flow_effects(
+    store: &ModelStore<'_>,
+    model: &kengine::ir::Model,
+    record_id: i64,
+    effects: &workflow::Effects,
+) -> Result<(), String> {
+    for (field, value) in &effects.updates {
+        let mut data = std::collections::HashMap::new();
+        data.insert(field.clone(), Value::String(value.clone()));
+        store
+            .update(model, record_id, &data)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 连续执行知会节点（`notify` 无审批人，自动推进直到普通节点或结束）。
+#[allow(clippy::too_many_arguments)] // dev 内部装配函数，直传比再包一层结构体更直白
+async fn auto_run_notify(
+    state: &AppState,
+    pool: &PgPool,
+    flow: &IrFlow,
+    model_def: &kengine::ir::Model,
+    record_id: i64,
+    instance_id: i64,
+    mut current: Option<String>,
+    user: &User,
+) -> (Option<String>, String) {
+    let mut steps = 0;
+    while let Some(node_name) = current.clone()
+        && steps < 20
+    {
+        let Some(node) = flow.nodes.iter().find(|n| n.name == node_name) else {
+            break;
+        };
+        if node.kind != kengine::ir::FlowNodeKind::Notify {
+            break;
+        }
+        steps += 1;
+        let (data, ctx) = load_record_context(state, model_def, record_id, user).await;
+        let mut data = data;
+        let Ok(outcome) = workflow::step(flow, &node_name, Decision::Approve, &mut data, &ctx)
+        else {
+            break;
+        };
+        if let Err(err) = apply_flow_effects(
+            &ModelStore::new(pool),
+            model_def,
+            record_id,
+            &outcome.effects,
+        )
+        .await
+        {
+            eprintln!("流程副作用落库失败：{err}");
+            break;
+        }
+        current = outcome.next;
+    }
+    if steps == 20 {
+        eprintln!("流程自动推进超过 20 步，停止");
+    }
+    let status = if current.is_none() { "done" } else { "running" };
+    let _ = FlowStore::new(pool)
+        .advance(instance_id, current.as_deref().unwrap_or(""), status)
+        .await;
+    (current, status.to_string())
+}
+
+/// 加载记录数据为表达式上下文（`{{字段}}` + `currentUser.*`）。
+async fn load_record_context(
+    state: &AppState,
+    model_def: &kengine::ir::Model,
+    record_id: i64,
+    user: &User,
+) -> (
+    std::collections::HashMap<String, kengine::expr::Value>,
+    kengine::expr::Context,
+) {
+    let mut data = std::collections::HashMap::new();
+    let Some(pool) = &state.db else {
+        return (data, user_context(user));
+    };
+    let store = ModelStore::new(pool);
+    if let Ok(Some(row)) = find_record(store, model_def, record_id).await
+        && let Value::Object(map) = row
+    {
+        for (k, v) in map {
+            data.insert(k, json_to_expr_value(&v));
+        }
+    }
+    (data, user_context(user))
+}
+
+/// 查记录（按 id 过滤）。
+async fn find_record(
+    store: ModelStore<'_>,
+    model_def: &kengine::ir::Model,
+    record_id: i64,
+) -> Result<Option<Value>, String> {
+    // 复用行级过滤：id 字段 + Eq 条件
+    let groups = vec![vec![FilterCond::eq("id", &record_id.to_string())]];
+    store
+        .list_filtered(model_def, &groups)
+        .await
+        .map(|mut rows| rows.pop())
+        .map_err(|e| e.to_string())
+}
+
+/// 启动流程：`POST /__kenvoy/flow/{flow}/records/{record_id}/start`。
+async fn start_flow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((flow_name, record_id)): AxumPath<(String, i64)>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (user, _roles) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let (flow, model_def, model_name) = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(flow) = build.ir.flows.iter().find(|f| f.name == flow_name) else {
+            return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+        };
+        let Some(model_name) = flow_model(flow) else {
+            return (
+                StatusCode::BAD_REQUEST,
+                "流程未声明触发模型（flow.trigger）",
+            )
+                .into_response();
+        };
+        let Some(m) = build.ir.models.get(model_name) else {
+            return (StatusCode::NOT_FOUND, "触发模型不存在").into_response();
+        };
+        (flow.clone(), m.clone(), model_name.to_string())
+    };
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    let Some(_) = find_record(store, &model_def, record_id)
+        .await
+        .ok()
+        .flatten()
+    else {
+        return (StatusCode::NOT_FOUND, "记录不存在").into_response();
+    };
+    let Some(start) = workflow::start_node(&flow) else {
+        return (StatusCode::BAD_REQUEST, "流程无节点").into_response();
+    };
+    let instance_id = match FlowStore::new(pool)
+        .create(&flow.name, &model_name, record_id, &start, Some(user.id))
+        .await
+    {
+        Ok(id) => id,
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    };
+    // 首节点为知会节点时自动推进
+    let (current, status) = auto_run_notify(
+        &state,
+        pool,
+        &flow,
+        &model_def,
+        record_id,
+        instance_id,
+        Some(start),
+        &user,
+    )
+    .await;
+    Json(json!({
+        "instanceId": instance_id,
+        "currentNode": current,
+        "status": status,
+    }))
+    .into_response()
+}
+
+/// 流程推进：`POST /__kenvoy/flow/{flow}/records/{record_id}/step`。
+///
+/// body：`{"action": "approve" | "reject"}`。
+async fn step_flow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((flow_name, record_id)): AxumPath<(String, i64)>,
+    Json(req): Json<FlowStepReq>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (user, roles) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let (flow, model_def, model_name) = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(flow) = build.ir.flows.iter().find(|f| f.name == flow_name) else {
+            return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+        };
+        let Some(model_name) = flow_model(flow) else {
+            return (StatusCode::BAD_REQUEST, "流程未声明触发模型").into_response();
+        };
+        let Some(m) = build.ir.models.get(model_name) else {
+            return (StatusCode::NOT_FOUND, "触发模型不存在").into_response();
+        };
+        (flow.clone(), m.clone(), model_name.to_string())
+    };
+    let flow_store = FlowStore::new(pool);
+    let instance = match flow_store.latest_by_record(&model_name, record_id).await {
+        Ok(Some(i)) => i,
+        Ok(None) => return (StatusCode::NOT_FOUND, "流程未启动").into_response(),
+        Err(err) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+        }
+    };
+    if instance.status != "running" {
+        return (
+            StatusCode::CONFLICT,
+            format!("流程已结束（{}）", instance.status),
+        )
+            .into_response();
+    }
+    let Some(node) = flow.nodes.iter().find(|n| n.name == instance.current_node) else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "当前节点不存在").into_response();
+    };
+    // 审批人校验（`approver` 为角色名，可带 `角色.` 前缀）
+    if !approver_allows(node, &roles) {
+        return (StatusCode::FORBIDDEN, "当前用户不是本节点审批人").into_response();
+    }
+    let decision = match req.action.as_str() {
+        "approve" => Decision::Approve,
+        "reject" => Decision::Reject,
+        other => {
+            return (StatusCode::BAD_REQUEST, format!("无效决策：{other}")).into_response();
+        }
+    };
+    let mut data = std::collections::HashMap::new();
+    let mut ctx = user_context(&user);
+    let store = ModelStore::new(pool);
+    if let Err(err) = store.ensure(&model_def).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+    }
+    if let Ok(Some(row)) = find_record(ModelStore::new(pool), &model_def, record_id).await
+        && let Value::Object(map) = row
+    {
+        for (k, v) in map {
+            let expr_v = json_to_expr_value(&v);
+            ctx.insert(k.as_str(), expr_v.clone());
+            data.insert(k, expr_v);
+        }
+    }
+    let outcome = match workflow::step(&flow, &instance.current_node, decision, &mut data, &ctx) {
+        Ok(o) => o,
+        Err(err) => {
+            return (StatusCode::BAD_REQUEST, err.message.clone()).into_response();
+        }
+    };
+    if let Err(err) = apply_flow_effects(&store, &model_def, record_id, &outcome.effects).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
+    }
+    let (current, status) = auto_run_notify(
+        &state,
+        pool,
+        &flow,
+        &model_def,
+        record_id,
+        instance.id,
+        outcome.next,
+        &user,
+    )
+    .await;
+    Json(json!({
+        "instanceId": instance.id,
+        "currentNode": current,
+        "status": status,
+        "notifications": outcome.effects.notifications,
+        "messages": outcome.effects.messages,
+    }))
+    .into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct FlowStepReq {
+    action: String,
+}
+
+/// 流程实例状态：`GET /__kenvoy/flow/{flow}/records/{record_id}`。
+async fn get_flow_instance(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath((flow_name, record_id)): AxumPath<(String, i64)>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    if let Err(r) = auth_user(&state, &headers).await {
+        return r;
+    }
+    let model_name = {
+        let build = state.build.read().expect("读取状态失败");
+        let Some(flow) = build.ir.flows.iter().find(|f| f.name == flow_name) else {
+            return (StatusCode::NOT_FOUND, "流程不存在").into_response();
+        };
+        flow_model(flow)
+            .map(str::to_string)
+            .unwrap_or(flow_name.clone())
+    };
+    match FlowStore::new(pool)
+        .latest_by_record(&model_name, record_id)
+        .await
+    {
+        Ok(Some(instance)) => Json(json!({ "instance": instance })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "流程未启动").into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
 }
 
@@ -939,7 +1520,9 @@ fn collect_node_validations(node: &Node, model_name: &str, out: &mut Vec<Validat
         | Node::Table { .. }
         | Node::Column { .. }
         | Node::StatCard { .. }
-        | Node::Text { .. } => {}
+        | Node::Text { .. }
+        | Node::Chart { .. }
+        | Node::FlowViewer { .. } => {}
     }
 }
 
@@ -969,7 +1552,7 @@ mod tests {
 
     #[test]
     fn builds_example_project() {
-        let state = build(&example_dir(), "测试").expect("构建示例项目失败");
+        let state = build(&example_dir(), "测试", None).expect("构建示例项目失败");
         assert!(state.ir.pages.iter().any(|p| p.path == "/leave/apply"));
         assert!(state.ir.pages.iter().any(|p| p.path == "/leave/list"));
         assert!(state.ir.pages.iter().any(|p| p.path == "/dashboard"));
@@ -985,7 +1568,13 @@ mod tests {
                 .iter()
                 .any(|f| f.path == "apps/leave/apply/page.kenvoy.xml")
         );
-        assert!(files.iter().all(|f| f.path.starts_with("apps/")));
+        // 仅收集 `apps/` 与 `I8n/` 目录下的 XML（module/ 也有）
+        assert!(files.iter().all(|f| {
+            f.path.starts_with("apps/")
+                || f.path.starts_with("I8n/")
+                || f.path.starts_with("module/")
+        }));
+        assert!(files.iter().any(|f| f.path == "I8n/zh/strings.kenvoy.xml"));
     }
 
     #[test]
@@ -1024,8 +1613,8 @@ mod tests {
         )
         .expect("写入页面失败");
 
-        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
-        spawn_watcher(dir.clone(), "测试".to_string(), build_state.clone());
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试", None).expect("构建失败")));
+        spawn_watcher(dir.clone(), "测试".to_string(), None, build_state.clone());
 
         // 等 watcher 就绪后修改 XML
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -1067,7 +1656,7 @@ mod tests {
         use tower::ServiceExt;
 
         let dir = example_dir();
-        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试", None).expect("构建失败")));
         let state = AppState {
             dir: dir.clone(),
             description: None,
@@ -1185,6 +1774,7 @@ mod tests {
             project: kengine::ir::ProjectMeta {
                 name: "t".into(),
                 description: None,
+                locale: None,
             },
             models: BTreeMap::new(),
             layouts: BTreeMap::new(),
@@ -1193,7 +1783,10 @@ mod tests {
                 title: None,
                 layout_chain: vec![],
                 content: Node::Text {
-                    props: kengine::ir::TextProps { value: "x".into() },
+                    props: kengine::ir::TextProps {
+                        value: "x".into(),
+                        i18n: None,
+                    },
                 },
                 flows: vec![],
                 publish: Some(kengine::ir::Publish {
@@ -1228,6 +1821,7 @@ mod tests {
             flows: vec![],
             permissions: kengine::ir::Permissions::default(),
             components: BTreeMap::new(),
+            translations: BTreeMap::new(),
         };
         let user = User {
             id: 1,
@@ -1269,6 +1863,7 @@ mod tests {
             project: kengine::ir::ProjectMeta {
                 name: "t".into(),
                 description: None,
+                locale: None,
             },
             models: BTreeMap::new(),
             layouts: BTreeMap::new(),
@@ -1277,7 +1872,10 @@ mod tests {
                 title: None,
                 layout_chain: vec![],
                 content: Node::Text {
-                    props: kengine::ir::TextProps { value: "x".into() },
+                    props: kengine::ir::TextProps {
+                        value: "x".into(),
+                        i18n: None,
+                    },
                 },
                 flows: vec![],
                 publish: Some(kengine::ir::Publish {
@@ -1294,6 +1892,7 @@ mod tests {
             flows: vec![],
             permissions: kengine::ir::Permissions::default(),
             components: BTreeMap::new(),
+            translations: BTreeMap::new(),
         };
         assert!(field_read_visible(&ir, "薪资", &["管理员".to_string()]));
         assert!(!field_read_visible(&ir, "薪资", &["普通员工".to_string()]));
@@ -1308,7 +1907,7 @@ mod tests {
         use tower::ServiceExt;
 
         let dir = example_dir();
-        let build_state = Arc::new(RwLock::new(build(&dir, "测试").expect("构建失败")));
+        let build_state = Arc::new(RwLock::new(build(&dir, "测试", None).expect("构建失败")));
         let state = AppState {
             dir: dir.clone(),
             description: None,

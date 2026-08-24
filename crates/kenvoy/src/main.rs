@@ -210,6 +210,7 @@ async fn main() -> anyhow::Result<()> {
                 port,
                 project_name: &name,
                 description: cfg.project.description.clone(),
+                locale: cfg.project.locale.clone(),
                 storage: &cfg.storage,
                 auth: &cfg.auth,
                 db,
@@ -223,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Build { dir, out }) => {
             let cfg = config::read_config(&dir);
-            build_cmd::run(&dir, out.as_deref(), &cfg)?;
+            build_cmd::run(&dir, out.as_deref(), &cfg).await?;
         }
         Some(Commands::Deploy { dir: _ }) => {
             println!("KenvoySpace 为闭源商业产品，部署命令暂未开放，请关注后续版本。");

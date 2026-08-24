@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use crate::ir::{
-    ColProps, ColumnProps, FieldProps, FormProps, Node, RowProps, SectionProps, StatCardProps,
-    TableProps, TextProps, Validation,
+    ChartProps, ColProps, ColumnProps, FieldProps, FlowViewerProps, FormProps, Node, RowProps,
+    SectionProps, StatCardProps, TableProps, TextProps, Validation,
 };
 use crate::parse::ParseError;
 
@@ -19,6 +19,10 @@ pub(crate) fn parse_children(
     for child in elem.children().filter(roxmltree::Node::is_element) {
         // `<Validation>` 是表单元数据，不参与组件树
         if child.tag_name().name() == "Validation" {
+            continue;
+        }
+        // `<Filter>` / `<Sort>` 是表格元数据，不参与组件树
+        if matches!(child.tag_name().name(), "Filter" | "Sort") {
             continue;
         }
         nodes.push(parse_node(path, child)?);
@@ -55,6 +59,7 @@ pub(crate) fn parse_validations(
 }
 
 /// 将单个元素解析为 [`Node`]；未知元素映射为 [`Node::Custom`]（用户 DSL 组件）。
+#[allow(clippy::too_many_lines)] // 组件类型逐个映射，分支直白可读性优先
 pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<Node, ParseError> {
     let tag = elem.tag_name().name();
     let node = match tag {
@@ -95,15 +100,35 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
                 validations: Vec::new(),
             },
         },
-        "Table" => Node::Table {
-            props: TableProps {
-                model: required_attr(path, elem, tag, "model")?,
-                filter: serde_json::Map::new(),
-                sort: serde_json::Map::new(),
-                page_size: parse_u32(path, elem, "pageSize")?,
-            },
-            children: parse_children(path, elem)?,
-        },
+        "Table" => {
+            // `<Filter field value>` / `<Sort field order>` 为表格元数据（非组件树）
+            let mut filter = serde_json::Map::new();
+            let mut sort = serde_json::Map::new();
+            for child in elem.children().filter(roxmltree::Node::is_element) {
+                match child.tag_name().name() {
+                    "Filter" => {
+                        let field = required_attr(path, child, "Filter", "field")?;
+                        let value = required_attr(path, child, "Filter", "value")?;
+                        filter.insert(field, Value::String(value));
+                    }
+                    "Sort" => {
+                        let field = required_attr(path, child, "Sort", "field")?;
+                        let order = child.attribute("order").unwrap_or("asc").to_string();
+                        sort.insert(field, Value::String(order));
+                    }
+                    _ => {}
+                }
+            }
+            Node::Table {
+                props: TableProps {
+                    model: required_attr(path, elem, tag, "model")?,
+                    filter,
+                    sort,
+                    page_size: parse_u32(path, elem, "pageSize")?,
+                },
+                children: parse_children(path, elem)?,
+            }
+        }
         "Column" => Node::Column {
             props: ColumnProps {
                 field: required_attr(path, elem, tag, "field")?,
@@ -125,6 +150,19 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
                     .map(str::to_string)
                     .or_else(|| text_content(elem))
                     .ok_or_else(|| ParseError::missing_attribute(path, tag, "value"))?,
+                i18n: elem.attribute("i18n").map(str::to_string),
+            },
+        },
+        "FlowViewer" => Node::FlowViewer {
+            props: FlowViewerProps {
+                flow: required_attr(path, elem, tag, "flow")?,
+            },
+        },
+        "Chart" => Node::Chart {
+            props: ChartProps {
+                model: required_attr(path, elem, tag, "model")?,
+                field: required_attr(path, elem, tag, "field")?,
+                stat: elem.attribute("stat").unwrap_or("count").to_string(),
             },
         },
         // 未知元素 → 用户 DSL 自定义组件：组件名 = 标签名，属性原样透传

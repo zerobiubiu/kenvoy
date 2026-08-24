@@ -4,19 +4,22 @@
 //! 全部产物（页面、索引页、`assets/`、`__kenvoy/`、`public/` 拷贝）统一放在
 //! `dist{public_path}/` 下，页面内的自产资源引用与索引链接均带此前缀（子路径部署）；
 //! 缺省（根路径）时行为同以往。产物为生产 HTML（不含 dev 自动刷新脚本）。
+//!
+//! 配置 `[database].url` 时，额外导出各模型数据快照到 `__kenvoy/data/{模型}.json`
+//! （静态站数据降级：客户端运行时在数据 API 不可用时读取；快照为公开数据，注意隐私）。
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::config::{self, KenvoyConfig};
 use crate::dev;
 
-/// 执行构建。
-pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Result<()> {
+/// 执行构建。DB 可用时附带导出静态数据快照。
+pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Result<()> {
     let project_name = config::resolve_name(dir, cfg, None);
-    let ir = dev::build_ir(dir, &project_name)?;
+    let ir = dev::build_ir(dir, &project_name, cfg.project.locale.as_deref())?;
 
     let out_dir = out_override
         .map(Path::to_path_buf)
@@ -87,8 +90,39 @@ pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Resul
 
     copy_public(dir, &root)?;
 
+    // 静态站数据快照：`[database].url` 配置时导出各模型数据（运行时降级读取）
+    if let Some(url) = &cfg.database.url {
+        match export_static_data(url, &ir, &root).await {
+            Ok(count) => println!("已导出 {count} 个模型静态数据快照（__kenvoy/data/）"),
+            Err(err) => eprintln!("静态数据快照导出失败（跳过）：{err}"),
+        }
+    }
+
     println!("构建完成：{}（{} 个页面）", out_dir.display(), count);
     Ok(())
+}
+
+/// 导出各模型数据快照（`__kenvoy/data/{模型}.json`，公开内容，注意隐私）。
+async fn export_static_data(url: &str, ir: &kengine::ir::ProjectIr, root: &Path) -> Result<usize> {
+    let pool = kengine_db::connect(url).await.context("连接数据库失败")?;
+    kengine_db::migrate(&pool).await.context("数据库迁移失败")?;
+    let data_dir = root.join("__kenvoy/data");
+    std::fs::create_dir_all(&data_dir)?;
+    let mut count = 0;
+    for model in ir.models.values() {
+        kengine_db::models::ensure_model_table(&pool, model)
+            .await
+            .context("确保模型表失败")?;
+        let rows = kengine_db::models::list_records(&pool, model)
+            .await
+            .context("读取模型数据失败")?;
+        std::fs::write(
+            data_dir.join(format!("{}.json", model.name)),
+            serde_json::to_string_pretty(&rows)?,
+        )?;
+        count += 1;
+    }
+    Ok(count)
 }
 
 /// 生成页面索引页（链接带部署前缀）。
@@ -148,12 +182,14 @@ fn escape_html(s: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn builds_example_to_dist() {
+    #[tokio::test]
+    async fn builds_example_to_dist() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/leave-app");
         let out = std::env::temp_dir().join(format!("kenvoy-build-test-{}", std::process::id()));
 
-        run(&dir, Some(&out), &KenvoyConfig::default()).expect("构建失败");
+        run(&dir, Some(&out), &KenvoyConfig::default())
+            .await
+            .expect("构建失败");
 
         let index = std::fs::read_to_string(out.join("index.html")).expect("缺少索引页");
         assert!(index.contains("/leave/apply"));
