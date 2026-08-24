@@ -5,11 +5,11 @@
 use std::fmt::Write;
 use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, mpsc};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 
 use anyhow::Context;
 use axum::Router;
-use axum::extract::{Path as AxumPath, State};
+use axum::extract::{Json, Path as AxumPath, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
@@ -17,6 +17,7 @@ use kengine::ir::ProjectIr;
 use kengine::{SourceFile, build_project};
 use kengine_html::render_page;
 use notify::Watcher;
+use serde_json::Value;
 
 /// 构建状态：解析后的 `IR` + 版本号（用于自动刷新）。
 struct BuildState {
@@ -35,6 +36,8 @@ struct AppState {
     description: Option<String>,
     /// 当前构建状态。
     build: Arc<RwLock<BuildState>>,
+    /// 内存数据存储（模型名 → 记录列表，demo 用）。
+    data: Arc<Mutex<std::collections::HashMap<String, Vec<Value>>>>,
 }
 
 /// 启动开发服务器。
@@ -72,10 +75,13 @@ pub async fn run(
         dir: dir.to_path_buf(),
         description,
         build: build_state,
+        data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     let app = Router::new()
         .route("/", get(index))
         .route("/__kenvoy/version", get(version))
+        .route("/__kenvoy/runtime.js", get(runtime_js))
+        .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
         .route("/{*path}", get(page_or_static))
         .with_state(state);
 
@@ -239,7 +245,7 @@ async fn page_or_static(
     };
 
     match html {
-        Some(html) => Html(inject_reload(&html, version)).into_response(),
+        Some(html) => Html(inject_dev_scripts(&html, version)).into_response(),
         None => match serve_static(&state.dir, &path_norm) {
             Some(resp) => resp,
             None => (StatusCode::NOT_FOUND, "未找到页面或静态资源").into_response(),
@@ -287,12 +293,94 @@ fn content_type(path: &Path) -> &'static str {
     }
 }
 
-/// 注入自动刷新脚本：轮询版本号，变化时整页刷新。
-fn inject_reload(html: &str, version: u64) -> String {
-    let script = format!(
-        "<script>let v={version};setInterval(async()=>{{const r=await fetch('/__kenvoy/version');if((await r.text())!==String(v))location.reload();}},1000);</script>"
+/// 注入 dev 脚本：客户端运行时 + 轮询自动刷新。
+fn inject_dev_scripts(html: &str, version: u64) -> String {
+    let scripts = format!(
+        "<script src=\"/__kenvoy/runtime.js\"></script>\
+         <script>let v={version};setInterval(async()=>{{const r=await fetch('/__kenvoy/version');if((await r.text())!==String(v))location.reload();}},1000);</script>"
     );
-    html.replace("</body>", &format!("{script}</body>"))
+    html.replace("</body>", &format!("{scripts}</body>"))
+}
+
+/// 客户端运行时 JS：表格数据渲染 + 表单提交（走 `/__kenvoy/data` API）。
+const RUNTIME_JS: &str = r#"
+(function () {
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  // 表格数据渲染
+  document.querySelectorAll("table[data-model]").forEach(function (table) {
+    var model = encodeURIComponent(table.getAttribute("data-model"));
+    var cols = Array.prototype.map.call(
+      table.querySelectorAll("th[data-field]"),
+      function (th) { return th.getAttribute("data-field"); }
+    );
+    fetch("/__kenvoy/data/" + model).then(function (r) { return r.json(); }).then(function (rows) {
+      var tbody = table.querySelector("tbody");
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td class="kv-empty" colspan="' + cols.length + '">暂无数据</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(function (row) {
+        return "<tr>" + cols.map(function (c) {
+          return "<td>" + escapeHtml(row[c]) + "</td>";
+        }).join("") + "</tr>";
+      }).join("");
+    });
+  });
+  // 表单提交
+  document.querySelectorAll("form[data-model]").forEach(function (form) {
+    var model = encodeURIComponent(form.getAttribute("data-model"));
+    var submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "kv-submit";
+    submit.textContent = "提交";
+    form.appendChild(submit);
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var data = {};
+      new FormData(form).forEach(function (v, k) { data[k] = v; });
+      fetch("/__kenvoy/data/" + model, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then(function () { location.reload(); });
+    });
+  });
+})();
+"#;
+
+/// 返回客户端运行时 JS。
+async fn runtime_js() -> Html<&'static str> {
+    Html(RUNTIME_JS)
+}
+
+/// 列表数据：`GET /__kenvoy/data/{model}`。
+async fn list_data(
+    State(state): State<AppState>,
+    AxumPath(model): AxumPath<String>,
+) -> Json<Vec<Value>> {
+    let records = state
+        .data
+        .lock()
+        .expect("读取数据失败")
+        .get(&model)
+        .cloned()
+        .unwrap_or_default();
+    Json(records)
+}
+
+/// 创建数据：`POST /__kenvoy/data/{model}`。
+async fn create_data(
+    State(state): State<AppState>,
+    AxumPath(model): AxumPath<String>,
+    Json(payload): Json<Value>,
+) -> Json<Value> {
+    let mut data = state.data.lock().expect("写入数据失败");
+    data.entry(model).or_default().push(payload.clone());
+    Json(payload)
 }
 
 /// 简易 HTML 转义（索引页标题/路径）。
@@ -340,9 +428,10 @@ mod tests {
     }
 
     #[test]
-    fn inject_reload_appends_script() {
+    fn inject_dev_scripts_appends_scripts() {
         let html = "<html><body>hi</body></html>";
-        let out = inject_reload(html, 3);
+        let out = inject_dev_scripts(html, 3);
+        assert!(out.contains("/__kenvoy/runtime.js"));
         assert!(out.contains("__kenvoy/version"));
         assert!(out.contains("location.reload()"));
         assert!(out.ends_with("</html>"));
@@ -421,10 +510,13 @@ mod tests {
             dir: dir.clone(),
             description: None,
             build: build_state,
+            data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()
             .route("/", get(index))
             .route("/__kenvoy/version", get(version))
+            .route("/__kenvoy/runtime.js", get(runtime_js))
+            .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
             .route("/{*path}", get(page_or_static))
             .with_state(state);
 
@@ -484,5 +576,38 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+        // 数据 API：创建 + 列表
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/__kenvoy/data/请假单")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"请假类型":"年假","请假天数":2}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/__kenvoy/data/请假单")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = String::from_utf8(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(body.contains("年假"));
     }
 }

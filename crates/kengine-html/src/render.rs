@@ -51,7 +51,11 @@ pub(crate) fn render_node(ir: &ProjectIr, node: &Node, slot: &str) -> String {
         Node::Table { props, children } => render_table(ir, props, children),
         Node::Column { props } => {
             let label = props.label.as_deref().unwrap_or(&props.field);
-            format!("<th class=\"kv-th\">{}</th>", escape_html(label))
+            format!(
+                "<th class=\"kv-th\" data-field=\"{}\">{}</th>",
+                escape_html(&props.field),
+                escape_html(label)
+            )
         }
         Node::StatCard { props } => render_stat_card(props),
         Node::Text { props } => {

@@ -152,8 +152,8 @@ mod tests {
             ),
         ]);
         let html = render_page(&ir, &ir.pages[0]);
-        assert!(html.contains("<th class=\"kv-th\">类型</th>"));
-        assert!(html.contains("<th class=\"kv-th\">天数</th>"));
+        assert!(html.contains("<th class=\"kv-th\" data-field=\"请假类型\">类型</th>"));
+        assert!(html.contains("<th class=\"kv-th\" data-field=\"请假天数\">天数</th>"));
         assert!(html.contains("暂无数据"));
         assert!(html.contains("colspan=\"2\""));
     }

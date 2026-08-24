@@ -61,3 +61,11 @@
 - 实现：`IR` 新增 `Flow` / `FlowNode` / `FlowAction`（`next/back/notify/update/send_message/if`）、`Publish` / `FieldAccess` / `Role`；`Page` 新增 `flows`（引入的流程名）与 `publish`；`parse` 新增 `<Flow>` / `<Publish>` 解析与页面 `<Import>` 引入（`src` 相对页面目录解析，`ImportNotFound` / `ImportInvalid` / `UnknownImportType`）；顶层 `flows` 汇总引入流程，`permissions.roles` 合并各页面角色（按名去重）
 - 测试：golden fixture 新增 `flow.kenvoy.xml` / `publish.kenvoy.xml` 并由申请页引入（3 节点审批流 + 3 角色）；`examples/leave-app` 同步
 - 已知限制：XML 属性值中 `<` 需转义为 `&lt;`（XML 规范）；`DataFilter` 尚未解析；审批流引擎（状态机执行）未实现；publish 仅解析不参与渲染/鉴权
+
+### 执行验证记录（2026-08-23，客户端交互：表单提交与表格数据）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过
+- 实现：dev 服务器新增内存数据 API（`GET/POST /__kenvoy/data/{model}`，模型名需百分号编码）与客户端运行时 `/__kenvoy/runtime.js`（表格按 `th[data-field]` 渲染数据行、表单自动加提交按钮并 POST 后刷新）；`kengine-html` 表格列增加 `data-field` 属性；页面注入运行时脚本 + 自动刷新脚本
+- 冒烟测试：`GET /__kenvoy/data/请假单` 返回 `[]`；POST 后 GET 返回记录；页面含 `runtime.js` 与 `data-field`
+- 已知限制：数据为内存存储（重启丢失）；`readonly` 字段渲染为 `disabled` 不参与 FormData 提交；`kv build` 静态产物不含运行时脚本（无数据 API，表格保持空态）；客户端提交中文 body 在 git-bash curl 下需用 ASCII 或文件方式（浏览器 fetch 无此问题）

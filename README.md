@@ -181,6 +181,7 @@ cargo install kenvoy
 - [x] `kenvoy.toml` 配置读取（`[project]` / `[server]` / `[build]`）
 - [x] layout 逐级匹配与继承（`layoutChain` 解析）
 - [x] `kengine-html`：IR → HTML 渲染（SSR 核心，含 HTML 转义防 XSS）
+- [x] demo 客户端交互：表单提交 + 表格数据（dev 内存数据 API + 客户端运行时）
 - [ ] 组件库（表单、表格、图表、布局容器）
 - [ ] flow 审批流引擎
 - [ ] publish 权限控制
