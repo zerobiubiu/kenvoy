@@ -127,6 +127,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kengine-html"
+version = "0.1.0"
+dependencies = [
+ "kengine",
+]
+
+[[package]]
 name = "kenvoy"
 version = "0.1.0"
 dependencies = [

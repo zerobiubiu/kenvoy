@@ -28,3 +28,11 @@
 - 结构变更：`ProjectIr.models` / `.layouts` 及 `Custom.props` 由 `HashMap` 改为 `BTreeMap`（序列化输出确定，契约已同步）
 - 测试：golden 测试 `tests/parse.rs` + `tests/fixtures/leave/`（5 个 XML → `expected.json`）
 - 已知限制：`flow` / `publish` / `<Validation>` 尚未解析；`filter` / `sort` 未从 XML 解析（IR 字段保留）
+
+### 执行验证记录（2026-08-23，B3 完成）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine-html 8 个单元测试）
+- 实现：新增 `crates/kengine-html`，`render_page(&ProjectIr, &Page) -> String`（纯函数无 I/O）；布局链嵌套 + `Slot` 替换；Form 按模型字段类型渲染控件（text/textarea/number/date/select/boolean/file）；Table 表头 + 空态；StatCard；未知元素（Custom）渲染为 `data-component` 容器；HTML 转义防 XSS；内置极简样式
+- 决策：D2（独立 crate `kengine-html`）落地
+- 已知限制：`filter` / `sort` / 分页数据未渲染（demo 空态）；客户端交互（提交/审批）未实现

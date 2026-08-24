@@ -18,3 +18,4 @@ pedantic = "warn"
 
 [workspace.dependencies]
 kengine = { path = "crates/kengine", version = "0.1" }
+kengine-html = { path = "crates/kengine-html", version = "0.1" }

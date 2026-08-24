@@ -1,0 +1,17 @@
+[package]
+name = "kengine-html"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "IR → HTML 渲染器（纯函数，无 I/O），Kenvoy 的 SSR/边缘渲染核心"
+license.workspace = true
+repository.workspace = true
+keywords = ["html", "renderer", "ssr", "engine"]
+categories = ["web-programming"]
+
+[dependencies]
+kengine = { workspace = true }
+
+[lints]
+workspace = true
