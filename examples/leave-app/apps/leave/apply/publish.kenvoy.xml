@@ -22,7 +22,17 @@
     <Allow roles="普通员工,部门主管,管理员" />
     <Field name="附件">
       <Read roles="普通员工,部门主管,管理员" />
-      <Write roles="普通员工,管理员" />
+      <Write roles="管理员" />
     </Field>
   </Access>
+  <DataFilter>
+    <Rule model="请假单">
+      <Filter role="普通员工">
+        <Eq field="申请人" value="{{currentUser.id}}" />
+      </Filter>
+      <Filter role="部门主管,管理员">
+        <All />
+      </Filter>
+    </Rule>
+  </DataFilter>
 </Publish>

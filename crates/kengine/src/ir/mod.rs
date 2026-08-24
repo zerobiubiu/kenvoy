@@ -472,6 +472,41 @@ pub struct Publish {
     pub fields: Vec<FieldAccess>,
     /// 角色定义（含继承与权限清单）。
     pub roles: Vec<Role>,
+    /// 数据级行过滤规则（`<DataFilter>`，按模型）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data_filters: Vec<DataFilterRule>,
+}
+
+/// 数据级行过滤规则：作用于指定模型的记录。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DataFilterRule {
+    /// 目标模型名。
+    pub model: String,
+    /// 角色 → 过滤条件（多条命中其一）。
+    pub filters: Vec<RoleFilter>,
+}
+
+/// 角色过滤条件。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RoleFilter {
+    /// 适用角色（`role` 逗号分隔）。
+    pub roles: Vec<String>,
+    /// 全量可见（`<All/>`），此时忽略 `conditions`。
+    pub all: bool,
+    /// 相等条件（`<Eq/>`，AND 连接）。
+    pub conditions: Vec<EqCondition>,
+}
+
+/// 相等条件；`value` 支持 `{{currentUser.*}}` 绑定。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EqCondition {
+    /// 字段名。
+    pub field: String,
+    /// 字段值（支持 `{{ }}` 绑定）。
+    pub value: String,
 }
 
 /// 字段访问控制。
@@ -703,6 +738,7 @@ mod tests {
                         extends: None,
                         permissions: vec!["请假申请.查看".into()],
                     }],
+                    data_filters: vec![],
                 }),
             }],
             flows: vec![],
@@ -752,6 +788,17 @@ mod tests {
                 name: "部门主管".into(),
                 extends: Some("普通员工".into()),
                 permissions: vec!["请假管理.审批.操作".into()],
+            }],
+            data_filters: vec![DataFilterRule {
+                model: "请假单".into(),
+                filters: vec![RoleFilter {
+                    roles: vec!["普通员工".into()],
+                    all: false,
+                    conditions: vec![EqCondition {
+                        field: "申请人".into(),
+                        value: "{{currentUser.id}}".into(),
+                    }],
+                }],
             }],
         };
         let _ = round_trip_json(&publish);

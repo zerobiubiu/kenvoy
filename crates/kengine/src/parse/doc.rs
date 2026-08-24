@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 
 use crate::ir::{
-    FieldAccess, FieldDef, FieldType, Flow, FlowAction, FlowActionKind, FlowNode, FlowNodeKind,
-    Layout, Model, Page, Publish, Role,
+    DataFilterRule, EqCondition, FieldAccess, FieldDef, FieldType, Flow, FlowAction,
+    FlowActionKind, FlowNode, FlowNodeKind, Layout, Model, Page, Publish, Role, RoleFilter,
 };
 use crate::parse::node::{
     as_single_or_row, child_text, find_child, parse_bool, parse_children, required_attr,
@@ -275,6 +275,7 @@ pub(crate) fn parse_publish(
     let mut allow_roles = Vec::new();
     let mut fields = Vec::new();
     let mut roles = Vec::new();
+    let mut data_filters = Vec::new();
     for child in root.children().filter(roxmltree::Node::is_element) {
         match child.tag_name().name() {
             "Roles" => {
@@ -297,7 +298,9 @@ pub(crate) fn parse_publish(
                     }
                 }
             }
-            // DataFilter 暂不解析（demo 范围外）
+            "DataFilter" => {
+                data_filters.extend(parse_data_filters(path, child)?);
+            }
             _ => {}
         }
     }
@@ -305,7 +308,48 @@ pub(crate) fn parse_publish(
         allow_roles,
         fields,
         roles,
+        data_filters,
     })
+}
+
+/// 解析 `<DataFilter>` 下的 `<Rule>`（模型级行过滤）。
+fn parse_data_filters(
+    path: &str,
+    elem: roxmltree::Node<'_, '_>,
+) -> Result<Vec<DataFilterRule>, ParseError> {
+    let mut filter_rules = Vec::new();
+    for rule_elem in elem.children().filter(roxmltree::Node::is_element) {
+        if rule_elem.tag_name().name() != "Rule" {
+            continue;
+        }
+        let model = required_attr(path, rule_elem, "Rule", "model")?;
+        let mut filters = Vec::new();
+        for filter_elem in rule_elem.children().filter(roxmltree::Node::is_element) {
+            if filter_elem.tag_name().name() != "Filter" {
+                continue;
+            }
+            let role_names = split_options(filter_elem.attribute("role"));
+            let mut all = false;
+            let mut conditions = Vec::new();
+            for cond in filter_elem.children().filter(roxmltree::Node::is_element) {
+                match cond.tag_name().name() {
+                    "All" => all = true,
+                    "Eq" => conditions.push(EqCondition {
+                        field: required_attr(path, cond, "Eq", "field")?,
+                        value: required_attr(path, cond, "Eq", "value")?,
+                    }),
+                    _ => {}
+                }
+            }
+            filters.push(RoleFilter {
+                roles: role_names,
+                all,
+                conditions,
+            });
+        }
+        filter_rules.push(DataFilterRule { model, filters });
+    }
+    Ok(filter_rules)
 }
 
 fn parse_role(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<Role, ParseError> {

@@ -117,3 +117,14 @@
   - dev：新增 `/assets/tabler.min.css` 路由；build：输出 `assets/tabler.min.css` / `__kenvoy/runtime.js` / `__kenvoy/ir.json`，页面注入运行时脚本
 - 冒烟：页面含 Tabler 类名与栅格、CSS 200、build 产物完整
 - 已知限制：Tabler 图标字体未引入（图标显示为占位）；`public_path` 前缀未作用于 CSS/runtime 引用（build 默认根路径）；具体业务组件（日期范围、上传、图表、流程查看器）与 DSL 级自定义组件未实现
+
+### 执行验证记录（2026-08-23，数据访问鉴权：DataFilter + 字段写权限）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`；PG 集成测试经 `KENVOY_TEST_DATABASE_URL`
+- 结果：全部通过
+- 实现：
+  - `IR`：`Publish` 新增 `data_filters`（`DataFilterRule` / `RoleFilter` / `EqCondition`）；解析 `<DataFilter><Rule model><Filter role><Eq/All>`
+  - `kengine-db`：`list_records_where`（AND 相等行级过滤）；`ensure_model_table` 支持列迁移（`ADD COLUMN IF NOT EXISTS`，模型加字段后已有表自动补列）
+  - `dev` 数据 API：要求 Bearer token 登录（401）；`GET` 按当前用户角色解析 `DataFilter`（无规则→全量、无匹配角色→403、`<All/>`→全量、否则 `{{currentUser.*}}` 绑定后 AND 过滤）；`POST` 校验字段写权限（`publish.fields.write_roles`，无权限→403）；`currentUser.*` 表达式上下文（id/username/displayName/email）
+- 冒烟（真实 PG）：无 token 401；普通员工仅见自己的记录；管理员全量；写受限字段 403；正常写入 200
+- 已知限制：多角色命中 `DataFilter` 时取首个匹配条件（未做 OR 合并）；字段读权限未在 SSR 渲染层应用（仅写入侧校验）；`DataFilter` 仅支持相等条件

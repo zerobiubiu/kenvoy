@@ -186,10 +186,10 @@ cargo install kenvoy
 - [x] 用户与权限系统基础（`/__kenvoy/auth/*` HTTP API + `kv user/role/contact/department` CLI：注册/登录/登出/会话、账号等级、角色分配、部门树、通讯录含无账号人员与账号关联）
 - [x] Tabler 组件基础（Bootstrap 5 风格类名：`row` / `col-md-*` / `card` / `form-control` / `form-select` / `table`，移动端响应式栅格）
 - [x] 静态构建增强（`kv build` 输出 `assets/tabler.min.css` / `__kenvoy/runtime.js` / `__kenvoy/ir.json`，页面注入运行时）
+- [x] 数据访问鉴权（数据 API 登录保护；`DataFilter` 行级过滤按角色；`publish` 字段写权限；模型表列迁移）
 
 ### 规划中
 
-- [ ] 页面级 / 字段级鉴权、`DataFilter` 行级过滤
 - [ ] S3 对象存储抽象与文件上传（`public/` 不可运行时写入；`storage_object` 元数据表已就绪）
 - [ ] 业务组件扩展（日期范围、上传、图表、流程查看器；DSL 级自定义组件 `<Component>` / `module/`）
 - [ ] 用户与权限系统（`auth/` 原生：users / roles / departments / sessions；页面级 + 字段级鉴权；`DataFilter` 行级过滤）

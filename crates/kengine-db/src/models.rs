@@ -1,6 +1,7 @@
 //! 业务模型动态建表与 CRUD：基于 `IR` 数据模型在 PostgreSQL 中管理业务数据。
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 use kengine::ir::{FieldType, Model};
 use serde_json::Value;
@@ -34,6 +35,15 @@ pub async fn ensure_model_table(pool: &PgPool, model: &Model) -> Result<(), DbEr
         cols.join(", ")
     );
     sqlx::query(&sql).execute(pool).await?;
+    // 模型演进：为已有表补充缺失列（幂等）
+    for field in &model.fields {
+        let alter = format!(
+            "ALTER TABLE \"{table}\" ADD COLUMN IF NOT EXISTS \"{}\" {}",
+            field.name,
+            sql_type(field.field_type)
+        );
+        sqlx::query(&alter).execute(pool).await?;
+    }
     Ok(())
 }
 
@@ -110,9 +120,34 @@ pub async fn insert_record(
 /// # Errors
 /// SQL 执行失败时返回 [`DbError`]。
 pub async fn list_records(pool: &PgPool, model: &Model) -> Result<Vec<Value>, DbError> {
+    list_records_where(pool, model, &[]).await
+}
+
+/// 列出模型记录，支持行级过滤（`conditions` 为 AND 相等的过滤条件，如 `DataFilter`）。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+pub async fn list_records_where(
+    pool: &PgPool,
+    model: &Model,
+    conditions: &[(String, String)],
+) -> Result<Vec<Value>, DbError> {
     let table = table_name(&model.name);
-    let sql = format!("SELECT to_jsonb(t) FROM \"{table}\" t ORDER BY t.id");
-    let rows: Vec<(Json<Value>,)> = sqlx::query_as(&sql).fetch_all(pool).await?;
+    let mut sql = format!("SELECT to_jsonb(t) FROM \"{table}\" t");
+    if !conditions.is_empty() {
+        let clauses: Vec<String> = conditions
+            .iter()
+            .enumerate()
+            .map(|(i, (f, _))| format!("t.\"{f}\" = ${}", i + 1))
+            .collect();
+        let _ = write!(sql, " WHERE {}", clauses.join(" AND "));
+    }
+    sql.push_str(" ORDER BY t.id");
+    let mut query = sqlx::query_as::<_, (Json<Value>,)>(&sql);
+    for (_, v) in conditions {
+        query = query.bind(v);
+    }
+    let rows = query.fetch_all(pool).await?;
     Ok(rows.into_iter().map(|(json,)| json.0).collect())
 }
 
@@ -154,5 +189,17 @@ impl<'a> ModelStore<'a> {
     /// 见 [`list_records`]。
     pub async fn list(&self, model: &Model) -> Result<Vec<Value>, DbError> {
         list_records(self.pool, model).await
+    }
+
+    /// 按过滤条件列出记录（行级过滤）。
+    ///
+    /// # Errors
+    /// 见 [`list_records_where`]。
+    pub async fn list_where(
+        &self,
+        model: &Model,
+        conditions: &[(String, String)],
+    ) -> Result<Vec<Value>, DbError> {
+        list_records_where(self.pool, model, conditions).await
     }
 }

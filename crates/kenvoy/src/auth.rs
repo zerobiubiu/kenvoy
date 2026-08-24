@@ -43,7 +43,7 @@ fn require_db(state: &AuthState) -> Result<&PgPool, StatusCode> {
     state.db.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)
 }
 
-fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+pub(crate) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(AUTHORIZATION)?
         .to_str()

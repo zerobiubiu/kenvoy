@@ -211,6 +211,33 @@
               "*"
             ]
           }
+        ],
+        "dataFilters": [
+          {
+            "model": "请假单",
+            "filters": [
+              {
+                "roles": [
+                  "普通员工"
+                ],
+                "all": false,
+                "conditions": [
+                  {
+                    "field": "申请人",
+                    "value": "{{currentUser.id}}"
+                  }
+                ]
+              },
+              {
+                "roles": [
+                  "部门主管",
+                  "管理员"
+                ],
+                "all": true,
+                "conditions": []
+              }
+            ]
+          }
         ]
       }
     },

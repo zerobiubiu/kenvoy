@@ -10,13 +10,14 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use anyhow::Context;
 use axum::Router;
 use axum::extract::{Json, Path as AxumPath, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use kengine::ir::{Node, Page, ProjectIr, Validation};
+use kengine::ir::{DataFilterRule, Node, Page, ProjectIr, RoleFilter, Validation};
 use kengine::validation;
 use kengine::{SourceFile, build_project};
-use kengine_db::ModelStore;
+use kengine_db::users::User;
+use kengine_db::{ModelStore, UserStore};
 use kengine_html::render_page;
 use notify::Watcher;
 use serde_json::{Value, json};
@@ -332,8 +333,18 @@ async fn tabler_css() -> Response {
 }
 
 /// 列表数据：`GET /__kenvoy/data/{model}`。
-async fn list_data(State(state): State<AppState>, AxumPath(model): AxumPath<String>) -> Response {
+///
+/// 启用数据库时要求登录（Bearer token），并按 `DataFilter` 做行级过滤。
+async fn list_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(model): AxumPath<String>,
+) -> Response {
     if let Some(pool) = &state.db {
+        let (user, roles) = match auth_user(&state, &headers).await {
+            Ok(v) => v,
+            Err(r) => return r,
+        };
         let model_def = {
             let build = state.build.read().expect("读取状态失败");
             let Some(m) = build.ir.models.get(&model) else {
@@ -345,7 +356,17 @@ async fn list_data(State(state): State<AppState>, AxumPath(model): AxumPath<Stri
         if let Err(err) = store.ensure(&model_def).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
         }
-        match store.list(&model_def).await {
+        let conditions = {
+            let build = state.build.read().expect("读取状态失败");
+            match resolve_data_filter(&build.ir, &model, &roles, &user) {
+                FilterDecision::AllowAll => Vec::new(),
+                FilterDecision::Forbidden => {
+                    return (StatusCode::FORBIDDEN, "无数据访问权限").into_response();
+                }
+                FilterDecision::Conditions(c) => c,
+            }
+        };
+        match store.list_where(&model_def, &conditions).await {
             Ok(rows) => Json(rows).into_response(),
             Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
         }
@@ -363,13 +384,19 @@ async fn list_data(State(state): State<AppState>, AxumPath(model): AxumPath<Stri
 
 /// 创建数据：`POST /__kenvoy/data/{model}`。
 ///
-/// 启用数据库时先执行表单校验（`<Validation>` 规则），失败返回 400。
+/// 启用数据库时要求登录，先执行表单校验（`<Validation>`），再校验字段写权限，
+/// 失败均返回 400。
 async fn create_data(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(model): AxumPath<String>,
     Json(payload): Json<Value>,
 ) -> Response {
     if let Some(pool) = &state.db {
+        let (_, roles) = match auth_user(&state, &headers).await {
+            Ok(v) => v,
+            Err(r) => return r,
+        };
         let (model_def, validations) = {
             let build = state.build.read().expect("读取状态失败");
             let Some(m) = build.ir.models.get(&model) else {
@@ -389,6 +416,22 @@ async fn create_data(
         if !errors.is_empty() {
             return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
         }
+        // 字段写权限：任一相关 publish 显式禁止该字段写入 → 拒绝
+        let denied: Vec<&String> = data_map
+            .keys()
+            .filter(|k| {
+                let build = state.build.read().expect("读取状态失败");
+                !field_write_allowed(&build.ir, k, &roles)
+            })
+            .collect();
+        if !denied.is_empty() {
+            let names: Vec<&str> = denied.iter().map(|s| s.as_str()).collect();
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "errors": [format!("无字段写入权限：{}", names.join(", "))] })),
+            )
+                .into_response();
+        }
         let store = ModelStore::new(pool);
         if let Err(err) = store.ensure(&model_def).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
@@ -402,6 +445,130 @@ async fn create_data(
         data.entry(model).or_default().push(payload.clone());
         Json(payload).into_response()
     }
+}
+
+/// 依据 Bearer token 解析当前用户与其角色名。
+#[allow(clippy::result_large_err)] // 返回 `Response` 作为错误，便于直接转发
+async fn auth_user(state: &AppState, headers: &HeaderMap) -> Result<(User, Vec<String>), Response> {
+    let Some(pool) = &state.db else {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response());
+    };
+    let Some(token) = crate::auth::bearer_token(headers) else {
+        return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response());
+    };
+    let store = UserStore::new(pool);
+    let Some(user) = store
+        .user_by_session(token)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response())?
+    else {
+        return Err((StatusCode::UNAUTHORIZED, "会话无效或已过期").into_response());
+    };
+    let role_names = store
+        .user_roles(user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response())?
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+    Ok((user, role_names))
+}
+
+/// 数据过滤决策。
+enum FilterDecision {
+    /// 全量可见。
+    AllowAll,
+    /// 无数据访问权限。
+    Forbidden,
+    /// AND 相等的过滤条件。
+    Conditions(Vec<(String, String)>),
+}
+
+/// 按当前用户角色解析模型的 `DataFilter`。
+///
+/// 无规则 → 全量；无匹配角色 → 禁止；任一匹配为 `<All/>` → 全量；否则取首个匹配条件。
+fn resolve_data_filter(
+    ir: &ProjectIr,
+    model: &str,
+    roles: &[String],
+    user: &User,
+) -> FilterDecision {
+    let mut filter_rules: Vec<&DataFilterRule> = Vec::new();
+    for page in &ir.pages {
+        if let Some(publish) = &page.publish {
+            filter_rules.extend(publish.data_filters.iter().filter(|r| r.model == model));
+        }
+    }
+    if filter_rules.is_empty() {
+        return FilterDecision::AllowAll;
+    }
+    let matched: Vec<&RoleFilter> = filter_rules
+        .iter()
+        .flat_map(|r| &r.filters)
+        .filter(|f| f.roles.iter().any(|r| roles.iter().any(|ur| ur == r)))
+        .collect();
+    if matched.is_empty() {
+        return FilterDecision::Forbidden;
+    }
+    if matched.iter().any(|f| f.all) {
+        return FilterDecision::AllowAll;
+    }
+    let ctx = user_context(user);
+    let conditions = matched[0]
+        .conditions
+        .iter()
+        .map(|c| (c.field.clone(), resolve_binding(&c.value, &ctx)))
+        .collect();
+    FilterDecision::Conditions(conditions)
+}
+
+/// 字段写权限：任一相关 `publish` 显式限制且当前角色不在 `write_roles` → 禁止。
+fn field_write_allowed(ir: &ProjectIr, field: &str, roles: &[String]) -> bool {
+    for page in &ir.pages {
+        if let Some(publish) = &page.publish {
+            let Some(access) = publish.fields.iter().find(|f| f.field == field) else {
+                continue;
+            };
+            if !access.write_roles.is_empty()
+                && !access
+                    .write_roles
+                    .iter()
+                    .any(|r| roles.iter().any(|ur| ur == r))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// 构造表达式上下文（`currentUser.*`）。
+fn user_context(user: &User) -> kengine::expr::Context {
+    let mut ctx = kengine::expr::Context::new();
+    ctx.insert(
+        "currentUser.id",
+        kengine::expr::Value::String(user.id.to_string()),
+    );
+    ctx.insert(
+        "currentUser.username",
+        kengine::expr::Value::String(user.username.clone()),
+    );
+    ctx.insert(
+        "currentUser.displayName",
+        kengine::expr::Value::String(user.display_name.clone()),
+    );
+    if let Some(email) = &user.email {
+        ctx.insert(
+            "currentUser.email",
+            kengine::expr::Value::String(email.clone()),
+        );
+    }
+    ctx
+}
+
+/// 解析 `{{ }}` 绑定；失败时原样返回。
+fn resolve_binding(value: &str, ctx: &kengine::expr::Context) -> String {
+    kengine::expr::resolve_bindings(value, ctx).unwrap_or_else(|_| value.to_string())
 }
 
 /// `serde_json` 值 → 表达式引擎值。
