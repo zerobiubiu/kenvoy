@@ -33,6 +33,9 @@ pub struct ProjectIr {
     /// 权限（demo 占位，结构后续补充）。
     #[serde(default)]
     pub permissions: Permissions,
+    /// 用户自定义组件（页面内 `<Component>` + `module/` 目录），按组件名索引。
+    #[serde(default)]
+    pub components: BTreeMap<String, ComponentDef>,
 }
 
 /// 项目元信息。
@@ -134,6 +137,15 @@ pub struct Page {
     /// 页面权限配置（`publish.kenvoy.xml`）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publish: Option<Publish>,
+}
+
+/// 用户自定义组件定义（页面内 `<Component>` 或 `module/` 目录文件）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentDef {
+    /// 组件名（使用处标签名与之匹配）。
+    pub name: String,
+    /// 定义体根节点（渲染时实例 props 绑定 `{{名}}`，实例子元素注入 `<Slot/>`）。
+    pub root: Node,
 }
 
 /// 组件树节点：内置组件为类型化变体，用户 DSL 组件走 [`Node::Custom`]。
@@ -743,6 +755,19 @@ mod tests {
             }],
             flows: vec![],
             permissions: Permissions::default(),
+            components: BTreeMap::from([(
+                "状态卡".to_string(),
+                ComponentDef {
+                    name: "状态卡".into(),
+                    root: Node::StatCard {
+                        props: StatCardProps {
+                            data: Some("{{data}}".into()),
+                            unit: Some("次".into()),
+                            color: None,
+                        },
+                    },
+                },
+            )]),
         };
         let _ = round_trip_json(&ir);
     }

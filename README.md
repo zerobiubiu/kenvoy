@@ -57,6 +57,12 @@ Kenvoy DSL 采用 **XML** 语法（`.kenvoy.xml`），目录结构参照 Next.js
 - **flow**：流程（审批流 / 工作流），只出现在 page 同级，由 page 显式引入
 - **publish**：发布权限，只出现在 page 同级，由 page 显式引入
 
+### 自定义组件
+
+- **页面私有**：`page.kenvoy.xml` 内与 `<Content>` 平级定义 `<Component name="...">`，仅本页可用
+- **全局 / 应用私有**：`module/` 目录下的 `*.kenvoy.xml`（根元素 `<Component name="...">`），全项目或应用内复用
+- **使用**：直接写 `<组件名 attr="值">…</组件名>`；实例属性通过 `{{名}}` 绑定到定义体内（Text / Section 标题 / StatCard / Field 默认值等），实例子元素注入定义体内的 `<Slot/>`
+
 ### 目标项目结构
 
 ```text
@@ -91,7 +97,7 @@ Rust 1.98 / edition 2024 / resolver 3，单 Workspace 多 crate：
 ```text
 kenvoy/
 ├── crates/
-│   ├── kengine       # 解析器核心（纯库，无 I/O）：XML 解析 → IR、表达式引擎、表单校验、审批流状态机
+│   ├── kengine       # 解析器核心（纯库，无 I/O）：XML 解析 → IR、表达式引擎、表单校验、审批流状态机、自定义组件解析
 │   ├── kengine-html  # SSR 渲染：IR → HTML（Tabler / Bootstrap 5，kv-* 语义类，移动端断点适配）
 │   ├── kengine-db    # PostgreSQL 18+ 数据层：自动建表迁移、数据访问鉴权（DataFilter / 字段写权限）
 │   ├── kengine-s3    # S3 对象存储抽象（兼容 S3 API 的任何服务，MinIO 联调通过）

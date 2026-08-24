@@ -1102,6 +1102,7 @@ name = "kengine-html"
 version = "0.1.0"
 dependencies = [
  "kengine",
+ "serde_json",
 ]
 
 [[package]]

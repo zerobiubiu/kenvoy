@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::ir::{
-    DataFilterRule, EqCondition, FieldAccess, FieldDef, FieldType, Flow, FlowAction,
+    ComponentDef, DataFilterRule, EqCondition, FieldAccess, FieldDef, FieldType, Flow, FlowAction,
     FlowActionKind, FlowNode, FlowNodeKind, Layout, Model, Page, Publish, Role, RoleFilter,
 };
 use crate::parse::node::{
@@ -89,18 +89,50 @@ pub(crate) fn parse_layout(
     })
 }
 
-/// 解析 `<Page>` 文档（含 `<Import>` 引入的 flow / publish）。
+/// 解析 `<Component>` 文档（`module/` 目录下的组件定义文件）。
+pub(crate) fn parse_component_file(
+    path: &str,
+    root: roxmltree::Node<'_, '_>,
+) -> Result<ComponentDef, ParseError> {
+    if root.tag_name().name() != "Component" {
+        return Err(ParseError::InvalidModuleRoot {
+            path: path.to_string(),
+            root: root.tag_name().name().to_string(),
+        });
+    }
+    let name = required_attr(path, root, "Component", "name")?;
+    let nodes = parse_children(path, root)?;
+    Ok(ComponentDef {
+        name,
+        root: as_single_or_row(nodes),
+    })
+}
+
+/// 解析 `<Page>` 文档（含 `<Import>` 引入的 flow / publish，及页面内联 `<Component>` 定义）。
 pub(crate) fn parse_page(
     path: &str,
     root: roxmltree::Node<'_, '_>,
     files: &[SourceFile],
     flow_registry: &mut BTreeMap<String, Flow>,
+    components: &mut BTreeMap<String, ComponentDef>,
 ) -> Result<Page, ParseError> {
     let content_elem = find_child(root, "Content").ok_or_else(|| ParseError::MissingElement {
         path: path.to_string(),
         element: "Content".to_string(),
     })?;
     let nodes = parse_children(path, content_elem)?;
+
+    // 页面级内联 `<Component>`：与 `<Content>` 平级，定义为页面私有组件
+    for child in root.children().filter(roxmltree::Node::is_element) {
+        if child.tag_name().name() != "Component" {
+            continue;
+        }
+        let def = parse_component_file(path, child)?;
+        if components.contains_key(&def.name) {
+            return Err(ParseError::DuplicateComponent { name: def.name });
+        }
+        components.insert(def.name.clone(), def);
+    }
 
     let mut flows = Vec::new();
     let mut publish = None;

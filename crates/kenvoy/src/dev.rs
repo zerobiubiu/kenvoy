@@ -134,10 +134,15 @@ fn build(dir: &Path, project_name: &str) -> anyhow::Result<BuildState> {
 /// 递归收集项目根下 `apps/` 中的 `.kenvoy.xml` 文件。
 fn collect_source_files(dir: &Path, out: &mut Vec<SourceFile>) -> std::io::Result<()> {
     let apps_dir = dir.join("apps");
-    if !apps_dir.is_dir() {
-        return Ok(());
+    if apps_dir.is_dir() {
+        walk_dir(&apps_dir, dir, out)?;
     }
-    walk_dir(&apps_dir, dir, out)
+    // 全局 `module/` 自定义组件目录
+    let module_dir = dir.join("module");
+    if module_dir.is_dir() {
+        walk_dir(&module_dir, dir, out)?;
+    }
+    Ok(())
 }
 
 fn walk_dir(dir: &Path, base: &Path, out: &mut Vec<SourceFile>) -> std::io::Result<()> {

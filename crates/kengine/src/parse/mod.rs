@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use crate::ir::{
-    Flow, IR_VERSION, Layout, Model, Node, Page, Permissions, ProjectIr, ProjectMeta,
+    ComponentDef, Flow, IR_VERSION, Layout, Model, Node, Page, Permissions, ProjectIr, ProjectMeta,
     Role as IrRole,
 };
 
@@ -136,6 +136,20 @@ pub enum ParseError {
         /// 根元素名。
         root: String,
     },
+    /// `module/` 目录文件根元素不是 `<Component>`。
+    #[error("{path}: module 文件根元素 <{root}> 不受支持（应为 <Component>）")]
+    InvalidModuleRoot {
+        /// 文件路径。
+        path: String,
+        /// 根元素名。
+        root: String,
+    },
+    /// 组件名重复。
+    #[error("组件名重复：`{name}`（页面内定义与 `module/` 目录冲突）")]
+    DuplicateComponent {
+        /// 重复的组件名。
+        name: String,
+    },
 }
 
 impl ParseError {
@@ -171,6 +185,8 @@ enum Role {
     Flow,
     /// 权限文件（`publish.kenvoy.xml`，由页面显式引入）。
     Publish,
+    /// 自定义组件文件（`module/` 目录，根元素 `<Component>`）。
+    Module,
 }
 
 /// 解析一组源文件，构建完整 `IR`。
@@ -185,6 +201,7 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
     let mut layouts: BTreeMap<String, Layout> = BTreeMap::new();
     let mut pages: Vec<Page> = Vec::new();
     let mut flow_registry: BTreeMap<String, Flow> = BTreeMap::new();
+    let mut components: BTreeMap<String, ComponentDef> = BTreeMap::new();
 
     for file in files {
         let Some((role, dir)) = classify(&file.path) else {
@@ -212,11 +229,18 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
                 layouts.insert(layout.path.clone(), layout);
             }
             Role::Page => {
-                let page = doc::parse_page(&dir, root, files, &mut flow_registry)?;
+                let page = doc::parse_page(&dir, root, files, &mut flow_registry, &mut components)?;
                 if pages.iter().any(|p| p.path == page.path) {
                     return Err(ParseError::DuplicatePage { path: page.path });
                 }
                 pages.push(page);
+            }
+            Role::Module => {
+                let def = doc::parse_component_file(&file.path, root)?;
+                if components.contains_key(&def.name) {
+                    return Err(ParseError::DuplicateComponent { name: def.name });
+                }
+                components.insert(def.name.clone(), def);
             }
             Role::Flow | Role::Publish => {
                 // 仅由页面 `<Import>` 显式引入，顶层不收集
@@ -233,6 +257,7 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
     }
 
     validate_models(&pages, &models)?;
+    validate_components(&components, &models)?;
 
     let flows: Vec<Flow> = flow_registry.into_values().collect();
     let mut role_map: BTreeMap<String, IrRole> = BTreeMap::new();
@@ -256,15 +281,23 @@ pub fn build_project(files: &[SourceFile], project_name: &str) -> Result<Project
         pages,
         flows,
         permissions: Permissions { roles },
+        components,
     })
 }
 
 /// 依据文件路径识别角色与「apps 内目录路径」。
 ///
-/// 例如 `apps/leave/apply/page.kenvoy.xml` → (`Page`, `/leave/apply`)。
+/// 例如 `apps/leave/apply/page.kenvoy.xml` → (`Page`, `/leave/apply`)；
+/// `module/` 目录（全局或应用私有）下的 `*.kenvoy.xml` → `Module`。
 fn classify(path: &str) -> Option<(Role, String)> {
     let norm = path.replace('\\', "/");
     let (dir, file) = norm.rsplit_once('/')?;
+    if norm.contains("/module/") || norm.starts_with("module/") {
+        if file.ends_with(".kenvoy.xml") {
+            return Some((Role::Module, String::new()));
+        }
+        return None;
+    }
     let role = match file {
         "layout.kenvoy.xml" => Role::Layout,
         "page.kenvoy.xml" => Role::Page,
@@ -325,6 +358,17 @@ fn resolve_layout_chain(page_path: &str, layouts: &BTreeMap<String, Layout>) -> 
 fn validate_models(pages: &[Page], models: &BTreeMap<String, Model>) -> Result<(), ParseError> {
     for page in pages {
         validate_node(&page.content, models, &page.path, None)?;
+    }
+    Ok(())
+}
+
+/// 校验自定义组件定义体中的模型与字段引用。
+fn validate_components(
+    components: &BTreeMap<String, ComponentDef>,
+    models: &BTreeMap<String, Model>,
+) -> Result<(), ParseError> {
+    for def in components.values() {
+        validate_node(&def.root, models, &format!("组件 <{}-/>", def.name), None)?;
     }
     Ok(())
 }
@@ -492,6 +536,138 @@ mod tests {
                 content:
                     "<Page><Content><Form model=\"不存在\"><Field name=\"x\"/></Form></Content></Page>"
                         .into(),
+            },
+        ];
+        let err = build_project(&files, "t").unwrap_err();
+        assert!(matches!(err, ParseError::ModelNotFound { .. }));
+    }
+
+    #[test]
+    fn module_file_registers_component() {
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content: "<Page><Content><Text value=\"x\"/></Content></Page>".into(),
+            },
+            SourceFile {
+                path: "module/组件/状态卡.kenvoy.xml".into(),
+                content:
+                    "<Component name=\"状态卡\"><StatCard data=\"{{data}}\" unit=\"次\"/></Component>"
+                        .into(),
+            },
+        ];
+        let ir = build_project(&files, "t").unwrap();
+        let def = ir.components.get("状态卡").expect("组件未注册");
+        assert!(matches!(def.root, Node::StatCard { .. }));
+    }
+
+    #[test]
+    fn app_module_dir_registers_component() {
+        // 应用私有 module/（apps/<应用>/module/）同样注册
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content: "<Page><Content><Text value=\"x\"/></Content></Page>".into(),
+            },
+            SourceFile {
+                path: "apps/leave/module/审批卡片.kenvoy.xml".into(),
+                content: "<Component name=\"审批卡片\"><Section title=\"审批\"><Slot/></Section></Component>"
+                    .into(),
+            },
+        ];
+        let ir = build_project(&files, "t").unwrap();
+        assert!(ir.components.contains_key("审批卡片"));
+    }
+
+    #[test]
+    fn inline_component_registers() {
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content:
+                    "<Page><Component name=\"问候\"><Text value=\"你好 {{who}}\"/></Component>\
+                <Content><问候 who=\"张三\"/></Content></Page>"
+                        .into(),
+            },
+        ];
+        let ir = build_project(&files, "t").unwrap();
+        let def = ir.components.get("问候").expect("组件未注册");
+        assert!(matches!(def.root, Node::Text { .. }));
+        // 页面内容中 `<问候>` 是未知元素 → Custom
+        let page = &ir.pages[0];
+        assert!(matches!(&page.content, Node::Custom { component, .. } if component == "问候"));
+    }
+
+    #[test]
+    fn duplicate_component_errors() {
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content: "<Page><Component name=\"卡\"><Text value=\"a\"/></Component>\
+                <Content><Text value=\"x\"/></Content></Page>"
+                    .into(),
+            },
+            SourceFile {
+                path: "module/卡.kenvoy.xml".into(),
+                content: "<Component name=\"卡\"><Text value=\"b\"/></Component>".into(),
+            },
+        ];
+        let err = build_project(&files, "t").unwrap_err();
+        assert!(matches!(err, ParseError::DuplicateComponent { .. }));
+    }
+
+    #[test]
+    fn module_file_with_wrong_root_errors() {
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content: "<Page><Content><Text value=\"x\"/></Content></Page>".into(),
+            },
+            SourceFile {
+                path: "module/坏.kenvoy.xml".into(),
+                content: "<Layout><Root/></Layout>".into(),
+            },
+        ];
+        let err = build_project(&files, "t").unwrap_err();
+        assert!(matches!(err, ParseError::InvalidModuleRoot { .. }));
+    }
+
+    #[test]
+    fn component_body_validates_models() {
+        // 组件定义体内的 Form 引用不存在的模型 → 报错
+        let files = vec![
+            SourceFile {
+                path: "apps/layout.kenvoy.xml".into(),
+                content: "<Layout><Root><Slot/></Root></Layout>".into(),
+            },
+            SourceFile {
+                path: "apps/dashboard/page.kenvoy.xml".into(),
+                content: "<Page><Content><Text value=\"x\"/></Content></Page>".into(),
+            },
+            SourceFile {
+                path: "module/表单卡.kenvoy.xml".into(),
+                content: "<Component name=\"表单卡\"><Form model=\"不存在\"></Form></Component>"
+                    .into(),
             },
         ];
         let err = build_project(&files, "t").unwrap_err();

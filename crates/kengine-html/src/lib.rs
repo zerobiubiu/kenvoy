@@ -39,12 +39,13 @@ pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
 
 /// 渲染页面主体：布局链嵌套 + 页面内容。
 fn render_body(ir: &ProjectIr, page: &Page) -> String {
-    let mut inner = render::render_node(ir, &page.content, "");
+    let empty = std::collections::BTreeMap::new();
+    let mut inner = render::render_node(ir, &page.content, "", &empty, 0);
     for layout_path in page.layout_chain.iter().rev() {
         let Some(layout) = ir.layouts.get(layout_path) else {
             continue;
         };
-        inner = render::render_node(ir, &layout.root, &inner);
+        inner = render::render_node(ir, &layout.root, &inner, &empty, 0);
     }
     inner
 }
@@ -171,6 +172,79 @@ mod tests {
         let html = render_page(&ir, &ir.pages[0]);
         assert!(html.contains("data-component=\"MyWidget\""));
         assert!(html.contains("内部"));
+    }
+
+    #[test]
+    fn defined_component_expands_with_props_and_slot() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "module/卡.kenvoy.xml",
+                "<Component name=\"卡\"><Section title=\"{{title}}\"><Slot/></Section></Component>",
+            ),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><卡 title=\"我的卡片\"><Text value=\"插槽内容\"/></卡></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(html.contains("data-component=\"卡\""));
+        assert!(html.contains("我的卡片")); // props 绑定 {{title}}
+        assert!(html.contains("插槽内容")); // 实例子元素注入 <Slot/>
+    }
+
+    #[test]
+    fn component_binding_applies_to_text_and_stat_card() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "module/统计.kenvoy.xml",
+                "<Component name=\"统计\"><StatCard data=\"{{count}}\" unit=\"{{unit}}\"/></Component>",
+            ),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><统计 count=\"42\" unit=\"件\"/></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(html.contains(">42</div>"));
+        assert!(html.contains(">件</span>"));
+        assert!(!html.contains("{{count}}"));
+    }
+
+    #[test]
+    fn recursive_components_hit_depth_limit() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "module/a.kenvoy.xml",
+                "<Component name=\"a\"><b/></Component>",
+            ),
+            (
+                "module/b.kenvoy.xml",
+                "<Component name=\"b\"><a/></Component>",
+            ),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><a/></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(html.contains("组件嵌套过深"));
+    }
+
+    #[test]
+    fn inline_component_used_on_page() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Component name=\"问候\"><Text value=\"你好，{{who}}\"/></Component>\
+                <Content><问候 who=\"张三\"/></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(html.contains("你好，张三"));
     }
 
     #[test]

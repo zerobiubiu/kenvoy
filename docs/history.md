@@ -142,3 +142,15 @@
   - 示例项目 `examples/leave-app/kenvoy.toml` 增加本地 MinIO 配置
 - 冒烟（真实 PG + MinIO，`--noproxy` 绕过本地代理）：注册/登录 → 上传 200（返回 id+objectKey）→ 下载 200 且内容与 Content-Type 一致 → 无 token 401 → 未知 ID 404 → 重启 dev 服务器后同 ID 仍可下载（元数据在 PG、文件在 MinIO，持久化成立）
 - 已知限制：下载不设 Content-Disposition（文件名由前端处理）；无大小上限/类型白名单；`storage_object.bucket` 记录实际桶名，下载固定走默认桶；`public/` 不可运行时写入的约束不变
+
+### 执行验证记录（2026-08-25，自定义组件：inline `<Component>` + `module/` 目录）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine 35 个单元测试 + golden 更新；kengine-html 12 个渲染测试）
+- 实现：
+  - `IR`：新增 `ComponentDef`，`ProjectIr.components` 按名索引
+  - `parse`：`module/` 目录（全局 `module/` 与 `apps/<应用>/module/`）文件解析（`Role::Module`，根元素必须为 `<Component name>`，否则 `InvalidModuleRoot`）；页面内联 `<Component>` 与 `<Content>` 平级注册；重名 `DuplicateComponent`；组件定义体参与模型/字段引用校验
+  - `kengine-html`：`Custom` 节点命中定义时展开（实例 props 替换 `{{名}}` 绑定，实例子元素注入 `<Slot/>`，嵌套深度上限 8 防循环引用）；未定义组件保持 `data-component` 兜底
+  - `kenvoy dev`：源文件收集扩展至全局 `module/` 目录
+- 冒烟：dashboard 页面 inline `进度卡` 组件（`{{title}}` 绑定 + 插槽）渲染正确
+- 已知限制：绑定仅作用于渲染时的字符串属性（Text/标题/StatCard/Field 默认值等），字段可见性等逻辑属性不支持绑定；`module/` 暂不支持通过 `<Import>` 声明式引用（按目录自动收集）
