@@ -13,27 +13,43 @@ use crate::escape::escape_html;
 /// Tabler 样式（MIT，v1.3.0），供 dev / build 输出到 `/assets/tabler.min.css`。
 pub const TABLER_CSS: &str = include_str!("../assets/tabler.min.css");
 
+/// Tabler 图标子集样式（`@font-face` + 常用 `.ti-*`），供 dev / build 输出到 `/assets/icons.css`。
+pub const ICONS_CSS: &str = include_str!("../assets/icons.css");
+
+/// Tabler 图标字体（woff2，MIT，Tabler Icons v2.47），供 dev / build 输出到 `/assets/tabler-icons.woff2`。
+pub const TABLER_ICONS_WOFF2: &[u8] = include_bytes!("../assets/tabler-icons.woff2");
+
 /// 客户端运行时 JS（表格数据渲染 + 表单提交），供 dev / build 输出。
 pub const RUNTIME_JS: &str = include_str!("../assets/runtime.js");
 
 /// 渲染完整 HTML 文档（含布局链嵌套与页面内容）。
 ///
+/// 等价于 `render_page_with_prefix(ir, page, "")`。
+#[must_use]
+pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
+    render_page_with_prefix(ir, page, "")
+}
+
+/// 渲染完整 HTML 文档；`prefix` 为部署子路径（如 `/sub`），作用于自产资源引用。
+///
 /// `Page.layout_chain` 外层在前：根布局最先渲染，`Slot` 逐层注入内层布局，
 /// 最内层 `Slot` 注入页面内容。链中缺失的布局会被跳过（防御性处理，
 /// 正常情况下由 [`kengine::build_project`] 保证完整）。
-///
-/// 样式引用 `/assets/tabler.min.css`，由 dev 服务器 / build 产物提供。
 #[must_use]
-pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
+pub fn render_page_with_prefix(ir: &ProjectIr, page: &Page, prefix: &str) -> String {
+    let asset = |path: &str| format!("{prefix}{path}");
     let title = escape_html(page.title.as_deref().unwrap_or(&page.path));
     let body = render_body(ir, page);
     format!(
         "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
          <title>{title}</title>\n\
-         <link rel=\"stylesheet\" href=\"/assets/tabler.min.css\">\n\
+         <link rel=\"stylesheet\" href=\"{}\">\n\
+         <link rel=\"stylesheet\" href=\"{}\">\n\
          <style>\n.kv-form .form-label{{font-weight:600}}\n.kv-empty{{text-align:center;color:#6c757d}}\n.kv-custom{{border:1px dashed #ced4da;border-radius:8px;padding:8px;margin:8px}}\n</style>\n\
-         </head>\n<body>\n{body}\n</body>\n</html>\n"
+         </head>\n<body>\n{body}\n</body>\n</html>\n",
+        asset("/assets/tabler.min.css"),
+        asset("/assets/icons.css")
     )
 }
 

@@ -58,6 +58,13 @@ pub async fn user_add(
     display_name: &str,
     role: Option<&str>,
 ) -> Result<()> {
+    // 密码强度校验（`kenvoy.toml [auth].password`，与 HTTP 注册一致）
+    let cfg = config::read_config(dir);
+    let policy = crate::config::password_policy(&cfg.auth.password);
+    let errors = policy.validate(password, username);
+    if !errors.is_empty() {
+        anyhow::bail!("密码不满足强度要求：{}", errors.join("；"));
+    }
     let pool = connect(dir).await?;
     let store = UserStore::new(&pool);
     let uid = store.create_user(username, password, display_name).await?;

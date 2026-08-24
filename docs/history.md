@@ -154,3 +154,18 @@
   - `kenvoy dev`：源文件收集扩展至全局 `module/` 目录
 - 冒烟：dashboard 页面 inline `进度卡` 组件（`{{title}}` 绑定 + 插槽）渲染正确
 - 已知限制：绑定仅作用于渲染时的字符串属性（Text/标题/StatCard/Field 默认值等），字段可见性等逻辑属性不支持绑定；`module/` 暂不支持通过 `<Import>` 声明式引用（按目录自动收集）
+
+### 执行验证记录（2026-08-25，auth 注册模式 + 密码策略 + 数据鉴权加强 + 部署与上传增强）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine 40、kengine-html 12、kenvoy 21、kengine-db 5、kengine-s3 3 个测试）
+- 实现：
+  1. **注册模式可配置**（`[auth].mode`）：`open` 公开注册（默认）/ `review` 审核注册（账号 `pending`，`POST /users/{id}/approve` 通过后方可登录）/ `hr` 人事绑定式（关闭公开注册，账号由人事/管理员经 CLI 或管理 API 创建后发放）；管理端点（用户/角色/部门/通讯录、审核）要求登录
+  2. **密码强度策略**（`[auth.password]`）：`none`（默认）/ `weak` / `medium` / `strong` / `custom`（最短长度、大小写、数字、符号、不得含用户名）；HTTP 注册与 CLI `user add` 一致校验，失败 400/错误提示
+  3. **DataFilter 加强**：条件支持比较操作符（`<Eq/>` `<Ne/>` `<Gt/>` `<Ge/>` `<Lt/>` `<Le/>`，IR `OpCondition`/`FilterOp`）；多角色命中按 **OR 合并**（组内 AND，不再取首条）；SQL 侧 `list_records_filtered`（组间 OR + 操作符）
+  4. **字段读权限**：数据 API 响应按当前角色裁剪（`publish.fields.read_roles` 声明且角色不在 → 字段剔除，保留 id/created_at）；SSR 层无用户上下文保持全列（设计取舍：读权限在数据层生效）
+  5. **Tabler 图标**：引入 Tabler Icons v2.47 字体（woff2 778KB + 45 个常用 `.ti-*` 子集 `icons.css`），dev 与 build 均输出，页面自动引用
+  6. **public_path 前缀**：`[build].public_path` 非空时全部产物（页面/索引/assets/__kenvoy/public）统一置于 `dist{前缀}/`，页面资源引用与索引链接带前缀（子路径部署）；缺省行为不变
+  7. **上传限制**（`[storage]`）：`max_size_mb`（超限 413）、`allowed_types`（支持 `image/*` 通配，不符 415）；`kv init` 骨架与示例 `kenvoy.toml` 附注释模板
+- 冒烟（真实 PG + MinIO）：open 注册 200；strong 弱密码 400（列出全部缺失项）；review 注册 pending → 登录 401 → 管理 token approve 204 → 登录 200；管理端点无 token 401；hr 注册 403；上传 txt 415、1.5MB 413；dev 图标资源 200；`public_path=/myapps` build 产物与引用全部带前缀
+- 已知限制：管理端点仅要求登录（未按账号等级分级，后续可加 level 门槛）；axum multipart 默认 2MB 字段上限（超过直接 400，未配置化）；`kv deploy` 保持占位（闭源 KenvoySpace）

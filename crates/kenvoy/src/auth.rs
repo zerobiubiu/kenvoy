@@ -1,7 +1,8 @@
 //! 用户与权限 HTTP API（`/__kenvoy/auth/*`）。
 //!
-//! 覆盖：注册 / 登录 / 登出 / 当前用户、用户与角色管理（账号等级）、部门、通讯录
-//! （含「人事新增人员但不需要账号」与账号关联）。
+//! 覆盖：注册（可配置：公开 / 审核 / 人事绑定式）、登录、登出、当前用户、
+//! 用户与角色管理（账号等级）、部门、通讯录（含「人事新增人员但不需要账号」与账号关联）。
+//! 管理端点（用户/角色/部门/通讯录、审核）要求登录；注册模式与密码强度由 `kenvoy.toml [auth]` 配置。
 
 use axum::Router;
 use axum::extract::{Json, Path, State};
@@ -9,15 +10,20 @@ use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use kengine_db::UserStore;
+use kengine_db::users::User;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::PgPool;
+
+use crate::config::{AuthConfig, password_policy};
 
 /// auth 路由共享状态。
 #[derive(Clone)]
 pub struct AuthState {
     /// 数据库连接池（未配置时为 `None`）。
     pub db: Option<PgPool>,
+    /// 注册模式与密码策略配置。
+    pub auth: AuthConfig,
 }
 
 /// 构建 auth 路由。
@@ -29,6 +35,8 @@ pub fn router() -> Router<AuthState> {
         .route("/me", get(me))
         .route("/users", get(list_users))
         .route("/users/{id}/roles", post(assign_role))
+        .route("/users/{id}/approve", post(approve_user))
+        .route("/users/{id}/disable", post(disable_user))
         .route("/roles", get(list_roles).post(create_role))
         .route("/roles/{id}/level", post(set_role_level))
         .route(
@@ -49,6 +57,22 @@ pub(crate) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .to_str()
         .ok()?
         .strip_prefix("Bearer ")
+}
+
+/// 管理端点前置校验：数据库可用 + 已登录（返回当前用户）。
+async fn require_login(
+    state: &AuthState,
+    headers: &HeaderMap,
+) -> Result<User, (StatusCode, &'static str)> {
+    let pool = require_db(state).map_err(|c| (c, "数据库未配置"))?;
+    let Some(token) = bearer_token(headers) else {
+        return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token"));
+    };
+    UserStore::new(pool)
+        .user_by_session(token)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误"))?
+        .ok_or((StatusCode::UNAUTHORIZED, "会话无效或已过期"))
 }
 
 async fn user_detail_json(
@@ -76,13 +100,39 @@ async fn register(State(state): State<AuthState>, Json(req): Json<RegisterReq>) 
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
     };
+    // 密码强度校验（`[auth].password`，默认无校验）
+    let policy = password_policy(&state.auth.password);
+    let errors = policy.validate(&req.password, &req.username);
+    if !errors.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
+    }
     let store = UserStore::new(pool);
-    match store
-        .create_user(&req.username, &req.password, &req.display_name)
-        .await
-    {
-        Ok(id) => Json(json!({ "id": id })).into_response(),
-        Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
+    match state.auth.mode.as_str() {
+        // 审核注册：账号进入 `pending`，审核通过后方可登录
+        "review" => match store
+            .create_user_with_status(&req.username, &req.password, &req.display_name, "pending")
+            .await
+        {
+            Ok(id) => Json(
+                json!({ "id": id, "status": "pending", "message": "注册已提交，等待管理员审核" }),
+            )
+            .into_response(),
+            Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
+        },
+        // 人事绑定式：关闭公开注册，账号由人事/管理员创建后发放
+        "hr" => (
+            StatusCode::FORBIDDEN,
+            "注册未开放：账号由人事应用创建后发放",
+        )
+            .into_response(),
+        // 公开注册（默认）
+        _ => match store
+            .create_user(&req.username, &req.password, &req.display_name)
+            .await
+        {
+            Ok(id) => Json(json!({ "id": id })).into_response(),
+            Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
+        },
     }
 }
 
@@ -153,7 +203,10 @@ async fn me(State(state): State<AuthState>, headers: HeaderMap) -> Response {
     }
 }
 
-async fn list_users(State(state): State<AuthState>) -> Response {
+async fn list_users(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -172,8 +225,12 @@ struct AssignRoleReq {
 async fn assign_role(
     State(state): State<AuthState>,
     Path(user_id): Path<i64>,
+    headers: HeaderMap,
     Json(req): Json<AssignRoleReq>,
 ) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -191,7 +248,14 @@ struct RoleReq {
     description: Option<String>,
 }
 
-async fn create_role(State(state): State<AuthState>, Json(req): Json<RoleReq>) -> Response {
+async fn create_role(
+    State(state): State<AuthState>,
+    headers: HeaderMap,
+    Json(req): Json<RoleReq>,
+) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -205,7 +269,10 @@ async fn create_role(State(state): State<AuthState>, Json(req): Json<RoleReq>) -
     }
 }
 
-async fn list_roles(State(state): State<AuthState>) -> Response {
+async fn list_roles(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -224,8 +291,12 @@ struct LevelReq {
 async fn set_role_level(
     State(state): State<AuthState>,
     Path(role_id): Path<i64>,
+    headers: HeaderMap,
     Json(req): Json<LevelReq>,
 ) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -247,8 +318,12 @@ struct DepartmentReq {
 
 async fn create_department(
     State(state): State<AuthState>,
+    headers: HeaderMap,
     Json(req): Json<DepartmentReq>,
 ) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -262,7 +337,10 @@ async fn create_department(
     }
 }
 
-async fn list_departments(State(state): State<AuthState>) -> Response {
+async fn list_departments(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -283,7 +361,14 @@ struct ContactReq {
     title: Option<String>,
 }
 
-async fn add_contact(State(state): State<AuthState>, Json(req): Json<ContactReq>) -> Response {
+async fn add_contact(
+    State(state): State<AuthState>,
+    headers: HeaderMap,
+    Json(req): Json<ContactReq>,
+) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -306,8 +391,12 @@ async fn add_contact(State(state): State<AuthState>, Json(req): Json<ContactReq>
 
 async fn list_contacts(
     State(state): State<AuthState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<ContactListParams>,
 ) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),
@@ -331,12 +420,53 @@ struct LinkUserReq {
     user_id: Option<i64>,
 }
 
+/// 审核通过用户（`pending` → `active`，审核注册模式）。
+async fn approve_user(
+    State(state): State<AuthState>,
+    Path(user_id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    match UserStore::new(pool).approve_user(user_id).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(err) => (StatusCode::NOT_FOUND, err.to_string()).into_response(),
+    }
+}
+
+/// 禁用账号（`active` → `disabled`，不得登录）。
+async fn disable_user(
+    State(state): State<AuthState>,
+    Path(user_id): Path<i64>,
+    headers: HeaderMap,
+) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    match UserStore::new(pool).disable_user(user_id).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(err) => (StatusCode::NOT_FOUND, err.to_string()).into_response(),
+    }
+}
 /// 通讯录人员关联账号（人事 app 自动关联；`user_id` 为 `null` 时解除关联）。
 async fn link_contact(
     State(state): State<AuthState>,
     Path(contact_id): Path<i64>,
+    headers: HeaderMap,
     Json(req): Json<LinkUserReq>,
 ) -> Response {
+    if let Err((code, msg)) = require_login(&state, &headers).await {
+        return (code, msg).into_response();
+    }
     let pool = match require_db(&state) {
         Ok(p) => p,
         Err(code) => return (code, "数据库未配置").into_response(),

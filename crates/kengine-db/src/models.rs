@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use kengine::ir::{FieldType, Model};
+use kengine::ir::{FieldType, FilterOp, Model};
 use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{PgPool, Row};
@@ -123,7 +123,77 @@ pub async fn list_records(pool: &PgPool, model: &Model) -> Result<Vec<Value>, Db
     list_records_where(pool, model, &[]).await
 }
 
-/// 列出模型记录，支持行级过滤（`conditions` 为 AND 相等的过滤条件，如 `DataFilter`）。
+/// 过滤条件（行级 `DataFilter`）。
+#[derive(Debug, Clone)]
+pub struct FilterCond {
+    /// 字段名。
+    pub field: String,
+    /// 比较操作符。
+    pub op: FilterOp,
+    /// 比较值。
+    pub value: String,
+}
+
+impl FilterCond {
+    /// 构造相等条件。
+    #[must_use]
+    pub fn eq(field: &str, value: &str) -> Self {
+        Self {
+            field: field.to_string(),
+            op: FilterOp::Eq,
+            value: value.to_string(),
+        }
+    }
+
+    /// SQL 操作符。
+    fn sql_op(&self) -> &'static str {
+        match self.op {
+            FilterOp::Eq => "=",
+            FilterOp::Ne => "<>",
+            FilterOp::Gt => ">",
+            FilterOp::Ge => ">=",
+            FilterOp::Lt => "<",
+            FilterOp::Le => "<=",
+        }
+    }
+}
+
+/// 列出模型记录，支持行级过滤（`groups` 之间 OR 连接，组内 AND）。
+///
+/// # Errors
+/// SQL 执行失败时返回 [`DbError`]。
+pub async fn list_records_filtered(
+    pool: &PgPool,
+    model: &Model,
+    groups: &[Vec<FilterCond>],
+) -> Result<Vec<Value>, DbError> {
+    let table = table_name(&model.name);
+    let mut sql = format!("SELECT to_jsonb(t) FROM \"{table}\" t");
+    let mut n = 0;
+    if !groups.is_empty() {
+        let mut or_clauses = Vec::with_capacity(groups.len());
+        for group in groups {
+            let mut and_clauses = Vec::with_capacity(group.len());
+            for c in group {
+                n += 1;
+                and_clauses.push(format!("t.\"{}\" {} ${n}", c.field, c.sql_op()));
+            }
+            or_clauses.push(format!("({})", and_clauses.join(" AND ")));
+        }
+        let _ = write!(sql, " WHERE {}", or_clauses.join(" OR "));
+    }
+    sql.push_str(" ORDER BY t.id");
+    let mut query = sqlx::query_as::<_, (Json<Value>,)>(&sql);
+    for group in groups {
+        for c in group {
+            query = query.bind(&c.value);
+        }
+    }
+    let rows = query.fetch_all(pool).await?;
+    Ok(rows.into_iter().map(|(json,)| json.0).collect())
+}
+
+/// 列出模型记录，支持 AND 相等过滤（旧接口兼容）。
 ///
 /// # Errors
 /// SQL 执行失败时返回 [`DbError`]。
@@ -132,23 +202,17 @@ pub async fn list_records_where(
     model: &Model,
     conditions: &[(String, String)],
 ) -> Result<Vec<Value>, DbError> {
-    let table = table_name(&model.name);
-    let mut sql = format!("SELECT to_jsonb(t) FROM \"{table}\" t");
-    if !conditions.is_empty() {
-        let clauses: Vec<String> = conditions
-            .iter()
-            .enumerate()
-            .map(|(i, (f, _))| format!("t.\"{f}\" = ${}", i + 1))
-            .collect();
-        let _ = write!(sql, " WHERE {}", clauses.join(" AND "));
-    }
-    sql.push_str(" ORDER BY t.id");
-    let mut query = sqlx::query_as::<_, (Json<Value>,)>(&sql);
-    for (_, v) in conditions {
-        query = query.bind(v);
-    }
-    let rows = query.fetch_all(pool).await?;
-    Ok(rows.into_iter().map(|(json,)| json.0).collect())
+    let groups: Vec<Vec<FilterCond>> = if conditions.is_empty() {
+        Vec::new()
+    } else {
+        vec![
+            conditions
+                .iter()
+                .map(|(f, v)| FilterCond::eq(f, v))
+                .collect(),
+        ]
+    };
+    list_records_filtered(pool, model, &groups).await
 }
 
 /// 模型存储操作集合。
@@ -201,5 +265,17 @@ impl<'a> ModelStore<'a> {
         conditions: &[(String, String)],
     ) -> Result<Vec<Value>, DbError> {
         list_records_where(self.pool, model, conditions).await
+    }
+
+    /// 按 OR 分组条件列出记录（行级过滤：组内 AND、组间 OR，支持比较操作符）。
+    ///
+    /// # Errors
+    /// 见 [`list_records_filtered`]。
+    pub async fn list_filtered(
+        &self,
+        model: &Model,
+        groups: &[Vec<FilterCond>],
+    ) -> Result<Vec<Value>, DbError> {
+        list_records_filtered(self.pool, model, groups).await
     }
 }

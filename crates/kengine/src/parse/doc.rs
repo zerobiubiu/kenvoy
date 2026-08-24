@@ -3,8 +3,9 @@
 use std::collections::BTreeMap;
 
 use crate::ir::{
-    ComponentDef, DataFilterRule, EqCondition, FieldAccess, FieldDef, FieldType, Flow, FlowAction,
-    FlowActionKind, FlowNode, FlowNodeKind, Layout, Model, Page, Publish, Role, RoleFilter,
+    ComponentDef, DataFilterRule, FieldAccess, FieldDef, FieldType, FilterOp, Flow, FlowAction,
+    FlowActionKind, FlowNode, FlowNodeKind, Layout, Model, OpCondition, Page, Publish, Role,
+    RoleFilter,
 };
 use crate::parse::node::{
     as_single_or_row, child_text, find_child, parse_bool, parse_children, required_attr,
@@ -364,12 +365,16 @@ fn parse_data_filters(
             let mut all = false;
             let mut conditions = Vec::new();
             for cond in filter_elem.children().filter(roxmltree::Node::is_element) {
-                match cond.tag_name().name() {
+                let tag = cond.tag_name().name();
+                match tag {
                     "All" => all = true,
-                    "Eq" => conditions.push(EqCondition {
-                        field: required_attr(path, cond, "Eq", "field")?,
-                        value: required_attr(path, cond, "Eq", "value")?,
-                    }),
+                    "Eq" | "Ne" | "Gt" | "Ge" | "Lt" | "Le" => {
+                        conditions.push(OpCondition {
+                            field: required_attr(path, cond, tag, "field")?,
+                            op: filter_op(tag),
+                            value: required_attr(path, cond, tag, "value")?,
+                        });
+                    }
                     _ => {}
                 }
             }
@@ -382,6 +387,18 @@ fn parse_data_filters(
         filter_rules.push(DataFilterRule { model, filters });
     }
     Ok(filter_rules)
+}
+
+/// 标签名 → 比较操作符。
+fn filter_op(tag: &str) -> FilterOp {
+    match tag {
+        "Ne" => FilterOp::Ne,
+        "Gt" => FilterOp::Gt,
+        "Ge" => FilterOp::Ge,
+        "Lt" => FilterOp::Lt,
+        "Le" => FilterOp::Le,
+        _ => FilterOp::Eq,
+    }
 }
 
 fn parse_role(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<Role, ParseError> {

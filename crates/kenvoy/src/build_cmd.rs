@@ -1,14 +1,14 @@
 //! `kv build`：将项目构建为静态 HTML 产物。
 //!
-//! 输出到 `dist/`（或配置 `[build].output`）：每个页面一个 `<path>/index.html`，
-//! 索引页 + `public/` 静态资源拷贝（`[build].public_path` 决定拷贝到的子目录）。
-//! 产物为生产 HTML（不含 dev 自动刷新脚本）。
+//! 输出到 `dist/`（或配置 `[build].output`）：`[build].public_path` 非空时，
+//! 全部产物（页面、索引页、`assets/`、`__kenvoy/`、`public/` 拷贝）统一放在
+//! `dist{public_path}/` 下，页面内的自产资源引用与索引链接均带此前缀（子路径部署）；
+//! 缺省（根路径）时行为同以往。产物为生产 HTML（不含 dev 自动刷新脚本）。
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use kengine_html::render_page;
 
 use crate::config::{self, KenvoyConfig};
 use crate::dev;
@@ -33,21 +33,32 @@ pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Resul
     }
     std::fs::create_dir_all(&out_dir)?;
 
+    // 部署子路径：非空时全部产物放入 dist{prefix}/，资源引用带前缀
+    let raw_prefix = cfg.build.public_path.as_deref().unwrap_or("");
+    let prefix = format!("/{}", raw_prefix.trim_matches('/')).replace("//", "/");
+    let prefix = if prefix == "/" { String::new() } else { prefix };
+    let root = if prefix.is_empty() {
+        out_dir.clone()
+    } else {
+        out_dir.join(prefix.trim_start_matches('/'))
+    };
+    std::fs::create_dir_all(&root)?;
+
     let root_page_owned = ir.pages.iter().any(|p| p.path == "/");
 
     let mut count = 0;
     for page in &ir.pages {
-        let html = render_page(&ir, page);
+        let html = kengine_html::render_page_with_prefix(&ir, page, &prefix);
         // 静态产物注入客户端运行时（表格数据由宿主集成时通过 `__kenvoy/ir.json` 等接入）
         let html = html.replace(
             "</body>",
-            "<script src=\"/__kenvoy/runtime.js\"></script></body>",
+            &format!("<script src=\"{prefix}/__kenvoy/runtime.js\"></script></body>"),
         );
         let rel = page.path.trim_start_matches('/');
         if rel.is_empty() {
-            std::fs::write(out_dir.join("index.html"), html)?;
+            std::fs::write(root.join("index.html"), html)?;
         } else {
-            let page_dir = out_dir.join(rel);
+            let page_dir = root.join(rel);
             std::fs::create_dir_all(&page_dir)?;
             std::fs::write(page_dir.join("index.html"), html)?;
         }
@@ -55,39 +66,38 @@ pub fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) -> Resul
     }
 
     if !root_page_owned {
-        let index = build_index(&ir);
-        std::fs::write(out_dir.join("index.html"), index)?;
+        let index = build_index(&ir, &prefix);
+        std::fs::write(root.join("index.html"), index)?;
     }
 
-    // 样式与运行时资源
-    std::fs::create_dir_all(out_dir.join("assets"))?;
+    // 样式、图标与运行时资源
+    std::fs::create_dir_all(root.join("assets"))?;
+    std::fs::write(root.join("assets/tabler.min.css"), kengine_html::TABLER_CSS)?;
+    std::fs::write(root.join("assets/icons.css"), kengine_html::ICONS_CSS)?;
     std::fs::write(
-        out_dir.join("assets/tabler.min.css"),
-        kengine_html::TABLER_CSS,
+        root.join("assets/tabler-icons.woff2"),
+        kengine_html::TABLER_ICONS_WOFF2,
     )?;
-    std::fs::create_dir_all(out_dir.join("__kenvoy"))?;
+    std::fs::create_dir_all(root.join("__kenvoy"))?;
+    std::fs::write(root.join("__kenvoy/runtime.js"), kengine_html::RUNTIME_JS)?;
     std::fs::write(
-        out_dir.join("__kenvoy/runtime.js"),
-        kengine_html::RUNTIME_JS,
-    )?;
-    std::fs::write(
-        out_dir.join("__kenvoy/ir.json"),
+        root.join("__kenvoy/ir.json"),
         serde_json::to_string_pretty(&ir)?,
     )?;
 
-    copy_public(dir, &out_dir, cfg.build.public_path.as_deref())?;
+    copy_public(dir, &root)?;
 
     println!("构建完成：{}（{} 个页面）", out_dir.display(), count);
     Ok(())
 }
 
-/// 生成页面索引页。
-fn build_index(ir: &kengine::ir::ProjectIr) -> String {
+/// 生成页面索引页（链接带部署前缀）。
+fn build_index(ir: &kengine::ir::ProjectIr, prefix: &str) -> String {
     let mut links = String::new();
     for page in &ir.pages {
         let path = escape_html(&page.path);
         let title = escape_html(page.title.as_deref().unwrap_or(&page.path));
-        let _ = write!(links, "<li><a href=\"{path}\">{title}</a></li>");
+        let _ = write!(links, "<li><a href=\"{prefix}{path}\">{title}</a></li>");
     }
     format!(
         "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Kenvoy</title></head>\
@@ -95,19 +105,13 @@ fn build_index(ir: &kengine::ir::ProjectIr) -> String {
     )
 }
 
-/// 拷贝 `public/` 到输出目录（`public_path` 决定目标子目录，缺省为根）。
-fn copy_public(project_dir: &Path, out_dir: &Path, public_path: Option<&str>) -> Result<()> {
+/// 拷贝 `public/` 到产物根目录。
+fn copy_public(project_dir: &Path, root: &Path) -> Result<()> {
     let public_dir = project_dir.join("public");
     if !public_dir.is_dir() {
         return Ok(());
     }
-    let sub = public_path.unwrap_or("/").trim_matches('/');
-    let dst = if sub.is_empty() {
-        out_dir.to_path_buf()
-    } else {
-        out_dir.join(sub)
-    };
-    copy_dir_recursive(&public_dir, &dst)
+    copy_dir_recursive(&public_dir, root)
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {

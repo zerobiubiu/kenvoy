@@ -224,6 +224,7 @@
                 "conditions": [
                   {
                     "field": "申请人",
+                    "op": "Eq",
                     "value": "{{currentUser.id}}"
                   }
                 ]

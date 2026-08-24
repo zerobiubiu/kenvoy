@@ -204,15 +204,16 @@ async fn main() -> anyhow::Result<()> {
                 },
                 None => None,
             };
-            dev::run(
-                &dir,
+            dev::run(dev::DevOptions {
+                dir: &dir,
                 host,
                 port,
-                &name,
-                cfg.project.description.clone(),
-                &cfg.storage,
+                project_name: &name,
+                description: cfg.project.description.clone(),
+                storage: &cfg.storage,
+                auth: &cfg.auth,
                 db,
-            )
+            })
             .await?;
         }
         Some(Commands::Init { name, title }) => {

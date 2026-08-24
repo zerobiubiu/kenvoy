@@ -4,6 +4,7 @@
 
 pub mod expr;
 pub mod ir;
+pub mod password;
 pub mod validation;
 pub mod workflow;
 

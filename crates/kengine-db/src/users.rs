@@ -110,7 +110,7 @@ impl<'a> UserStore<'a> {
         Self { pool }
     }
 
-    /// 创建用户（密码经 argon2 哈希）。
+    /// 创建用户（密码经 argon2 哈希），状态为 `active`。
     ///
     /// # Errors
     /// 用户名重复或 SQL 失败时返回 [`DbError`]。
@@ -120,16 +120,63 @@ impl<'a> UserStore<'a> {
         password: &str,
         display_name: &str,
     ) -> Result<i64, DbError> {
+        self.create_user_with_status(username, password, display_name, "active")
+            .await
+    }
+
+    /// 创建用户并指定状态（如审核注册的 `pending`）。
+    ///
+    /// # Errors
+    /// 用户名重复或 SQL 失败时返回 [`DbError`]。
+    pub async fn create_user_with_status(
+        &self,
+        username: &str,
+        password: &str,
+        display_name: &str,
+        status: &str,
+    ) -> Result<i64, DbError> {
         let hash = hash_password(password)?;
         let row = sqlx::query(
-            "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO users (username, password_hash, display_name, status) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(username)
         .bind(&hash)
         .bind(display_name)
+        .bind(status)
         .fetch_one(self.pool)
         .await?;
         Ok(row.get::<i64, _>("id"))
+    }
+
+    /// 审核通过：`pending` → `active`（审核注册模式）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]；用户不存在时返回 [`DbError::NotFound`]。
+    pub async fn approve_user(&self, user_id: i64) -> Result<(), DbError> {
+        let row = sqlx::query("UPDATE users SET status = 'active' WHERE id = $1")
+            .bind(user_id)
+            .execute(self.pool)
+            .await?;
+        if row.rows_affected() == 0 {
+            return Err(DbError::NotFound("用户不存在".to_string()));
+        }
+        Ok(())
+    }
+
+    /// 禁用账号（`active` → `disabled`，不得登录）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]；用户不存在时返回 [`DbError::NotFound`]。
+    pub async fn disable_user(&self, user_id: i64) -> Result<(), DbError> {
+        let row = sqlx::query("UPDATE users SET status = 'disabled' WHERE id = $1")
+            .bind(user_id)
+            .execute(self.pool)
+            .await?;
+        if row.rows_affected() == 0 {
+            return Err(DbError::NotFound("用户不存在".to_string()));
+        }
+        Ok(())
     }
 
     /// 按登录名校验密码；成功返回用户。

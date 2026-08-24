@@ -14,3 +14,13 @@ region = "us-east-1"
 bucket = "kenvoy-dev"
 access_key = "minioadmin"
 secret_key = "minioadmin"
+# 上传限制（缺省不限）：
+# max_size_mb = 10
+# allowed_types = ["image/*", "application/pdf"]
+
+[auth]
+# 注册模式：open（公开注册）| review（审核注册）| hr（人事绑定式，关闭公开注册）
+mode = "open"
+# 密码强度：none | weak | medium | strong | custom
+[auth.password]
+strength = "none"

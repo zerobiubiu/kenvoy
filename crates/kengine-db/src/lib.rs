@@ -25,6 +25,9 @@ pub enum DbError {
     /// 业务错误（含自定义信息）。
     #[error("{0}")]
     Other(String),
+    /// 目标不存在。
+    #[error("{0} 不存在")]
+    NotFound(String),
 }
 
 /// 建立连接池。

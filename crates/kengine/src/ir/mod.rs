@@ -507,18 +507,38 @@ pub struct RoleFilter {
     pub roles: Vec<String>,
     /// 全量可见（`<All/>`），此时忽略 `conditions`。
     pub all: bool,
-    /// 相等条件（`<Eq/>`，AND 连接）。
-    pub conditions: Vec<EqCondition>,
+    /// 比较条件（`<Eq/>` / `<Ne/>` / `<Gt/>` / `<Ge/>` / `<Lt/>` / `<Le/>`，AND 连接）。
+    pub conditions: Vec<OpCondition>,
 }
 
 /// 相等条件；`value` 支持 `{{currentUser.*}}` 绑定。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct EqCondition {
+pub struct OpCondition {
     /// 字段名。
     pub field: String,
+    /// 比较操作符。
+    pub op: FilterOp,
     /// 字段值（支持 `{{ }}` 绑定）。
     pub value: String,
+}
+
+/// 比较操作符（`DataFilter` 与字段值比较）。
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FilterOp {
+    /// 等于。
+    #[default]
+    Eq,
+    /// 不等于。
+    Ne,
+    /// 大于。
+    Gt,
+    /// 大于等于。
+    Ge,
+    /// 小于。
+    Lt,
+    /// 小于等于。
+    Le,
 }
 
 /// 字段访问控制。
@@ -819,8 +839,9 @@ mod tests {
                 filters: vec![RoleFilter {
                     roles: vec!["普通员工".into()],
                     all: false,
-                    conditions: vec![EqCondition {
+                    conditions: vec![OpCondition {
                         field: "申请人".into(),
+                        op: FilterOp::Eq,
                         value: "{{currentUser.id}}".into(),
                     }],
                 }],

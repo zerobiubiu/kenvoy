@@ -24,6 +24,46 @@ pub struct KenvoyConfig {
     /// `[storage]` 段。
     #[serde(default)]
     pub storage: StorageConfig,
+    /// `[auth]` 段。
+    #[serde(default)]
+    pub auth: AuthConfig,
+}
+
+/// `[auth]` 段（注册模式与密码策略）。
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct AuthConfig {
+    /// 注册模式：`open`（公开注册，默认）/ `review`（审核注册，注册后需审核）/ `hr`（人事绑定式，关闭公开注册）。
+    #[serde(default)]
+    pub mode: String,
+    /// 密码强度策略。
+    #[serde(default)]
+    pub password: PasswordConfig,
+}
+
+/// `[auth.password]` 段（密码强度校验）。
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct PasswordConfig {
+    /// 强度档位：`none`（不校验，默认）/ `weak` / `medium` / `strong` / `custom`（按下方自定义规则）。
+    #[serde(default)]
+    pub strength: String,
+    /// 自定义：最短长度。
+    #[serde(default)]
+    pub min_length: Option<usize>,
+    /// 自定义：要求大写字母。
+    #[serde(default)]
+    pub require_upper: Option<bool>,
+    /// 自定义：要求小写字母。
+    #[serde(default)]
+    pub require_lower: Option<bool>,
+    /// 自定义：要求数字。
+    #[serde(default)]
+    pub require_digit: Option<bool>,
+    /// 自定义：要求符号。
+    #[serde(default)]
+    pub require_symbol: Option<bool>,
+    /// 自定义：密码不得包含用户名。
+    #[serde(default)]
+    pub reject_username: Option<bool>,
 }
 
 /// `[storage]` 段（S3 对象存储：文件本体存放处，元数据在 PostgreSQL）。
@@ -39,6 +79,11 @@ pub struct StorageConfig {
     pub access_key: Option<String>,
     /// 秘密密钥。
     pub secret_key: Option<String>,
+    /// 上传大小上限（MB；缺省不限制）。
+    pub max_size_mb: Option<u64>,
+    /// 允许的 Content-Type 白名单（支持 `image/*` 通配；空或缺省不限制）。
+    #[serde(default)]
+    pub allowed_types: Vec<String>,
 }
 
 /// `[database]` 段（PostgreSQL 18+）。
@@ -73,6 +118,25 @@ pub struct BuildConfig {
     pub output: Option<String>,
     /// 静态资源访问前缀。
     pub public_path: Option<String>,
+}
+
+/// 密码策略配置 → 引擎校验策略（`none` / `weak` / `medium` / `strong` / `custom`）。
+#[must_use]
+pub fn password_policy(cfg: &PasswordConfig) -> kengine::password::PasswordPolicy {
+    match cfg.strength.as_str() {
+        "weak" => kengine::password::PasswordPolicy::weak(),
+        "medium" => kengine::password::PasswordPolicy::medium(),
+        "strong" => kengine::password::PasswordPolicy::strong(),
+        "custom" => kengine::password::PasswordPolicy {
+            min_length: cfg.min_length,
+            require_upper: cfg.require_upper.unwrap_or(false),
+            require_lower: cfg.require_lower.unwrap_or(false),
+            require_digit: cfg.require_digit.unwrap_or(false),
+            require_symbol: cfg.require_symbol.unwrap_or(false),
+            reject_username: cfg.reject_username.unwrap_or(false),
+        },
+        _ => kengine::password::PasswordPolicy::none(),
+    }
 }
 
 /// 读取项目配置；文件缺失或解析失败时回退默认值并打印提示。

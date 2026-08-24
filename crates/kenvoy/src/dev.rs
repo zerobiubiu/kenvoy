@@ -16,6 +16,7 @@ use axum::routing::{get, post};
 use kengine::ir::{DataFilterRule, Node, Page, ProjectIr, RoleFilter, Validation};
 use kengine::validation;
 use kengine::{SourceFile, build_project};
+use kengine_db::models::FilterCond;
 use kengine_db::users::User;
 use kengine_db::{ModelStore, StorageStore, UserStore};
 use kengine_html::render_page;
@@ -24,7 +25,7 @@ use notify::Watcher;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
-use crate::config::StorageConfig;
+use crate::config::{AuthConfig, StorageConfig};
 
 /// 构建状态：解析后的 `IR` + 版本号（用于自动刷新）。
 struct BuildState {
@@ -47,20 +48,43 @@ struct AppState {
     db: Option<PgPool>,
     /// 对象存储（配置 `[storage]` 时启用；否则文件上传不可用）。
     store: Option<ObjectStore>,
+    /// 存储配置（上传限制等）。
+    storage_cfg: StorageConfig,
     /// 内存数据存储（模型名 → 记录列表，无数据库时的降级模式）。
     data: Arc<Mutex<std::collections::HashMap<String, Vec<Value>>>>,
 }
 
+/// 开发服务器启动选项。
+#[allow(clippy::struct_excessive_bools)]
+pub struct DevOptions<'a> {
+    /// 项目根目录。
+    pub dir: &'a Path,
+    /// 监听地址。
+    pub host: &'a str,
+    /// 监听端口。
+    pub port: u16,
+    /// 项目显示名称。
+    pub project_name: &'a str,
+    /// 项目描述。
+    pub description: Option<String>,
+    /// `[storage]` 配置。
+    pub storage: &'a StorageConfig,
+    /// `[auth]` 配置。
+    pub auth: &'a AuthConfig,
+    /// PostgreSQL 连接池（未配置为 `None`）。
+    pub db: Option<PgPool>,
+}
+
 /// 启动开发服务器。
-pub async fn run(
-    dir: &Path,
-    host: &str,
-    port: u16,
-    project_name: &str,
-    description: Option<String>,
-    storage: &StorageConfig,
-    db: Option<PgPool>,
-) -> anyhow::Result<()> {
+pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
+    let dir = opts.dir;
+    let host = opts.host;
+    let port = opts.port;
+    let project_name = opts.project_name;
+    let description = opts.description;
+    let storage = opts.storage;
+    let auth = opts.auth;
+    let db = opts.db;
     let build_state = Arc::new(RwLock::new(
         build(dir, project_name).with_context(|| format!("构建项目失败：{}", dir.display()))?,
     ));
@@ -87,6 +111,7 @@ pub async fn run(
         build: build_state,
         db,
         store,
+        storage_cfg: storage.clone(),
         data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     let app = Router::new()
@@ -94,12 +119,17 @@ pub async fn run(
         .route("/__kenvoy/version", get(version))
         .route("/__kenvoy/runtime.js", get(runtime_js))
         .route("/assets/tabler.min.css", get(tabler_css))
+        .route("/assets/icons.css", get(icons_css))
+        .route("/assets/tabler-icons.woff2", get(tabler_icons_woff2))
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
         .route("/__kenvoy/file", post(upload_file))
         .route("/__kenvoy/file/{id}", get(download_file))
         .nest(
             "/__kenvoy/auth",
-            crate::auth::router().with_state(crate::auth::AuthState { db: db_for_auth }),
+            crate::auth::router().with_state(crate::auth::AuthState {
+                db: db_for_auth,
+                auth: auth.clone(),
+            }),
         )
         .route("/{*path}", get(page_or_static))
         .with_state(state);
@@ -347,6 +377,24 @@ async fn tabler_css() -> Response {
         .into_response()
 }
 
+/// 返回 Tabler 图标子集样式。
+async fn icons_css() -> Response {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        kengine_html::ICONS_CSS,
+    )
+        .into_response()
+}
+
+/// 返回 Tabler 图标字体。
+async fn tabler_icons_woff2() -> Response {
+    (
+        [(header::CONTENT_TYPE, "font/woff2")],
+        kengine_html::TABLER_ICONS_WOFF2,
+    )
+        .into_response()
+}
+
 /// `[storage]` 配置齐全时连接对象存储并确保 Bucket 存在；失败仅告警（不阻断 dev 服务）。
 async fn connect_store(storage: &StorageConfig) -> Option<ObjectStore> {
     let cfg = s3_config(storage)?;
@@ -426,6 +474,30 @@ async fn upload_file(
     if data.is_empty() {
         return (StatusCode::BAD_REQUEST, "文件内容为空").into_response();
     }
+    // 上传限制（`[storage]` 配置）：大小上限 / 类型白名单
+    if let Some(max_mb) = state.storage_cfg.max_size_mb {
+        let max_bytes = max_mb.saturating_mul(1024 * 1024);
+        if data.len() as u64 > max_bytes {
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                format!("文件大小超过上限 {max_mb} MB"),
+            )
+                .into_response();
+        }
+    }
+    if !state.storage_cfg.allowed_types.is_empty()
+        && !state
+            .storage_cfg
+            .allowed_types
+            .iter()
+            .any(|t| type_allowed(&content_type, t))
+    {
+        return (
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            format!("不支持的文件类型：{content_type}"),
+        )
+            .into_response();
+    }
     let key = ObjectStore::object_key(&file_name);
     let etag = match store.put(&key, &data, &content_type).await {
         Ok(e) => e,
@@ -451,6 +523,15 @@ async fn upload_file(
         }
     };
     Json(json!({ "id": id, "objectKey": key, "fileName": file_name })).into_response()
+}
+
+/// `Content-Type` 是否匹配白名单项（支持 `image/*` 通配）。
+fn type_allowed(content_type: &str, rule: &str) -> bool {
+    if let Some(prefix) = rule.strip_suffix("/*") {
+        content_type.starts_with(&format!("{prefix}/"))
+    } else {
+        content_type == rule
+    }
 }
 
 /// 下载文件：`GET /__kenvoy/file/{id}`。
@@ -521,18 +602,24 @@ async fn list_data(
         if let Err(err) = store.ensure(&model_def).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
         }
-        let conditions = {
+        let groups = {
             let build = state.build.read().expect("读取状态失败");
             match resolve_data_filter(&build.ir, &model, &roles, &user) {
                 FilterDecision::AllowAll => Vec::new(),
                 FilterDecision::Forbidden => {
                     return (StatusCode::FORBIDDEN, "无数据访问权限").into_response();
                 }
-                FilterDecision::Conditions(c) => c,
+                FilterDecision::Conditions(g) => g,
             }
         };
-        match store.list_where(&model_def, &conditions).await {
-            Ok(rows) => Json(rows).into_response(),
+        match store.list_filtered(&model_def, &groups).await {
+            Ok(rows) => {
+                let rows = {
+                    let build = state.build.read().expect("读取状态失败");
+                    apply_field_read_perms(rows, &model_def, &build.ir, &roles)
+                };
+                Json(rows).into_response()
+            }
             Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
         }
     } else {
@@ -645,13 +732,14 @@ enum FilterDecision {
     AllowAll,
     /// 无数据访问权限。
     Forbidden,
-    /// AND 相等的过滤条件。
-    Conditions(Vec<(String, String)>),
+    /// OR 分组的过滤条件（组内 AND，如 `DataFilter` 多角色命中）。
+    Conditions(Vec<Vec<FilterCond>>),
 }
 
 /// 按当前用户角色解析模型的 `DataFilter`。
 ///
-/// 无规则 → 全量；无匹配角色 → 禁止；任一匹配为 `<All/>` → 全量；否则取首个匹配条件。
+/// 无规则 → 全量；无匹配角色 → 禁止；任一匹配为 `<All/>` → 全量；
+/// 否则所有匹配角色的条件按 OR 合并（组内 AND）。
 fn resolve_data_filter(
     ir: &ProjectIr,
     model: &str,
@@ -679,12 +767,63 @@ fn resolve_data_filter(
         return FilterDecision::AllowAll;
     }
     let ctx = user_context(user);
-    let conditions = matched[0]
-        .conditions
+    let groups = matched
         .iter()
-        .map(|c| (c.field.clone(), resolve_binding(&c.value, &ctx)))
+        .map(|f| {
+            f.conditions
+                .iter()
+                .map(|c| FilterCond {
+                    field: c.field.clone(),
+                    op: c.op,
+                    value: resolve_binding(&c.value, &ctx),
+                })
+                .collect()
+        })
         .collect();
-    FilterDecision::Conditions(conditions)
+    FilterDecision::Conditions(groups)
+}
+
+/// 字段读权限：任一相关 `publish` 显式限制且当前角色不在 `read_roles` → 不可见。
+fn field_read_visible(ir: &ProjectIr, field: &str, roles: &[String]) -> bool {
+    for page in &ir.pages {
+        if let Some(publish) = &page.publish {
+            let Some(access) = publish.fields.iter().find(|f| f.field == field) else {
+                continue;
+            };
+            if !access.read_roles.is_empty()
+                && !access
+                    .read_roles
+                    .iter()
+                    .any(|r| roles.iter().any(|ur| ur == r))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// 数据 API 响应按当前角色裁剪无读权限的字段（保留 `id` / `created_at`）。
+fn apply_field_read_perms(
+    rows: Vec<Value>,
+    model_def: &kengine::ir::Model,
+    ir: &ProjectIr,
+    roles: &[String],
+) -> Vec<Value> {
+    let visible: Vec<String> = model_def
+        .fields
+        .iter()
+        .map(|f| f.name.clone())
+        .filter(|f| field_read_visible(ir, f, roles))
+        .collect();
+    rows.into_iter()
+        .map(|mut row| {
+            if let Value::Object(map) = &mut row {
+                map.retain(|k, _| k == "id" || k == "created_at" || visible.iter().any(|v| v == k));
+            }
+            row
+        })
+        .collect()
 }
 
 /// 字段写权限：任一相关 `publish` 显式限制且当前角色不在 `write_roles` → 禁止。
@@ -808,6 +947,7 @@ fn escape_html(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn example_dir() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/leave-app")
@@ -920,6 +1060,7 @@ mod tests {
             build: build_state,
             db: None,
             store: None,
+            storage_cfg: StorageConfig::default(),
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()
@@ -1022,6 +1163,130 @@ mod tests {
         assert!(body.contains("年假"));
     }
 
+    #[test]
+    fn data_filter_merges_multi_role_groups() {
+        // 两个角色规则均命中 → OR 合并为两组条件（组内 AND）
+        let ir = ProjectIr {
+            version: kengine::ir::IR_VERSION.to_string(),
+            project: kengine::ir::ProjectMeta {
+                name: "t".into(),
+                description: None,
+            },
+            models: BTreeMap::new(),
+            layouts: BTreeMap::new(),
+            pages: vec![Page {
+                path: "/x".into(),
+                title: None,
+                layout_chain: vec![],
+                content: Node::Text {
+                    props: kengine::ir::TextProps { value: "x".into() },
+                },
+                flows: vec![],
+                publish: Some(kengine::ir::Publish {
+                    allow_roles: vec![],
+                    fields: vec![],
+                    roles: vec![],
+                    data_filters: vec![DataFilterRule {
+                        model: "请假单".into(),
+                        filters: vec![
+                            RoleFilter {
+                                roles: vec!["员工A".into()],
+                                all: false,
+                                conditions: vec![kengine::ir::OpCondition {
+                                    field: "部门".into(),
+                                    op: kengine::ir::FilterOp::Eq,
+                                    value: "技术部".into(),
+                                }],
+                            },
+                            RoleFilter {
+                                roles: vec!["员工B".into()],
+                                all: false,
+                                conditions: vec![kengine::ir::OpCondition {
+                                    field: "部门".into(),
+                                    op: kengine::ir::FilterOp::Gt,
+                                    value: "10".into(),
+                                }],
+                            },
+                        ],
+                    }],
+                }),
+            }],
+            flows: vec![],
+            permissions: kengine::ir::Permissions::default(),
+            components: BTreeMap::new(),
+        };
+        let user = User {
+            id: 1,
+            username: "a".into(),
+            display_name: "A".into(),
+            email: None,
+            phone: None,
+            status: "active".into(),
+        };
+        let decision = resolve_data_filter(
+            &ir,
+            "请假单",
+            &["员工A".to_string(), "员工B".to_string()],
+            &user,
+        );
+        match decision {
+            FilterDecision::Conditions(groups) => {
+                assert_eq!(groups.len(), 2, "多角色命中应按 OR 合并");
+                assert_eq!(groups[0][0].op, kengine::ir::FilterOp::Eq);
+                assert_eq!(groups[1][0].op, kengine::ir::FilterOp::Gt);
+            }
+            _ => panic!("期望 OR 条件组"),
+        }
+    }
+
+    #[test]
+    fn type_allowed_matches_wildcard() {
+        assert!(type_allowed("image/png", "image/*"));
+        assert!(type_allowed("image/jpeg", "image/*"));
+        assert!(!type_allowed("application/pdf", "image/*"));
+        assert!(type_allowed("application/pdf", "application/pdf"));
+        assert!(!type_allowed("text/plain", "application/pdf"));
+    }
+
+    #[test]
+    fn field_read_perm_filters_by_role() {
+        let ir = ProjectIr {
+            version: kengine::ir::IR_VERSION.to_string(),
+            project: kengine::ir::ProjectMeta {
+                name: "t".into(),
+                description: None,
+            },
+            models: BTreeMap::new(),
+            layouts: BTreeMap::new(),
+            pages: vec![Page {
+                path: "/x".into(),
+                title: None,
+                layout_chain: vec![],
+                content: Node::Text {
+                    props: kengine::ir::TextProps { value: "x".into() },
+                },
+                flows: vec![],
+                publish: Some(kengine::ir::Publish {
+                    allow_roles: vec![],
+                    fields: vec![kengine::ir::FieldAccess {
+                        field: "薪资".into(),
+                        read_roles: vec!["管理员".into()],
+                        write_roles: vec![],
+                    }],
+                    roles: vec![],
+                    data_filters: vec![],
+                }),
+            }],
+            flows: vec![],
+            permissions: kengine::ir::Permissions::default(),
+            components: BTreeMap::new(),
+        };
+        assert!(field_read_visible(&ir, "薪资", &["管理员".to_string()]));
+        assert!(!field_read_visible(&ir, "薪资", &["普通员工".to_string()]));
+        // 未声明的字段不受限
+        assert!(field_read_visible(&ir, "姓名", &["普通员工".to_string()]));
+    }
+
     #[tokio::test]
     async fn upload_without_storage_returns_503() {
         use axum::body::{Body, to_bytes};
@@ -1036,6 +1301,7 @@ mod tests {
             build: build_state,
             db: None,
             store: None,
+            storage_cfg: StorageConfig::default(),
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()
