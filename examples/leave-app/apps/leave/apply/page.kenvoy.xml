@@ -16,6 +16,11 @@
             <Field name="请假天数" suffix="天" />
             <Field name="事由" rows="4" />
             <Field name="附件" />
+            <Validation>
+              <Rule field="请假天数" expr="请假天数 &gt; 0">请假天数必须大于0</Rule>
+              <Rule field="事由" expr="事由 非空">请填写请假事由</Rule>
+              <Rule field="结束日期" expr="结束日期 &gt;= 开始日期">结束日期不能早于开始日期</Rule>
+            </Validation>
           </Form>
         </Section>
       </Col>

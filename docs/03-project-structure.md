@@ -26,6 +26,10 @@
 ├── module              # 自定义通用组件（全局应用可共用自定义组件）
 │   ├── 组件            # 表单、表格、图表等
 │   └── 交互            # 按钮、提交、跳转等
+├── auth                # 用户与权限管理（系统原生，账号管理是系统基础）
+│   ├── users           # 用户账号（由平台管理，非业务 XML）
+│   ├── roles           # 角色定义（业务 publish 引用的角色）
+│   └── sessions        # 会话 / 登录态
 ├── I8n                 # 翻译应对表
 │   ├── zh              # 中文内容
 │   └── eng             # 英文内容
@@ -40,3 +44,16 @@
 ```
 
 > 注：`dashbord` 与 `I8n` 为原文拼写，保留原样。落地约定：数据模型文件位于 `apps/<应用名>/models.kenvoy.xml`（决策点 D1），见 [02-demo-plan.md](./02-demo-plan.md)。
+
+## 用户管理（auth/，系统原生）
+
+账号管理是系统基础（ToB 企业内部多角色是基本条件：OA 多人、企业内部多人），因此由平台**原生内置**，而非业务 XML 定义：
+
+- **数据层**：PostgreSQL 表 `users` / `roles` / `user_roles` / `departments` / `sessions`（见 [04-storage.md](./04-storage.md)）
+- **业务引用**：`publish.allowRoles`、`flow` 的 `approver`（如 `角色.人事总监`）引用这些角色；`{{currentUser.*}}` 绑定当前登录用户
+- **管理**：由平台管理后台（KenvoySpace 控制台 / dev 管理页）维护账号，业务侧只读引用
+- `auth/` 目录为结构占位；系统级用户数据不落地为 `.kenvoy.xml`，避免业务 XML 承担账号权限职责
+
+## 存储架构（PostgreSQL + S3）
+
+见 [04-storage.md](./04-storage.md)：PostgreSQL 负责结构化数据 / 文件元数据 / 关联关系，S3 负责文件本体，两者通过对象记录关联。

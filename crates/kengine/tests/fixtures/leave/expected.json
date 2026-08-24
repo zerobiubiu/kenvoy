@@ -109,7 +109,19 @@
               {
                 "type": "Form",
                 "props": {
-                  "model": "请假单"
+                  "model": "请假单",
+                  "validations": [
+                    {
+                      "field": "请假天数",
+                      "expr": "请假天数 > 0",
+                      "message": "请假天数必须大于0"
+                    },
+                    {
+                      "field": "事由",
+                      "expr": "事由 非空",
+                      "message": "请填写请假事由"
+                    }
+                  ]
                 },
                 "children": [
                   {

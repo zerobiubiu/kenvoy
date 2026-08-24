@@ -247,6 +247,9 @@ pub struct SectionProps {
 pub struct FormProps {
     /// 绑定的数据模型名。
     pub model: String,
+    /// 表单级校验规则。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<Validation>,
 }
 
 /// 表单字段属性。
@@ -551,6 +554,7 @@ mod tests {
             Node::Form {
                 props: FormProps {
                     model: "请假单".into(),
+                    validations: Vec::new(),
                 },
                 children: vec![],
             },
@@ -676,6 +680,7 @@ mod tests {
                 content: Node::Form {
                     props: FormProps {
                         model: "请假单".into(),
+                        validations: Vec::new(),
                     },
                     children: vec![Node::Field {
                         props: FieldProps {

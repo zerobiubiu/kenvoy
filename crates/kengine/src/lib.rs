@@ -2,7 +2,10 @@
 //!
 //! 对外暴露最小可用 API，供 `kenvoy` 及下游 crate 复用。
 
+pub mod expr;
 pub mod ir;
+pub mod validation;
+pub mod workflow;
 
 mod parse;
 

@@ -69,3 +69,16 @@
 - 实现：dev 服务器新增内存数据 API（`GET/POST /__kenvoy/data/{model}`，模型名需百分号编码）与客户端运行时 `/__kenvoy/runtime.js`（表格按 `th[data-field]` 渲染数据行、表单自动加提交按钮并 POST 后刷新）；`kengine-html` 表格列增加 `data-field` 属性；页面注入运行时脚本 + 自动刷新脚本
 - 冒烟测试：`GET /__kenvoy/data/请假单` 返回 `[]`；POST 后 GET 返回记录；页面含 `runtime.js` 与 `data-field`
 - 已知限制：数据为内存存储（重启丢失）；`readonly` 字段渲染为 `disabled` 不参与 FormData 提交；`kv build` 静态产物不含运行时脚本（无数据 API，表格保持空态）；客户端提交中文 body 在 git-bash curl 下需用 ASCII 或文件方式（浏览器 fetch 无此问题）
+
+### 执行验证记录（2026-08-23，表达式引擎 + 表单校验 + 审批流状态机）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（kengine 29 个单元测试）
+- 实现：
+  - `kengine::expr` 表达式引擎（递归下降）：中文标识符、点路径变量、比较/算术/逻辑、`empty()` 函数、`非空` 后缀、`{{ }}` 绑定求值（`resolve_bindings`）
+  - `kengine::validation` 表单校验执行：对提交数据求值 `Validation.expr`，返回失败提示
+  - `kengine::workflow` 审批流状态机：`start_node` / `step`（推进/退回/条件分支/更新模型/通知/消息），纯函数返回副作用
+  - XML `<Validation>/<Rule>` 解析（`FormProps.validations`）；`<Validation>` 不混入组件树
+- 测试：expr 9 个、validation 4 个、workflow 4 个；golden fixture/示例申请页加入校验规则
+- 文档：新增 `docs/04-storage.md`（PG 18+ + S3）；`docs/03-project-structure.md` 增加 `auth/` 用户管理；README 路线图重排
+- 已知限制：校验/状态机为纯逻辑，尚未接入 dev 数据 API 与渲染器（下一阶段接 PG 持久化时一并接入）；`auth/` 用户系统未实现

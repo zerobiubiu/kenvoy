@@ -172,19 +172,26 @@ cargo install kenvoy
 
 ## 状态与路线图
 
+### 已完成
+
 - [x] Workspace 骨架（kengine 库 + kenvoy CLI + kengine-html）
-- [x] `kengine`：XML 解析子集（`<Layout>` / `<Page>` / `<Models>` / `<Flow>` / `<Publish>`）
-- [x] `kengine`：`flow` / `publish` 解析与页面 `<Import>` 引入机制
-- [x] `kenvoy` CLI：`kv dev`（扫描 apps/ → 解析 → 渲染 → 热更新预览）
-- [x] `kenvoy` CLI：`kv init` / `kv build`
-- [ ] `kenvoy` CLI：`kv deploy`（需闭源 KenvoySpace，暂未开放）
-- [x] `kenvoy.toml` 配置读取（`[project]` / `[server]` / `[build]`）
-- [x] layout 逐级匹配与继承（`layoutChain` 解析）
-- [x] `kengine-html`：IR → HTML 渲染（SSR 核心，含 HTML 转义防 XSS）
-- [x] demo 客户端交互：表单提交 + 表格数据（dev 内存数据 API + 客户端运行时）
-- [ ] 组件库（表单、表格、图表、布局容器）
-- [ ] flow 审批流引擎
-- [ ] publish 权限控制
+- [x] `kengine`：XML 解析（`<Layout>` / `<Page>` / `<Models>` / `<Flow>` / `<Publish>` + `<Import>` 引入 + `<Validation>` 校验规则）
+- [x] `kenvoy` CLI：`kv dev` / `kv init` / `kv build`；`kenvoy.toml` 配置
+- [x] `kengine-html`：IR → HTML 渲染（SSR 核心，HTML 转义防 XSS）
+- [x] 表达式引擎 `kengine::expr`（中文标识符、`{{ }}` 绑定、`empty()` / `非空`）
+- [x] 表单校验执行 `kengine::validation`
+- [x] 审批流状态机 `kengine::workflow`（推进/退回/条件/更新/通知）
+- [x] demo 客户端交互：表单提交 + 表格数据（dev 内存数据 API）
+
+### 规划中
+
+- [ ] PostgreSQL 18+ 持久化（模型数据 → PG 表；`storage_object` 文件元数据）
+- [ ] S3 对象存储抽象与文件上传（`public/` 不可运行时写入）
+- [ ] 用户与权限系统（`auth/` 原生：users / roles / departments / sessions；页面级 + 字段级鉴权；`DataFilter` 行级过滤）
+- [ ] 组件库扩展（日期范围、上传、图表、流程查看器；参考 [Tabler](https://github.com/tabler/tabler)）；DSL 级自定义组件（`<Component>` 内联 + `module/`）
+- [ ] 移动端自适应（`kv-col` 断点）
+- [ ] 静态构建增强（`kv build` 注入运行时 + 数据后端 / 声明静态站模式）
+- [ ] `kv deploy`（需闭源 KenvoySpace）
 - [ ] 桌面端 / 移动端自适应渲染
 - [ ] 数据模型自动关联
 - [ ] KenvoySpace 云平台（闭源）

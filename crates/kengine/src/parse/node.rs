@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::ir::{
     ColProps, ColumnProps, FieldProps, FormProps, Node, RowProps, SectionProps, StatCardProps,
-    TableProps, TextProps,
+    TableProps, TextProps, Validation,
 };
 use crate::parse::ParseError;
 
@@ -17,9 +17,41 @@ pub(crate) fn parse_children(
 ) -> Result<Vec<Node>, ParseError> {
     let mut nodes = Vec::new();
     for child in elem.children().filter(roxmltree::Node::is_element) {
+        // `<Validation>` 是表单元数据，不参与组件树
+        if child.tag_name().name() == "Validation" {
+            continue;
+        }
         nodes.push(parse_node(path, child)?);
     }
     Ok(nodes)
+}
+
+/// 解析 `<Validation>` 下的 `<Rule>` 列表（无则返回空）。
+pub(crate) fn parse_validations(
+    path: &str,
+    elem: roxmltree::Node<'_, '_>,
+) -> Result<Vec<Validation>, ParseError> {
+    let Some(validation_elem) = find_child(elem, "Validation") else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for rule in validation_elem
+        .children()
+        .filter(roxmltree::Node::is_element)
+    {
+        if rule.tag_name().name() != "Rule" {
+            continue;
+        }
+        let field = required_attr(path, rule, "Rule", "field")?;
+        let expr = required_attr(path, rule, "Rule", "expr")?;
+        let message = text_content(rule).unwrap_or_else(|| "校验失败".to_string());
+        out.push(Validation {
+            field,
+            expr,
+            message,
+        });
+    }
+    Ok(out)
 }
 
 /// 将单个元素解析为 [`Node`]；未知元素映射为 [`Node::Custom`]（用户 DSL 组件）。
@@ -46,6 +78,7 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
         "Form" => Node::Form {
             props: FormProps {
                 model: required_attr(path, elem, tag, "model")?,
+                validations: parse_validations(path, elem)?,
             },
             children: parse_children(path, elem)?,
         },
