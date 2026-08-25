@@ -6,7 +6,7 @@
 mod escape;
 mod render;
 
-use crate::ir::{Page, ProjectIr};
+use crate::ir::{Node, Page, ProjectIr};
 
 use crate::html::escape::escape_html;
 
@@ -39,7 +39,8 @@ pub fn render_page(ir: &ProjectIr, page: &Page) -> String {
 pub fn render_page_with_prefix(ir: &ProjectIr, page: &Page, prefix: &str) -> String {
     let asset = |path: &str| format!("{prefix}{path}");
     let title = escape_html(page.title.as_deref().unwrap_or(&page.path));
-    let body = render_body(ir, page);
+    let (top_nav, body) = render_body(ir, page);
+    let nav_html = top_nav.unwrap_or_default();
     format!(
         "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
@@ -47,23 +48,97 @@ pub fn render_page_with_prefix(ir: &ProjectIr, page: &Page, prefix: &str) -> Str
          <link rel=\"stylesheet\" href=\"{}\">\n\
          <link rel=\"stylesheet\" href=\"{}\">\n\
          <style>\n.kv-form .form-label{{font-weight:600}}\n.kv-empty{{text-align:center;color:#6c757d}}\n.kv-custom{{border:1px dashed #ced4da;border-radius:8px;padding:8px;margin:8px}}\n.kv-section{{margin-bottom:1rem}}\n</style>\n\
-         </head>\n<body>\n<div class=\"page\">\n<div class=\"page-wrapper\">\n<div class=\"page-body\">\n<div class=\"container-xl\">\n{body}\n</div>\n</div>\n</div>\n</div>\n</body>\n</html>\n",
+         </head>\n<body>\n<div class=\"page\">{nav_html}\n<div class=\"page-wrapper\">\n<div class=\"page-body\">\n<div class=\"container-xl\">\n{body}\n</div>\n</div>\n</div>\n</div>\n</body>\n</html>\n",
         asset("/assets/tabler.min.css"),
         asset("/assets/icons.css")
     )
 }
 
 /// 渲染页面主体：布局链嵌套 + 页面内容。
-fn render_body(ir: &ProjectIr, page: &Page) -> String {
+///
+/// 若最外层 layout 的 `Root` 首个 child 是 `Section kind="navbar"`，则拆出来
+/// 返回为 `top_nav`（供 `render_page_with_prefix` 放在 `<div class="page">`
+/// 内、`<div class="page-wrapper">` 之外，保持 navbar 全宽）；其余 children
+/// 与 `<Slot/>` 注入合并后作为 `body`。
+fn render_body(ir: &ProjectIr, page: &Page) -> (Option<String>, String) {
     let empty = std::collections::BTreeMap::new();
+    // 1. 渲染 page.content
     let mut inner = render::render_node(ir, &page.content, "", &empty, 0);
-    for layout_path in page.layout_chain.iter().rev() {
+    // 2. 渲染内层 layout 链（跳过最外层）
+    // `layout_chain` 顺序为 "根 → … → 页"：原版是 `iter().rev()` 逐个包内层。
+    // 现在要把最外层 layout 单独处理（拆 navbar），所以跳过 rev 后的最后一项。
+    let chain_len = page.layout_chain.len();
+    for (i, layout_path) in page.layout_chain.iter().rev().enumerate() {
+        if i + 1 == chain_len {
+            // 最外层（rev 后最后一项），留给下面单独处理
+            break;
+        }
         let Some(layout) = ir.layouts.get(layout_path) else {
             continue;
         };
         inner = render::render_node(ir, &layout.root, &inner, &empty, 0);
     }
-    inner
+    // 3. 拆出最外层 layout 的顶部 navbar（若有）
+    let (top_nav, outer_root) = match page.layout_chain.first() {
+        Some(layout_path) => {
+            let root = ir
+                .layouts
+                .get(layout_path)
+                .map(|l| l.root.clone())
+                .expect("layout_chain entry must resolve to a layout");
+            extract_top_navbar(&root)
+        }
+        None => return (None, inner),
+    };
+    // 4. 渲染外层 layout 的剩余 Root 包裹 inner
+    inner = render::render_node(ir, &outer_root, &inner, &empty, 0);
+    (top_nav, inner)
+}
+
+/// 拆出 Root 首个 child（若为 `Section kind="navbar"`），返回 `(top_nav, 新 Root)`。
+fn extract_top_navbar(root: &Node) -> (Option<String>, Node) {
+    let (props_row, props_col, children): (
+        Option<crate::ir::RowProps>,
+        Option<crate::ir::ColProps>,
+        Vec<Node>,
+    ) = match root {
+        Node::Row { props, children } => (Some(props.clone()), None, children.clone()),
+        Node::Col { props, children } => (None, Some(props.clone()), children.clone()),
+        _ => return (None, root.clone()),
+    };
+    if children.is_empty() {
+        return (None, root.clone());
+    }
+    let first = &children[0];
+    if let Node::Section {
+        props: section_props,
+        children: nav_children,
+    } = first
+        && section_props.kind.as_deref() == Some("navbar")
+    {
+        let new_root = if let Some(p) = props_row {
+            Node::Row {
+                props: p,
+                children: children[1..].to_vec(),
+            }
+        } else if let Some(p) = props_col {
+            Node::Col {
+                props: p,
+                children: children[1..].to_vec(),
+            }
+        } else {
+            return (None, root.clone());
+        };
+        let nav_html = render::render_navbar_section(
+            section_props,
+            nav_children,
+            &std::collections::BTreeMap::new(),
+            0,
+        );
+        (Some(nav_html), new_root)
+    } else {
+        (None, root.clone())
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +300,38 @@ mod tests {
         assert!(html.contains(r#"<nav class="navbar"#), "navbar 未渲染");
         assert!(html.contains(r#"<a class="navbar-brand""#));
         assert!(html.contains("navbar-nav"));
+    }
+
+    #[test]
+    fn top_navbar_lifted_outside_page_body() {
+        // root layout 的 Root 首个 child 是 navbar → 应从 page-body 里拆到 page 顶层
+        let ir = build(&[
+            (
+                "apps/layout.kenvoy.xml",
+                "<Layout><Root><Section kind=\"navbar\" title=\"品牌\"><Text value=\"链接A\"/></Section><Row><Slot/></Row></Root></Layout>",
+            ),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><Text value=\"主体\"/></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        // 拿到两段边界
+        let page_open = html.find(r#"<div class="page">"#).expect("page 框架");
+        let page_body_open = html.find(r#"<div class="page-body">"#).expect("page-body");
+        let page_wrapper_open = html
+            .find(r#"<div class="page-wrapper">"#)
+            .expect("page-wrapper");
+        let nav_pos = html.find(r#"<nav class="navbar"#).expect("navbar");
+        // 顺序应为：<div class="page"> → <nav> → <div class="page-wrapper"> → <div class="page-body">
+        assert!(nav_pos > page_open, "navbar 位置在 page 之后：{html}");
+        assert!(
+            nav_pos < page_wrapper_open,
+            "navbar 位置在 page-wrapper 之前：{html}"
+        );
+        assert!(page_wrapper_open < page_body_open);
+        // 主体文本仍在 page-body 之后
+        assert!(html.find(">主体<").unwrap() > page_body_open);
     }
 
     #[test]

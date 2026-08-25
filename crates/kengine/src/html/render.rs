@@ -397,25 +397,10 @@ fn render_section(
     bind: &BTreeMap<String, Value>,
     depth: u32,
 ) -> String {
-    let body = render_nodes(ir, children, slot, bind, depth);
     if props.kind.as_deref() == Some("navbar") {
-        // 顶部导航栏：<nav class="navbar navbar-expand-md"><a class="navbar-brand">title</a><ul class="navbar-nav">...</ul></nav>
-        let brand = props
-            .title
-            .as_deref()
-            .map(|t| {
-                format!(
-                    "<a class=\"navbar-brand\" href=\"/\">{}</a>",
-                    escape_html(&bind_str(t, bind))
-                )
-            })
-            .unwrap_or_default();
-        return format!(
-            "<nav class=\"navbar navbar-expand-md bg-white border-bottom\">\
-             {brand}<div class=\"collapse navbar-collapse\" id=\"kv-nav\">\
-             <ul class=\"navbar-nav\">{body}</ul></div></nav>"
-        );
+        return render_navbar_section(props, children, bind, depth);
     }
+    let body = render_nodes(ir, children, slot, bind, depth);
     // 默认 card 区块
     let header = props
         .title
@@ -428,6 +413,58 @@ fn render_section(
         })
         .unwrap_or_default();
     format!("<div class=\"card kv-section\">{header}<div class=\"card-body\">{body}</div></div>")
+}
+
+/// 仅渲染 `Section kind="navbar"` 主体（不含 card 包装）。
+/// 供 `render_body` 拆出顶部 navbar 在 `<div class="page">` 内、`<div class="page-wrapper">` 之外使用。
+///
+/// 不依赖 `ir`（navbar 不参与 i18n），仅按 `bind` 做 `{{名}}` 替换。
+pub(crate) fn render_navbar_section(
+    props: &SectionProps,
+    children: &[Node],
+    bind: &BTreeMap<String, Value>,
+    _depth: u32,
+) -> String {
+    let body = render_nodes_standalone(children, bind);
+    let brand = props
+        .title
+        .as_deref()
+        .map(|t| {
+            format!(
+                "<a class=\"navbar-brand\" href=\"/\">{}</a>",
+                escape_html(&bind_str(t, bind))
+            )
+        })
+        .unwrap_or_default();
+    format!(
+        "<nav class=\"navbar navbar-expand-md bg-white border-bottom\">\
+         {brand}<div class=\"collapse navbar-collapse\" id=\"kv-nav\">\
+         <ul class=\"navbar-nav\">{body}</ul></div></nav>"
+    )
+}
+
+/// 独立渲染节点列表（navbar 子项仅 `Text` / `Button` 等简单节点）。
+fn render_nodes_standalone(nodes: &[Node], bind: &BTreeMap<String, Value>) -> String {
+    let mut out = String::new();
+    for n in nodes {
+        if let Node::Text { props } = n {
+            let _ = write!(
+                out,
+                "<span class=\"nav-link kv-text\">{}</span>",
+                escape_html(&bind_str(&props.value, bind))
+            );
+        } else if let Node::Button { props } = n {
+            // 简化：navbar 内 button 不常用，只保留基础结构
+            let kind = props.kind.as_deref().unwrap_or("link");
+            let text = escape_html(&bind_str(&props.value, bind));
+            let _ = write!(
+                out,
+                "<span class=\"nav-item\"><button type=\"button\" class=\"btn btn-{kind} btn-sm\">{text}</button></span>"
+            );
+        }
+        // 其他节点类型在 navbar 内不常见，跳过。
+    }
+    out
 }
 
 /// 渲染统计卡（Tabler `card`）。`title` / `icon` 可选；`color` 作用到图标背景圈。

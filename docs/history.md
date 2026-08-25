@@ -260,3 +260,17 @@
 - clippy 修正：`render_node` `too_many_lines`（Section 拆为 `render_section`）/ `format-push-string`（改 `write!`）/ `format-collect`（`extra` 改 for 循环 `write!`）/ `single-match-else`（navbar 用 if let 提前返回）
 - 变更说明：本轮纯前塪设计质量提升（未改业务逻辑 / API 路径），v0.1.0 tag 仍有效
 - 已知限制：`packages/` 暂缓（未变更）；navbar 仍包含在 `container-xl` 内（全宽变窄）——后续可加 layout-aware 重排
+
+### 执行验证记录（2026-08-25，顶部 navbar 拆出 page-body 到 page 顶层）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（kengine 57 + kenvoy 25 + db_pg 5 + doctest 1 = 89 个测试、4 个编译路径）
+- 实现：
+  1. **顶部 navbar 重排**：`render_body` 返回 `(top_nav: Option<String>, body: String)`；`render_page_with_prefix` 将 `top_nav` 直接拼到 `<div class="page">` 顶层（page-body / page-wrapper 之外），保持 navbar 全宽背景
+  2. **拆出逻辑**：`extract_top_navbar(root: &Node)` 检测最外层 layout 的 Root 首个 child 是否为 `Section kind="navbar"`，是则独立渲染为 nav HTML、返回新 Root（其余 children）供 body 包裹
+  3. **layout chain 跳过最外层**：原 `iter().rev()` 包含最外层，现改为 enumerate 跳过 rev 后最后一项，避免“外层重包裹”导致 navbar 重复
+  4. **render_navbar_section 独立**：`render_section` 的 navbar 分支重构为公共 `render_navbar_section(props, children, bind, depth)`（不依赖 ir，仅按 bind 做 `{{名}}` 替换），既可被 render_section 调用也可被 extract_top_navbar 调用。navbar 子项走 `render_nodes_standalone`（仅支持 Text/Button，其他节点类型忽略）
+- 补充单测：`top_navbar_lifted_outside_page_body`：验证 navbar 位置在 `<div class="page">` 之后、`<div class="page-wrapper">` 之前；主体内容仍在 `page-body` 之后
+- 踩坑：原 `iter().rev().skip(1)` 实际跳过了最内层（外层被复包裹）——修正为 enumerate + `i + 1 == chain_len` 检测
+- 验证（dev 跑 examples/leave-app 真实产物）：`<body><div class="page"><nav class="navbar ...">...</nav><div class="page-wrapper"><div class="page-body"><div class="container-xl">...</div>...</div></div></div></body>` —— navbar 全宽、只出现一次
+- 变更说明：v0.1.0 tag 仍有效（本轮纯前塪调整，不改 API/响应/路由）
