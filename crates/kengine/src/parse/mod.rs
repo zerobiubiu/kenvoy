@@ -442,7 +442,8 @@ fn collect_flow_viewers(node: &Node, out: &mut Vec<String>) {
         | Node::Column { .. }
         | Node::StatCard { .. }
         | Node::Text { .. }
-        | Node::Chart { .. } => {}
+        | Node::Chart { .. }
+        | Node::Button { .. } => {}
     }
 }
 
@@ -490,7 +491,8 @@ fn validate_chart_node(
         | Node::Column { .. }
         | Node::StatCard { .. }
         | Node::Text { .. }
-        | Node::FlowViewer { .. } => {}
+        | Node::FlowViewer { .. }
+        | Node::Button { .. } => {}
     }
     Ok(())
 }
@@ -552,7 +554,8 @@ fn validate_node(
         | Node::StatCard { .. }
         | Node::Text { .. }
         | Node::Chart { .. }
-        | Node::FlowViewer { .. } => {}
+        | Node::FlowViewer { .. }
+        | Node::Button { .. } => {}
     }
     Ok(())
 }

@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use crate::ir::{
-    ChartProps, ColProps, ColumnProps, FieldProps, FlowViewerProps, FormProps, Node, RowProps,
-    SectionProps, StatCardProps, TableProps, TextProps, Validation,
+    ButtonProps, ChartProps, ColProps, ColumnProps, FieldProps, FlowViewerProps, FormProps, Node,
+    RowProps, SectionProps, StatCardProps, TableProps, TextProps, Validation,
 };
 use crate::parse::ParseError;
 
@@ -76,6 +76,7 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
         "Section" => Node::Section {
             props: SectionProps {
                 title: elem.attribute("title").map(str::to_string),
+                kind: elem.attribute("kind").map(str::to_string),
             },
             children: parse_children(path, elem)?,
         },
@@ -138,11 +139,40 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
         },
         "StatCard" => Node::StatCard {
             props: StatCardProps {
+                title: elem.attribute("title").map(str::to_string),
                 data: elem.attribute("data").map(str::to_string),
                 unit: elem.attribute("unit").map(str::to_string),
                 color: elem.attribute("color").map(str::to_string),
+                icon: elem.attribute("icon").map(str::to_string),
             },
         },
+        "Button" => {
+            let extra: std::collections::BTreeMap<String, String> = extra_attrs(
+                elem,
+                &[
+                    "value", "kind", "size", "icon", "action", "href", "i18n", "disabled",
+                ],
+            )
+            .into_iter()
+            .collect();
+            Node::Button {
+                props: ButtonProps {
+                    value: elem
+                        .attribute("value")
+                        .map(str::to_string)
+                        .or_else(|| text_content(elem))
+                        .ok_or_else(|| ParseError::missing_attribute(path, tag, "value"))?,
+                    kind: elem.attribute("kind").map(str::to_string),
+                    size: elem.attribute("size").map(str::to_string),
+                    icon: elem.attribute("icon").map(str::to_string),
+                    action: elem.attribute("action").map(str::to_string),
+                    href: elem.attribute("href").map(str::to_string),
+                    i18n: elem.attribute("i18n").map(str::to_string),
+                    disabled: parse_bool(path, elem, "disabled")?.unwrap_or(false),
+                    extra,
+                },
+            }
+        }
         "Text" => Node::Text {
             props: TextProps {
                 value: elem
@@ -229,6 +259,15 @@ pub(crate) fn required_attr(
     elem.attribute(attr)
         .map(str::to_string)
         .ok_or_else(|| ParseError::missing_attribute(path, element, attr))
+}
+
+/// 收集元素上除 `known` 之外的全部属性，按原顺序返回。
+/// 用途：让 `data-*` / `aria-*` 等任意额外属性透传到渲染输出。
+pub(crate) fn extra_attrs(elem: roxmltree::Node<'_, '_>, known: &[&str]) -> Vec<(String, String)> {
+    elem.attributes()
+        .map(|a| (a.name().to_string(), a.value().to_string()))
+        .filter(|(n, _)| !known.contains(&n.as_str()))
+        .collect()
 }
 
 /// 解析布尔属性（`true` / `false`），缺省为 `None`。

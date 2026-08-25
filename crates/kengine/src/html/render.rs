@@ -12,7 +12,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use crate::ir::{
-    FieldDef, FieldProps, FieldType, Model, Node, ProjectIr, StatCardProps, TableProps,
+    ButtonProps, FieldDef, FieldProps, FieldType, Model, Node, ProjectIr, SectionProps,
+    StatCardProps, TableProps,
 };
 use serde_json::Value;
 
@@ -56,22 +57,7 @@ pub(crate) fn render_node(
                 props.span.clamp(1, 12)
             )
         }
-        Node::Section { props, children } => {
-            let body = render_nodes(ir, children, slot, bind, depth);
-            let title = props
-                .title
-                .as_deref()
-                .map(|t| {
-                    format!(
-                        "<h3 class=\"card-title\">{}</h3>",
-                        escape_html(&bind_str(t, bind))
-                    )
-                })
-                .unwrap_or_default();
-            format!(
-                "<div class=\"card kv-section\"><div class=\"card-body\">{title}{body}</div></div>"
-            )
-        }
+        Node::Section { props, children } => render_section(ir, props, children, slot, bind, depth),
         Node::Slot => slot.to_string(),
         Node::Form {
             props: form_props,
@@ -102,6 +88,7 @@ pub(crate) fn render_node(
             )
         }
         Node::StatCard { props } => render_stat_card(props, bind),
+        Node::Button { props } => render_button(ir, props, bind),
         Node::Text { props } => {
             let body = escape_html(&translate(ir, props, bind));
             format!("<span class=\"kv-text\">{body}</span>")
@@ -401,7 +388,49 @@ fn v_to_str(v: &Value) -> String {
     }
 }
 
-/// 渲染统计卡（Tabler `card`）。
+/// 渲染区块：默认 card；`kind="navbar"` 输出顶部导航。
+fn render_section(
+    ir: &ProjectIr,
+    props: &SectionProps,
+    children: &[Node],
+    slot: &str,
+    bind: &BTreeMap<String, Value>,
+    depth: u32,
+) -> String {
+    let body = render_nodes(ir, children, slot, bind, depth);
+    if props.kind.as_deref() == Some("navbar") {
+        // 顶部导航栏：<nav class="navbar navbar-expand-md"><a class="navbar-brand">title</a><ul class="navbar-nav">...</ul></nav>
+        let brand = props
+            .title
+            .as_deref()
+            .map(|t| {
+                format!(
+                    "<a class=\"navbar-brand\" href=\"/\">{}</a>",
+                    escape_html(&bind_str(t, bind))
+                )
+            })
+            .unwrap_or_default();
+        return format!(
+            "<nav class=\"navbar navbar-expand-md bg-white border-bottom\">\
+             {brand}<div class=\"collapse navbar-collapse\" id=\"kv-nav\">\
+             <ul class=\"navbar-nav\">{body}</ul></div></nav>"
+        );
+    }
+    // 默认 card 区块
+    let header = props
+        .title
+        .as_deref()
+        .map(|t| {
+            format!(
+                "<div class=\"card-header\"><h3 class=\"card-title\">{}</h3></div>",
+                escape_html(&bind_str(t, bind))
+            )
+        })
+        .unwrap_or_default();
+    format!("<div class=\"card kv-section\">{header}<div class=\"card-body\">{body}</div></div>")
+}
+
+/// 渲染统计卡（Tabler `card`）。`title` / `icon` 可选；`color` 作用到图标背景圈。
 fn render_stat_card(props: &StatCardProps, bind: &BTreeMap<String, Value>) -> String {
     let data = props
         .data
@@ -413,13 +442,92 @@ fn render_stat_card(props: &StatCardProps, bind: &BTreeMap<String, Value>) -> St
         .as_deref()
         .map(|u| escape_html(&bind_str(u, bind)))
         .unwrap_or_default();
+    let title = props
+        .title
+        .as_deref()
+        .map(|t| escape_html(&bind_str(t, bind)))
+        .unwrap_or_default();
+    let color = props.color.as_deref().unwrap_or("primary");
+    let icon_html = props
+        .icon
+        .as_deref()
+        .map(|cls| {
+            format!(
+                "<span class=\"bg-{color}-lt avatar avatar-md mb-2\">\
+                 <i class=\"{cls}\"></i></span>"
+            )
+        })
+        .unwrap_or_default();
     let unit_html = if unit.is_empty() {
         String::new()
     } else {
         format!("<span class=\"text-secondary kv-stat-unit\">{unit}</span>")
     };
+    let title_html = if title.is_empty() {
+        String::new()
+    } else {
+        format!("<div class=\"text-secondary kv-stat-title\">{title}</div>")
+    };
     format!(
         "<div class=\"card kv-stat\"><div class=\"card-body text-center\">\
-         <div class=\"display-4 fw-bold kv-stat-data\">{data}</div>{unit_html}</div></div>"
+         {icon_html}\
+         <div class=\"display-6 fw-bold kv-stat-data\">{data}</div>\
+         {unit_html}\
+         {title_html}\
+         </div></div>"
+    )
+}
+
+/// 渲染按钮（Tabler `.btn`）。
+///
+/// `action` 协议：
+/// - `submit`（默认）：客户端运行时点击提交所在表单（`data-kv-action="submit"`）。
+/// - `navigate`：跳转 `href`（`data-kv-action="navigate" data-href="..."`）。
+/// - `flow`：交给 `data-kv-flow` 运行时，例：`<Button value="发起" action="flow" data-kv-flow="start" data-flow="请假审批流" data-record-id="…">`。
+fn render_button(ir: &ProjectIr, props: &ButtonProps, bind: &BTreeMap<String, Value>) -> String {
+    let kind = props.kind.as_deref().unwrap_or("primary");
+    let size = props.size.as_deref();
+    let action = props.action.as_deref().unwrap_or("submit");
+    let mut cls = format!("btn btn-{kind}");
+    if let Some(s) = size {
+        let _ = write!(cls, " btn-{s}");
+    }
+    let icon_html = props
+        .icon
+        .as_deref()
+        .map(|c| format!("<i class=\"{c}\"></i>"))
+        .unwrap_or_default();
+    let disabled = if props.disabled { " disabled" } else { "" };
+    // i18n 优先：命中翻译时取翻译文本，否则用 `value`。
+    let label = if let Some(key) = &props.i18n
+        && let Some(locale) = ir.project.locale.as_deref()
+        && let Some(text) = ir.translations.get(locale).and_then(|m| m.get(key))
+    {
+        bind_str(text, bind)
+    } else {
+        bind_str(&props.value, bind)
+    };
+    let text = escape_html(&label);
+    let href = props.href.as_deref().unwrap_or("#");
+    let data_action = format!(" data-kv-action=\"{action}\"");
+    let data_href = if action == "navigate" {
+        format!(" data-href=\"{}\"", escape_html(href))
+    } else {
+        String::new()
+    };
+    let extra_html: String = {
+        let mut s = String::new();
+        for (k, v) in &props.extra {
+            let _ = write!(s, " {}=\"{}\"", k, escape_html(v));
+        }
+        s
+    };
+    let body = if icon_html.is_empty() {
+        text
+    } else {
+        format!("{icon_html} {text}")
+    };
+    format!(
+        "<button type=\"button\" class=\"{cls}\"{disabled}{data_action}{data_href}{extra_html}>{body}</button>"
     )
 }

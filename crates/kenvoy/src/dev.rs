@@ -1706,7 +1706,8 @@ fn collect_node_validations(node: &Node, model_name: &str, out: &mut Vec<Validat
         | Node::StatCard { .. }
         | Node::Text { .. }
         | Node::Chart { .. }
-        | Node::FlowViewer { .. } => {}
+        | Node::FlowViewer { .. }
+        | Node::Button { .. } => {}
     }
 }
 

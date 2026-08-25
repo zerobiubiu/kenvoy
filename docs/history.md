@@ -240,3 +240,23 @@
 - 补充单测：`inject_body_auth_mode_inserts_data_attr` / `_preserves_existing_body_attrs` / `_passthrough_without_body`
 - 变更说明：v0.1.0 tag 仍指向 `fb3faf6`（SMTP 集成后）；本次变更需作 v0.1.1 / v0.2 增量（是否需重发由用户决定）
 - 已知限制：`packages/` 外部库依赖闭源平台分发暂缓（未变更）
+
+### 执行验证记录（2026-08-25，Tabler 页面骨架 + Button + StatCard icon + Section kind=navbar）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（kengine 56 + kenvoy 25 + db_pg 5 + doctest 1 = 87 个测试、4 个编译路径）
+- 实现：
+  1. **页面骨架**：`render_page_with_prefix` 在 `<body>` 下加 `<div class="page"><div class="page-wrapper"><div class="page-body"><div class="container-xl">…</div></div></div></div>`（Tabler 官方推荐结构）
+  2. **Section card-header 分组**：`render_section` 拆为独立函数，`<Section title="...">` 改为 `<div class="card-header"><h3 class="card-title">…</h3></div><div class="card-body">…</div>`（双容器·可视分隔）
+  3. **Section kind="navbar"**：新增 IR 字段 `SectionProps.kind`，parser 读取 `kind` 属性；`render_section` 遇 `kind="navbar"` 渲染为 `<nav class="navbar navbar-expand-md bg-white border-bottom"><a class="navbar-brand" href="/">title</a>…</nav>`，brand 来自 title、子元素进 `.navbar-nav` （可放导航项 / `ti ti-*` 图标）
+  4. **Button 节点**：
+     - IR：`Node::Button { props: ButtonProps }`（`value` / `kind` / `size` / `icon` / `action` / `href` / `i18n` / `disabled` / `extra`）
+     - `action` 协议：`submit`（默认，交所在 `<form>` 提交）/ `navigate`（跳转 `href`）/ `flow`（交给 runtime.js `[data-kv-flow]`）
+     - `extra: BTreeMap<String, String>`：parser 收集未声明属性（`data-*` / `aria-*` / 自定义），render 时原样透传——保证 `data-flow` / `data-record-id` 等审批属性不丢
+     - render：`<button class="btn btn-{kind}[ btn-{size}]" [disabled] data-kv-action="…"[ data-href="…"][ {extra}]><i class="…"></i> text</button>`
+  5. **StatCard title/icon**：IR `StatCardProps` 加 `title` / `icon` 字段；render 输出 `bg-{color}-lt avatar` 图标圈 + `display-6` 主数 + 单独 `kv-stat-title` 标题
+  6. **示例项目升级**：`examples/leave-app/apps/layout.kenvoy.xml` Root 改用 `kind="navbar"` Section + Row 包裹 Slot + Section 页脚；`apply/page.kenvoy.xml` 表单底部加主提交/保存草稿/返回 三个 Button（`ti ti-send` / `ti ti-device-floppy`）；`list/page.kenvoy.xml` 加 3 个 StatCard（待审批/已批准/已驳回，橙/绿/红三色图标）
+- 补充单测：`page_skeleton_wraps_body` / `section_renders_card_header_when_title_set` / `section_kind_navbar_renders_nav` / `button_renders_with_kind_icon_action`
+- clippy 修正：`render_node` `too_many_lines`（Section 拆为 `render_section`）/ `format-push-string`（改 `write!`）/ `format-collect`（`extra` 改 for 循环 `write!`）/ `single-match-else`（navbar 用 if let 提前返回）
+- 变更说明：本轮纯前塪设计质量提升（未改业务逻辑 / API 路径），v0.1.0 tag 仍有效
+- 已知限制：`packages/` 暂缓（未变更）；navbar 仍包含在 `container-xl` 内（全宽变窄）——后续可加 layout-aware 重排

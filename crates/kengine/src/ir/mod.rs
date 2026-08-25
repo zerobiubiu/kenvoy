@@ -225,6 +225,11 @@ pub enum Node {
         #[serde(default)]
         props: ChartProps,
     },
+    /// 按钮。点击触发客户端动作（`submit` 提交所在表单 / `navigate` 跳转 / 自由 `data-kv-*` 行为）。
+    Button {
+        #[serde(default)]
+        props: ButtonProps,
+    },
     /// 用户 DSL 自定义组件。
     ///
     /// serde 内部标签（`type`）占用 JSON 的 `type` 字段，因此组件名放在
@@ -287,6 +292,10 @@ pub struct SectionProps {
     /// 区块标题。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// 区块样式：`plain`（默认，`card` 包裹）/ `navbar`（顶部导航栏，Tabler `.navbar`）。
+    /// 未来可加 `page-header` / `empty` 等。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 /// 表单属性。
@@ -377,6 +386,9 @@ pub struct ColumnProps {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct StatCardProps {
+    /// 标题（显示在卡片顶部）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// 统计表达式（demo 为字符串约定，如 `统计(请假单.数量)`）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -386,6 +398,45 @@ pub struct StatCardProps {
     /// 颜色。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// 图标类名（`ti ti-home` 等，渲染为 `<i class="…"></i>`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+}
+
+/// 按钮属性。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ButtonProps {
+    /// 按钮文本。
+    pub value: String,
+    /// 按钮语义：`primary`（默认）/ `secondary` / `success` / `warning` / `danger` / `link` / `ghost-*`。
+    /// 实际映射到 `.btn-primary` 等。如需 ghost，`kind="ghost-primary"`。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// 尺寸：`sm` / `lg`。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<String>,
+    /// 图标类名（`ti ti-check` 等），加在文本前。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// 动作（语义协议）：
+    /// - `submit`（默认）：提交所在 `Form`（查找最近 `<form>` 元素）。
+    /// - `navigate`：跳转 `href`。
+    /// - `flow`：调用审批流端点，依赖 `data-kv-flow` 系列属性。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    /// 跳转地址（`action="navigate"` 时使用）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub href: Option<String>,
+    /// i18n 翻译键（命中时替换 `value`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub i18n: Option<String>,
+    /// 禁用。
+    #[serde(default)]
+    pub disabled: bool,
+    /// 其他未声明属性（`data-*` / `aria-*` / 自定义），原样透传为 HTML 属性。
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub extra: std::collections::BTreeMap<String, String>,
 }
 
 /// 纯文本属性。
@@ -653,6 +704,7 @@ mod tests {
             Node::Section {
                 props: SectionProps {
                     title: Some("区块".into()),
+                    kind: None,
                 },
                 children: vec![],
             },
@@ -822,9 +874,11 @@ mod tests {
                     name: "状态卡".into(),
                     root: Node::StatCard {
                         props: StatCardProps {
+                            title: None,
                             data: Some("{{data}}".into()),
                             unit: Some("次".into()),
                             color: None,
+                            icon: None,
                         },
                     },
                 },

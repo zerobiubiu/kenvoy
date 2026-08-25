@@ -46,8 +46,8 @@ pub fn render_page_with_prefix(ir: &ProjectIr, page: &Page, prefix: &str) -> Str
          <title>{title}</title>\n\
          <link rel=\"stylesheet\" href=\"{}\">\n\
          <link rel=\"stylesheet\" href=\"{}\">\n\
-         <style>\n.kv-form .form-label{{font-weight:600}}\n.kv-empty{{text-align:center;color:#6c757d}}\n.kv-custom{{border:1px dashed #ced4da;border-radius:8px;padding:8px;margin:8px}}\n</style>\n\
-         </head>\n<body>\n{body}\n</body>\n</html>\n",
+         <style>\n.kv-form .form-label{{font-weight:600}}\n.kv-empty{{text-align:center;color:#6c757d}}\n.kv-custom{{border:1px dashed #ced4da;border-radius:8px;padding:8px;margin:8px}}\n.kv-section{{margin-bottom:1rem}}\n</style>\n\
+         </head>\n<body>\n<div class=\"page\">\n<div class=\"page-wrapper\">\n<div class=\"page-body\">\n<div class=\"container-xl\">\n{body}\n</div>\n</div>\n</div>\n</div>\n</body>\n</html>\n",
         asset("/assets/tabler.min.css"),
         asset("/assets/icons.css")
     )
@@ -177,6 +177,88 @@ mod tests {
         let html = render_page(&ir, &ir.pages[0]);
         assert!(html.contains("统计(请假单.数量)"));
         assert!(html.contains(">次</span>"));
+    }
+
+    #[test]
+    fn page_skeleton_wraps_body() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><Text value=\"hi\"/></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        // 页面骨架：page / page-wrapper / page-body / container-xl
+        assert!(html.contains(r#"<div class="page">"#), "缺 page 骨架");
+        assert!(html.contains("page-wrapper"));
+        assert!(html.contains("page-body"));
+        assert!(html.contains("container-xl"));
+    }
+
+    #[test]
+    fn section_renders_card_header_when_title_set() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><Section title=\"详情\"><Text value=\"hi\"/></Section></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(
+            html.contains(r#"<div class="card-header"><h3 class="card-title">详情</h3></div>"#),
+            "实际输出：{html}"
+        );
+    }
+
+    #[test]
+    fn section_kind_navbar_renders_nav() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content><Section kind=\"navbar\" title=\"品牌\"><Text value=\"链接1\"/></Section></Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        assert!(html.contains(r#"<nav class="navbar"#), "navbar 未渲染");
+        assert!(html.contains(r#"<a class="navbar-brand""#));
+        assert!(html.contains("navbar-nav"));
+    }
+
+    #[test]
+    fn button_renders_with_kind_icon_action() {
+        let ir = build(&[
+            ("apps/layout.kenvoy.xml", ROOT_LAYOUT),
+            (
+                "apps/dashboard/page.kenvoy.xml",
+                "<Page><Content>\
+                 <Button value=\"提交\" kind=\"primary\" icon=\"ti ti-check\" action=\"submit\"/>\
+                 <Button value=\"上一步\" kind=\"secondary\" action=\"navigate\" href=\"/back\"/>\
+                 <Button value=\"发起\" kind=\"success\" action=\"flow\" data-kv-flow=\"start\" data-flow=\"请假流\" data-record-id=\"42\"/>\
+                 </Content></Page>",
+            ),
+        ]);
+        let html = render_page(&ir, &ir.pages[0]);
+        // 主提交按钮
+        assert!(
+            html.contains(r#"class="btn btn-primary""#),
+            "缺 btn-primary：{html}"
+        );
+        assert!(html.contains(r#"<i class="ti ti-check"></i>"#), "缺图标");
+        assert!(
+            html.contains(r#"<i class="ti ti-check"></i> 提交</button>"#),
+            "实际输出：{html}"
+        );
+        // navigate
+        assert!(html.contains(r#"class="btn btn-secondary""#));
+        assert!(html.contains(r#"data-kv-action="navigate""#));
+        assert!(html.contains(r#"data-href="/back""#));
+        // flow + data-* 属性透传
+        assert!(html.contains(r#"data-kv-flow="start""#));
+        assert!(html.contains(r#"data-flow="请假流""#));
+        assert!(html.contains(r#"data-record-id="42""#));
     }
 
     #[test]
