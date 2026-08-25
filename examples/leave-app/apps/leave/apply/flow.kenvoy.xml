@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Flow name="请假审批流" trigger="请假单.提交申请">
-  <Node name="部门主管审批" approver="部门主管">
+  <!-- 第一节点：部门主管审批。≤3 天直接到人事备案；>3 天到人事总监审批 -->
+  <Node name="部门主管审批" approver="角色.部门主管">
     <OnApprove>
       <If expr="请假天数 &lt;= 3">
         <Action type="next" target="人事备案" />
@@ -15,6 +16,7 @@
       <Notify users="申请人" />
     </OnReject>
   </Node>
+
   <Node name="人事总监审批" approver="角色.人事总监">
     <OnApprove>
       <Action type="next" target="人事备案" />
@@ -25,11 +27,22 @@
       <Notify users="申请人,部门主管" />
     </OnReject>
   </Node>
+
   <Node name="人事备案" type="notify" approver="角色.HR">
     <Notify users="HR,申请人,部门主管" />
     <OnComplete>
+      <!-- 终态：更新记录状态字段；无 next → 流程结束 -->
       <Update model="请假单" field="审批状态" value="已通过" />
+      <Update model="请假单" field="当前节点" value="已完成" />
       <SendMessage to="申请人">您的请假申请已通过</SendMessage>
+    </OnComplete>
+  </Node>
+
+  <!-- 驳回终点（back 目标）：记录驳回状态，流程结束 -->
+  <Node name="发起人" type="notify" approver="申请人">
+    <OnComplete>
+      <Update model="请假单" field="审批状态" value="已驳回" />
+      <Update model="请假单" field="当前节点" value="已驳回" />
     </OnComplete>
   </Node>
 </Flow>

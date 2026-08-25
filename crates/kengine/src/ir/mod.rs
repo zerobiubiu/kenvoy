@@ -296,6 +296,9 @@ pub struct SectionProps {
     /// 未来可加 `page-header` / `empty` 等。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// 其他未声明属性（`data-*` / `id`），原样透传为 HTML 属性。
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub extra: std::collections::BTreeMap<String, String>,
 }
 
 /// 表单属性。
@@ -357,6 +360,10 @@ pub struct Validation {
 pub struct TableProps {
     /// 数据源模型名。
     pub model: String,
+    /// 开启行内审批操作（关联的流程名，如 `请假审批流`）。
+    /// 存在时行元素带 `data-record-id`，`_actions` 列渲染操作按钮。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow: Option<String>,
     /// 筛选条件（字段名 → 值，支持 `{{ }}`）。
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub filter: Map<String, Value>,
@@ -705,6 +712,7 @@ mod tests {
                 props: SectionProps {
                     title: Some("区块".into()),
                     kind: None,
+                    extra: BTreeMap::new(),
                 },
                 children: vec![],
             },

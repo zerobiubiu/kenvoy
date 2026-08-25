@@ -373,9 +373,14 @@ fn render_table(
         .page_size
         .map(|p| format!(" data-page-size=\"{p}\""))
         .unwrap_or_default();
+    let flow_html = props
+        .flow
+        .as_deref()
+        .map(|f| format!(" data-flow=\"{}\"", escape_html(f)))
+        .unwrap_or_default();
     format!(
         "<div class=\"table-responsive kv-table-wrap\" data-model=\"{model_name}\"{filter_html}{sort_html}{page_html}>\
-         <table class=\"table table-hover kv-table\"><thead><tr>{head}</tr></thead>\
+         <table class=\"table table-hover kv-table\" data-model=\"{model_name}\"{flow_html}><thead><tr>{head}</tr></thead>\
          <tbody>{empty}</tbody></table></div>"
     )
 }
@@ -401,6 +406,13 @@ fn render_section(
         return render_navbar_section(props, children, bind, depth);
     }
     let body = render_nodes(ir, children, slot, bind, depth);
+    let extra_html: String = {
+        let mut s = String::new();
+        for (k, v) in &props.extra {
+            let _ = write!(s, " {}=\"{}\"", k, escape_html(v));
+        }
+        s
+    };
     // 默认 card 区块
     let header = props
         .title
@@ -412,7 +424,9 @@ fn render_section(
             )
         })
         .unwrap_or_default();
-    format!("<div class=\"card kv-section\">{header}<div class=\"card-body\">{body}</div></div>")
+    format!(
+        "<div class=\"card kv-section\"{extra_html}>{header}<div class=\"card-body\">{body}</div></div>"
+    )
 }
 
 /// 仅渲染 `Section kind="navbar"` 主体（不含 card 包装）。

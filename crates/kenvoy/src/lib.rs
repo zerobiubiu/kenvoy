@@ -96,8 +96,9 @@ pub enum Commands {
         #[command(subcommand)]
         cmd: ContactCmd,
     },
-    /// 部门管理
+    /// 部门管理（别名 `dept`）
     #[cfg(feature = "db")]
+    #[command(alias = "dept")]
     Department {
         #[command(subcommand)]
         cmd: DepartmentCmd,

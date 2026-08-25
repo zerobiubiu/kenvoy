@@ -48,6 +48,52 @@
     }
   }
 
+  // ---- 顶部导航：登录态徽章（用户名 / 退出）与未登录登录按钮 ----
+  function ensureUserBadge() {
+    if (document.getElementById("kv-user-badge")) return;
+    var nav = document.querySelector(".navbar-nav");
+    if (!nav) return;
+    var li = document.createElement("li");
+    li.id = "kv-user-badge";
+    li.className = "nav-item ms-auto d-flex align-items-center gap-2";
+    var user = getUser();
+    if (user) {
+      var span = document.createElement("span");
+      span.className = "nav-link text-muted small py-1";
+      span.textContent = (user.display_name || user.username || "用户");
+      var out = document.createElement("button");
+      out.id = "kv-user-logout";
+      out.className = "btn btn-sm btn-outline-secondary";
+      out.type = "button";
+      out.textContent = "退出";
+      li.appendChild(span);
+      li.appendChild(out);
+    } else {
+      var login = document.createElement("button");
+      login.id = "kv-user-login-top";
+      login.className = "btn btn-sm btn-primary";
+      login.type = "button";
+      login.textContent = "登录 / 注册";
+      li.appendChild(login);
+    }
+    nav.appendChild(li);
+  }
+
+  // ---- 未登录引导条（页面内有 `[data-kv-guest-hint]` 元素时显示） ----
+  function initGuestHint() {
+    var hints = document.querySelectorAll("[data-kv-guest-hint]");
+    if (!hints.length) return;
+    if (getUser()) {
+      hints.forEach(function (h) { h.style.display = "none"; });
+      return;
+    }
+    hints.forEach(function (h) { h.style.display = ""; });
+    var btn = document.querySelector("[data-kv-guest-login]");
+    if (btn) {
+      btn.addEventListener("click", function () { showLogin(); });
+    }
+  }
+
   var pendingAfterLogin = null; // 登录成功后待重试的请求
 
   function showLogin(onLogin) {
@@ -282,8 +328,20 @@
           return;
         }
         tbody.innerHTML = rows.map(function (row) {
-          return "<tr>" + cols.map(function (c) {
+          var recordId = row.id != null ? row.id : "";
+          var flowName = table.getAttribute("data-flow") || "";
+          return "<tr data-record-id=\"" + encodeURIComponent(recordId) + "\">" + cols.map(function (c) {
             var v = row[c.field];
+            if (c.field === "_actions") {
+              // 操作列：无流程名则不渲染；有则按协议 data-kv-flow 渲染三个按钮
+              if (!flowName) return "<td></td>";
+              var r = encodeURIComponent(recordId);
+              var f = encodeURIComponent(flowName);
+              return "<td class=\"text-nowrap\">" +
+                "<button data-kv-flow=\"withdraw\" data-flow=\"" + f + "\" data-record-id=\"" + r + "\" data-confirm=\"确认撤回该申请？\" class=\"btn btn-sm btn-outline-warning me-1\">撤回</button>" +
+                "<button data-kv-flow=\"approve\" data-flow=\"" + f + "\" data-record-id=\"" + r + "\" class=\"btn btn-sm btn-outline-success me-1\">通过</button>" +
+                "<button data-kv-flow=\"reject\" data-flow=\"" + f + "\" data-record-id=\"" + r + "\" class=\"btn btn-sm btn-outline-danger\">驳回</button></td>";
+            }
             if (c.type === "file" && v) {
               return "<td><a href=\"/__kenvoy/file/" + encodeURIComponent(v) + "\" target=\"_blank\">下载</a></td>";
             }
@@ -430,6 +488,8 @@
 
   // ---- 事件绑定（登录 / 登出 / Enter / 模式切换） ----
   ensureLoginBox();
+  ensureUserBadge();
+  initGuestHint();
   document.addEventListener("click", function (ev) {
     if (ev.target && ev.target.id === "kv-login-btn") {
       var mode = getLoginMode();
@@ -438,6 +498,8 @@
       else doLogin();
     }
     if (ev.target && ev.target.id === "kv-logout-btn") doLogout();
+    if (ev.target && ev.target.id === "kv-user-logout") doLogout();
+    if (ev.target && ev.target.id === "kv-user-login-top") showLogin();
     if (ev.target && ev.target.id === "kv-login-switch") {
       setLoginMode(getLoginMode() === "register" ? "login" : "register");
     }

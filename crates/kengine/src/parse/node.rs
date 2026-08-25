@@ -73,13 +73,18 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
             },
             children: parse_children(path, elem)?,
         },
-        "Section" => Node::Section {
-            props: SectionProps {
-                title: elem.attribute("title").map(str::to_string),
-                kind: elem.attribute("kind").map(str::to_string),
-            },
-            children: parse_children(path, elem)?,
-        },
+        "Section" => {
+            let extra: std::collections::BTreeMap<String, String> =
+                extra_attrs(elem, &["title", "kind"]).into_iter().collect();
+            Node::Section {
+                props: SectionProps {
+                    title: elem.attribute("title").map(str::to_string),
+                    kind: elem.attribute("kind").map(str::to_string),
+                    extra,
+                },
+                children: parse_children(path, elem)?,
+            }
+        }
         "Slot" => Node::Slot,
         "Form" => Node::Form {
             props: FormProps {
@@ -123,6 +128,7 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
             Node::Table {
                 props: TableProps {
                     model: required_attr(path, elem, tag, "model")?,
+                    flow: elem.attribute("flow").map(str::to_string),
                     filter,
                     sort,
                     page_size: parse_u32(path, elem, "pageSize")?,

@@ -8,15 +8,20 @@
     </Section>
   </Component>
   <Content>
+    <!-- 未登录引导条：登录后由 runtime.js 隐藏 -->
+    <Section title="欢迎使用 Kenvoy 演示" data-kv-guest-hint="true">
+      <Text value="注册 / 登录后可提交请假、审批、查看通讯录。" />
+      <Button value="登录 / 注册" kind="primary" action="submit" data-kv-guest-login="true" />
+    </Section>
     <Row>
       <Col span="4">
-        <StatCard data="统计(请假单.数量)" unit="次" color="blue" />
+        <StatCard title="待我审批" data="统计(请假单.数量)" unit="单" color="warning" icon="ti ti-clock" />
       </Col>
       <Col span="4">
-        <StatCard data="统计(请假单.数量)" unit="次" color="orange" />
+        <StatCard title="本月请假" data="统计(请假单.数量)" unit="单" color="blue" icon="ti ti-calendar" />
       </Col>
       <Col span="4">
-        <StatCard data="统计(请假单.数量)" unit="%" color="green" />
+        <StatCard title="已通过" data="统计(请假单.数量)" unit="%" color="success" icon="ti ti-check" />
       </Col>
     </Row>
     <Row>
@@ -28,7 +33,8 @@
       </Col>
       <Col span="4">
         <进度卡 title="审批进度">
-          <Text value="待我审批：2 单" />
+          <Text value="待我审批：0 单" />
+          <Button value="去审批" kind="success" size="sm" action="navigate" href="/leave/list" />
         </进度卡>
       </Col>
     </Row>

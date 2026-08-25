@@ -929,7 +929,14 @@ async fn create_data(
             return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
         }
         match store.insert(&model_def, &data_map).await {
-            Ok(_) => Json(payload).into_response(),
+            Ok(id) => {
+                // 回传 id，供调用方发起流程 / 定位记录
+                let mut resp = payload.clone();
+                if let Value::Object(map) = &mut resp {
+                    map.insert("id".to_string(), Value::from(id));
+                }
+                Json(resp).into_response()
+            }
             Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
         }
     } else {

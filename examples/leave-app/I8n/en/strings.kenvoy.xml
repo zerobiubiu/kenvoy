@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Strings>
+  <String key="app.name" value="Kenvoy Leave Management" />
+  <String key="nav.dashboard" value="Dashboard" />
+  <String key="nav.apply" value="Apply Leave" />
+  <String key="nav.list" value="Approvals" />
+  <String key="footer.copyright" value="© 2026 KenvoySpace" />
+  <String key="guest.hint" value="Sign up / Sign in to apply leave, approve requests and browse contacts." />
+</Strings>

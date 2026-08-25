@@ -274,3 +274,24 @@
 - 踩坑：原 `iter().rev().skip(1)` 实际跳过了最内层（外层被复包裹）——修正为 enumerate + `i + 1 == chain_len` 检测
 - 验证（dev 跑 examples/leave-app 真实产物）：`<body><div class="page"><nav class="navbar ...">...</nav><div class="page-wrapper"><div class="page-body"><div class="container-xl">...</div>...</div></div></div></body>` —— navbar 全宽、只出现一次
 - 变更说明：v0.1.0 tag 仍有效（本轮纯前塪调整，不改 API/响应/路由）
+
+### 执行验证记录（2026-08-25，示例改为完整功能模板 + 全链路冒烟）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 实现（`examples/leave-app` 升级为完整功能模板）：
+  1. **seed.sh / seed.bat 引导脚本**（幂等）：建 5 角色（管理员100/HR 80/人事总监70/部门主管50/普通员工10）+ 3 部门 + 5 演示账户（admin/hr/ceo/alice/bob，密码 demo123）+ 4 通讯录人员（含 2 名无账号人员，演示人事录入无账号场景）；支持 `--reset` / `--reset-users`
+  2. **账号等级 = 角色等级**（确认既有架构）：`kv role add --level` 决定；`kv user add` 分配角色即得对应等级；`admin` 达标 `[auth].admin_level=90`
+  3. **CLI `department` 别名 `dept`**（seed 脚本简写）
+  4. **models.kenvoy.xml**：请假单补 `审批状态` / `当前节点` 字段（流程副作用写库）
+  5. **flow.kenvoy.xml**：发起人节点移到末尾作驳回终点；首节点为部门主管审批；`OnApprove` 分支（≤3 → 人事备案；>3 → 人事总监）；HR 备案 notify 终态写入 已通过/已完成；驳回写入 已驳回
+  6. **publish.kenvoy.xml**：5 角色完整权限矩阵 + 字段读写（附件/审批状态）+ DataFilter（普通员工仅本人，主管/总监/HR/管理员全量）
+  7. **layout.kenvoy.xml**：navbar 含 工作台/提交请假/审批列表 导航（Button navigate）+ 登录态徽章（runtime.js）
+  8. **dashboard**：未登录引导条（`data-kv-guest-hint` + `data-kv-guest-login`）+ 统计卡 + 图表 + 流程查看器
+  9. **list 页**：`<Table flow="请假审批流">` 操作列（`_actions`）— runtime.js 行内 撤回/通过/驳回 按钮（data-kv-flow 协议）
+  10. **runtime.js**：navbar 登录徽章（用户名 + 退出）/ 未登录「登录 / 注册」按钮；guest hint 显示/隐藏；表格行带 `data-record-id` + `_actions` 操作列渲染；表格查询选择器修复（`table[data-model]` 现在与 render 输出一致）
+  11. **IR/render**：`SectionProps.extra`（data-*/id 透传）、`TableProps.flow`、table 元素本身带 `data-model`（修 wrapper 与选择器不一致）
+  12. **create_data 回传 id**：创建响应 `{...payload, "id": N}`，供前端发起流程
+  13. **README.md**：启动步骤 / 演示账户表 / 端到端演示步骤 / 目录说明 / 重置
+- 冒烟（真实 PG + MinIO）：seed 幂等两跑无重复；5 账户登录 200；bob 提交请假单（5 天）→ start 流程 200（当前节点=部门主管审批）→ alice 审批 → 人事总监审批 → ceo 审批 → done（HR 备案自动）；记录 `审批状态=已通过`、`当前节点=已完成`
+- 已知限制：`list` 页操作列按钮无角色判断（点击由后端 403 拒绝，模板演示足够）；数据库历史脏数据需手动清理（`docker exec kenvoy-pg18 psql -U kenvoy -d kenvoy -c "TRUNCATE contacts, user_roles, kv_flow_instance, sessions RESTART IDENTITY CASCADE; DELETE FROM users; DELETE FROM roles; DELETE FROM departments;"`）

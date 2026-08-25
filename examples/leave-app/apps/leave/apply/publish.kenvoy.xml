@@ -1,36 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Publish>
   <Roles>
-    <Role name="普通员工">
+    <Role name="普通员工" level="10">
       <Permissions>
         <Permission>请假管理.申请.查看</Permission>
         <Permission>请假管理.申请.创建</Permission>
       </Permissions>
     </Role>
-    <Role name="部门主管" extends="普通员工">
+    <Role name="部门主管" level="50">
       <Permissions>
+        <Permission>请假管理.申请.查看</Permission>
+        <Permission>请假管理.申请.创建</Permission>
         <Permission>请假管理.审批.操作</Permission>
       </Permissions>
     </Role>
-    <Role name="管理员">
+    <Role name="人事总监" level="70">
+      <Permissions>
+        <Permission>请假管理.申请.查看</Permission>
+        <Permission>请假管理.申请.创建</Permission>
+        <Permission>请假管理.审批.操作</Permission>
+        <Permission>请假管理.决策.操作</Permission>
+      </Permissions>
+    </Role>
+    <Role name="HR" level="80">
+      <Permissions>
+        <Permission>请假管理.备案.操作</Permission>
+        <Permission>通讯录.查看</Permission>
+        <Permission>部门.查看</Permission>
+      </Permissions>
+    </Role>
+    <Role name="管理员" level="100">
       <Permissions>
         <Permission>*</Permission>
       </Permissions>
     </Role>
   </Roles>
   <Access>
-    <Allow roles="普通员工,部门主管,管理员" />
+    <Allow roles="普通员工,部门主管,人事总监,HR,管理员" />
     <Field name="附件">
-      <Read roles="普通员工,部门主管,管理员" />
+      <Read roles="普通员工,部门主管,人事总监,HR,管理员" />
       <Write roles="管理员" />
+    </Field>
+    <Field name="审批状态">
+      <Read roles="普通员工,部门主管,人事总监,HR,管理员" />
+      <Write roles="管理员,HR" />
     </Field>
   </Access>
   <DataFilter>
     <Rule model="请假单">
+      <!-- 普通员工：仅看本人 -->
       <Filter role="普通员工">
         <Eq field="申请人" value="{{currentUser.id}}" />
       </Filter>
-      <Filter role="部门主管,管理员">
+      <!-- 部门主管 + 人事总监：全量可见（多人命中按 OR 合并） -->
+      <Filter role="部门主管,人事总监">
+        <All />
+      </Filter>
+      <!-- HR + 管理员：全量可见 -->
+      <Filter role="HR,管理员">
         <All />
       </Filter>
     </Rule>
