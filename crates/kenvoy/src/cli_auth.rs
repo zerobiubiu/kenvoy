@@ -1,4 +1,6 @@
-//! 用户 / 角色 / 通讯录 / 部门 CLI 管理命令（与 HTTP API 共用 `kengine-db`）。
+//! 用户 / 角色 / 通讯录 / 部门 CLI 管理命令（需要 `db` feature）。
+
+#![cfg(feature = "db")]
 
 use std::path::Path;
 

@@ -1,4 +1,4 @@
-//! `kv build`：将项目构建为静态 HTML 产物。
+//! `kv build`：将项目构建为静态 HTML 产物（需要 `db` feature）。
 //!
 //! 输出到 `dist/`（或配置 `[build].output`）：`[build].public_path` 非空时，
 //! 全部产物（页面、索引页、`assets/`、`__kenvoy/`、`public/` 拷贝）统一放在
@@ -7,6 +7,8 @@
 //!
 //! 配置 `[database].url` 时，额外导出各模型数据快照到 `__kenvoy/data/{模型}.json`
 //! （静态站数据降级：客户端运行时在数据 API 不可用时读取；快照为公开数据，注意隐私）。
+
+#![cfg(feature = "db")]
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};

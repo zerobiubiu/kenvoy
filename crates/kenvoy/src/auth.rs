@@ -1,8 +1,10 @@
-//! 用户与权限 HTTP API（`/__kenvoy/auth/*`）。
+//! 用户与权限 HTTP API（`/__kenvoy/auth/*`），需要 `db` feature。
 //!
 //! 覆盖：注册（可配置：公开 / 审核 / 人事绑定式）、登录、登出、当前用户、
 //! 用户与角色管理（账号等级）、部门、通讯录（含「人事新增人员但不需要账号」与账号关联）。
 //! 管理端点（用户/角色/部门/通讯录、审核）要求登录；注册模式与密码强度由 `kenvoy.toml [auth]` 配置。
+
+#![cfg(feature = "db")]
 
 use crate::db::UserStore;
 use crate::db::users::User;

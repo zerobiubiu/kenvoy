@@ -1,6 +1,9 @@
 //! `dev` 开发服务器：扫描 `apps/` → kengine 解析 → kengine-html 渲染 → 浏览器预览。
 //!
 //! 按 D3/D4 决策：axum + notify + tokio；文件变更后整页刷新（轮询自动刷新，非 SSE/WS）。
+//! 需要 `db` + `s3` feature（默认开启）。
+
+#![cfg(all(feature = "db", feature = "s3"))]
 
 use std::fmt::Write;
 use std::net::ToSocketAddrs;

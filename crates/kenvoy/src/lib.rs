@@ -5,10 +5,14 @@
 use clap::{Parser, Subcommand};
 use kengine::{self, EngineInfo};
 
+#[cfg(feature = "db")]
 pub mod auth;
+#[cfg(feature = "db")]
 pub mod build_cmd;
+#[cfg(feature = "db")]
 pub mod cli_auth;
 pub mod config;
+#[cfg(all(feature = "db", feature = "s3"))]
 pub mod dev;
 pub mod init;
 
@@ -39,6 +43,7 @@ pub enum Commands {
     /// 显示引擎信息
     Info,
     /// 启动开发服务器：扫描 apps/ → 解析渲染 → 浏览器实时预览
+    #[cfg(all(feature = "db", feature = "s3"))]
     Dev {
         /// 项目根目录（包含 apps/ 与 public/）
         #[arg(long, default_value = ".")]
@@ -56,6 +61,7 @@ pub enum Commands {
         title: Option<String>,
     },
     /// 构建静态产物到 dist/
+    #[cfg(feature = "db")]
     Build {
         /// 项目根目录
         #[arg(long, default_value = ".")]
@@ -71,21 +77,25 @@ pub enum Commands {
         dir: std::path::PathBuf,
     },
     /// 用户管理
+    #[cfg(feature = "db")]
     User {
         #[command(subcommand)]
         cmd: UserCmd,
     },
     /// 角色管理（账号等级）
+    #[cfg(feature = "db")]
     Role {
         #[command(subcommand)]
         cmd: RoleCmd,
     },
     /// 通讯录管理
+    #[cfg(feature = "db")]
     Contact {
         #[command(subcommand)]
         cmd: ContactCmd,
     },
     /// 部门管理
+    #[cfg(feature = "db")]
     Department {
         #[command(subcommand)]
         cmd: DepartmentCmd,
@@ -196,6 +206,7 @@ pub async fn run() -> anyhow::Result<()> {
             let info = EngineInfo::new();
             println!("{info}");
         }
+        #[cfg(all(feature = "db", feature = "s3"))]
         Some(Commands::Dev { dir, port }) => {
             let cfg = config::read_config(&dir);
             let name = config::resolve_name(&dir, &cfg, None);
@@ -238,6 +249,7 @@ pub async fn run() -> anyhow::Result<()> {
                 name.map_or_else(|| std::path::PathBuf::from("."), std::path::PathBuf::from);
             init::run(&target, title.as_deref())?;
         }
+        #[cfg(feature = "db")]
         Some(Commands::Build { dir, out }) => {
             let cfg = config::read_config(&dir);
             build_cmd::run(&dir, out.as_deref(), &cfg).await?;
@@ -245,6 +257,7 @@ pub async fn run() -> anyhow::Result<()> {
         Some(Commands::Deploy { dir: _ }) => {
             println!("KenvoySpace 为闭源商业产品，部署命令暂未开放，请关注后续版本。");
         }
+        #[cfg(feature = "db")]
         Some(Commands::User { cmd }) => {
             let dir = cli.dir.clone();
             match cmd {
@@ -260,6 +273,7 @@ pub async fn run() -> anyhow::Result<()> {
                 UserCmd::List => cli_auth::user_list(&dir).await?,
             }
         }
+        #[cfg(feature = "db")]
         Some(Commands::Role { cmd }) => {
             let dir = cli.dir.clone();
             match cmd {
@@ -271,6 +285,7 @@ pub async fn run() -> anyhow::Result<()> {
                 RoleCmd::List => cli_auth::role_list(&dir).await?,
             }
         }
+        #[cfg(feature = "db")]
         Some(Commands::Contact { cmd }) => {
             let dir = cli.dir.clone();
             match cmd {
@@ -298,6 +313,7 @@ pub async fn run() -> anyhow::Result<()> {
                 }
             }
         }
+        #[cfg(feature = "db")]
         Some(Commands::Department { cmd }) => {
             let dir = cli.dir.clone();
             match cmd {
