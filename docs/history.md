@@ -180,6 +180,29 @@
 - 冒烟（真实 PG + MinIO）：level 0 用户访问管理端点 403、level 90 管理员 200；未配置上传限制时 3MB 文件上传 200（此前 2MB 即被 axum 默认上限拦为 400）
 - 验证结论：✅ 通过；`kv deploy` 保持占位（闭源 KenvoySpace）
 
+### 执行验证记录（2026-08-25，邮箱重置 + 0.1 标签准备）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`、`cargo publish -p kengine --dry-run --allow-dirty`、`cargo package -p kengine --allow-dirty --no-verify`
+- 结果：全部通过（80 个测试、4 个编译路径）
+- 实现：
+  1. **邮箱重置密码链路**：
+     - DB 新增 `kv_password_reset` 表（user_id + sha256 hash + expires_at + used_at，1 小时过期）
+     - `UserStore::create_reset_token`（生成 uuid×2 + sha256 hash 存库）/ `consume_reset_token`（一次性消费，标记 used_at）/ `reset_password`（argon2 重新哈希）/ `user_id_by_username`（重置流程需要 user_id）
+     - 端点 `POST /__kenvoy/auth/forgot` body `{"username":"..."}`：总是返回 200 不泄露账号存在性；生成 token 后输出 eprintln（含明文 token，仅 dev 模式供调试）
+     - 端点 `POST /__kenvoy/auth/reset` body `{"token":"...","new_password":"..."}`：复用 `password_policy` 强度校验；token 无效/已用/过期返回 400
+     - `runtime.js doforgot` 真实调端点；dev mode 响应体含 `devToken` 供 UI 展示（生产邮件发送链路在注释中提示）
+     - 依赖 `sha2 = "0.10"`（feature db）
+  2. **Tabler 图标全量**：`icons.css` 从 45 个子集扩到 4962 个（完整 `@tabler/icons-webfont@2.47.0` 码点集）；生成脚本 `gen_icons.py`（一次性）已生成
+  3. **README 文档化**：`workspace` 结构 + `Features` 表 + 裁剪示例（`--no-default-features` 三种组合）；License 段位于最上
+  4. **0.1.0 标签**：`git tag -a v0.1.0` 已创建（`406f2e0` 上方 `afd2e2e`）；未推远端（待用户推）
+- 发布准备：
+  - `cargo package -p kengine --allow-dirty --no-verify` 成功（31 文件，1.6 MiB，含全部图标资产）
+  - `cargo publish -p kengine --dry-run --allow-dirty` 成功（需 `cargo login` 后实际发布）
+  - 干道顺序：`cargo publish -p kengine` → `cargo publish -p kenvoy`（kenvoy 依赖 kengine）
+- 冒烟（真实 PG）：forgot 200（devToken 返回）→ reset 200（一次性）→ 再次 reset 400（token 已用）→ 新密码登录 200
+- 已知限制：邮件发送链路未集成（dev mode 借 eprintln + devToken 调试）；`forgot` 当前不验证邮箱存在性（按"不泄露账号"设计）；`password_policy.validate` 第二个参数（username）当前传空串（计划接 full name 后改）
+- 验证结论：✅ 全部通过；准备 v0.1.0 发布 crates.io
+
 ### 执行验证记录（2026-08-25，登录流程 + 审批流运行时 + 表格查询 + 图表/i18n/静态快照）
 
 - 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
