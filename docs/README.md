@@ -17,10 +17,9 @@
 
 - IR 类型：`crates/kengine/src/ir/`
 - XML 解析：`crates/kengine/src/parse/`（表达式 `expr` / 校验 `validation` / 状态机 `workflow`）
-- IR→HTML 渲染：`crates/kengine-html/`（Tabler/Bootstrap 5，运行时 `assets/runtime.js`）
-- 数据层：`crates/kengine-db/`（PG 18 系统表 + 模型动态建表 + 数据鉴权）
-- 对象存储：`crates/kengine-s3/`（S3 抽象，MinIO 联调通过）
-- CLI：`crates/kenvoy/`（init / dev / build / deploy / user / role / contact / department）
+- IR→HTML 渲染：`crates/kengine/src/html/`（Tabler/Bootstrap 5，运行时 `crates/kengine/assets/runtime.js`）
+- 数据层 / 对象存储 / SMTP：`crates/kenvoy/src/{db,s3,mail}/`（feature 门控：`db` / `s3` / `mail`，默认全开）
+- CLI：`crates/kenvoy/src/`（init / dev / build / deploy / user / role / contact / department / auth HTTP）
 
 ## 已废弃 / 替代关系
 

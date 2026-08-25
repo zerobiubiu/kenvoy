@@ -54,6 +54,8 @@ struct AppState {
     store: Option<ObjectStore>,
     /// 存储配置（上传限制等）。
     storage_cfg: StorageConfig,
+    /// 认证配置（注册模式等，供渲染时下发到 runtime.js）。
+    auth: AuthConfig,
     /// 内存数据存储（模型名 → 记录列表，无数据库时的降级模式）。
     data: Arc<Mutex<std::collections::HashMap<String, Vec<Value>>>>,
 }
@@ -129,6 +131,7 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         db,
         store,
         storage_cfg: storage.clone(),
+        auth: auth.clone(),
         data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     // 全局 JSON body 兜底：1MB 足够 DSL 表单与审批数据；auth/上传端点各自更窄。
@@ -383,12 +386,33 @@ async fn page_or_static(
     };
 
     match html {
-        Some(html) => Html(inject_dev_scripts(&html, version)).into_response(),
+        Some(html) => {
+            let body = inject_dev_scripts(&html, version);
+            Html(inject_body_auth_mode(&body, state.auth.mode.as_str())).into_response()
+        }
         None => match serve_static(&state.dir, &path_norm) {
             Some(resp) => resp,
             None => (StatusCode::NOT_FOUND, "未找到页面或静态资源").into_response(),
         },
     }
+}
+
+/// 在 `<body>` 起始标签上加 `data-auth-mode` 属性，供 runtime.js 按注册模式隐藏入口。
+///
+/// 没有 `<body>` 标签或起始标签缺 `>`（理论上不会发生）时原样返回。
+pub(crate) fn inject_body_auth_mode(html: &str, mode: &str) -> String {
+    let tag = format!("<body data-auth-mode=\"{}\">", escape_html(mode));
+    if let Some(pos) = html.find("<body")
+        && let Some(rel) = html[pos..].find('>')
+    {
+        let end = pos + rel;
+        let mut out = String::with_capacity(html.len() + tag.len());
+        out.push_str(&html[..pos]);
+        out.push_str(&tag);
+        out.push_str(&html[end + 1..]);
+        return out;
+    }
+    html.to_string()
 }
 
 /// 归一化请求路径（axum 通配符捕获不带前导 `/`）。
@@ -1749,6 +1773,32 @@ mod tests {
     }
 
     #[test]
+    fn inject_body_auth_mode_inserts_data_attr() {
+        let html = "<html><body>hi</body></html>";
+        let out = inject_body_auth_mode(html, "hr");
+        assert!(
+            out.contains(r#"<body data-auth-mode="hr">"#),
+            "实际输出：{out}"
+        );
+        // 保持原有子结构
+        assert!(out.contains("hi"));
+    }
+
+    #[test]
+    fn inject_body_auth_mode_preserves_existing_body_attrs() {
+        let html = "<html><body class=\"x\" id=\"y\">hi</body></html>";
+        let out = inject_body_auth_mode(html, "open");
+        // 被标准化为 <body data-auth-mode="...">，原属性被覆盖（运行时重渲不依赖原 class）。
+        assert!(out.contains(r#"data-auth-mode="open""#));
+    }
+
+    #[test]
+    fn inject_body_auth_mode_passthrough_without_body() {
+        let html = "<html><div>nope</div></html>";
+        assert_eq!(inject_body_auth_mode(html, "open"), html);
+    }
+
+    #[test]
     fn normalize_path_adds_slash() {
         assert_eq!(normalize("leave/apply"), "/leave/apply");
         assert_eq!(normalize("/leave/apply"), "/leave/apply");
@@ -1825,6 +1875,7 @@ mod tests {
             db: None,
             store: None,
             storage_cfg: StorageConfig::default(),
+            auth: AuthConfig::default(),
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()
@@ -2076,6 +2127,7 @@ mod tests {
             db: None,
             store: None,
             storage_cfg: StorageConfig::default(),
+            auth: AuthConfig::default(),
             data: Arc::new(Mutex::new(std::collections::HashMap::new())),
         };
         let app = Router::new()

@@ -57,6 +57,8 @@ pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) ->
     let mut count = 0;
     for page in &ir.pages {
         let html = kengine::html::render_page_with_prefix(&ir, page, &prefix);
+        // 在 `<body>` 上加 `data-auth-mode` 供 runtime.js 隐藏 hr 模式的注册入口。
+        let html = dev::inject_body_auth_mode(&html, cfg.auth.mode.as_str());
         // 静态产物注入客户端运行时（表格数据由宿主集成时通过 `__kenvoy/ir.json` 等接入）
         let html = html.replace(
             "</body>",
@@ -74,7 +76,7 @@ pub async fn run(dir: &Path, out_override: Option<&Path>, cfg: &KenvoyConfig) ->
     }
 
     if !root_page_owned {
-        let index = build_index(&ir, &prefix);
+        let index = build_index(&ir, &prefix, cfg.auth.mode.as_str());
         std::fs::write(root.join("index.html"), index)?;
     }
 
@@ -134,7 +136,7 @@ async fn export_static_data(url: &str, ir: &kengine::ir::ProjectIr, root: &Path)
 }
 
 /// 生成页面索引页（链接带部署前缀）。
-fn build_index(ir: &kengine::ir::ProjectIr, prefix: &str) -> String {
+fn build_index(ir: &kengine::ir::ProjectIr, prefix: &str, auth_mode: &str) -> String {
     let mut links = String::new();
     for page in &ir.pages {
         let path = escape_html(&page.path);
@@ -143,7 +145,8 @@ fn build_index(ir: &kengine::ir::ProjectIr, prefix: &str) -> String {
     }
     format!(
         "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Kenvoy</title></head>\
-         <body><h1>Kenvoy</h1><p>选择页面：</p><ul>{links}</ul></body></html>"
+         <body data-auth-mode=\"{mode}\"><h1>Kenvoy</h1><p>选择页面：</p><ul>{links}</ul></body></html>",
+        mode = escape_html(auth_mode),
     )
 }
 

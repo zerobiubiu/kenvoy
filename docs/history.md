@@ -219,3 +219,24 @@
 - 修复：`LIMIT $1` 与条件占位符冲突（编号接在条件后、bind 顺序一致）；`id`/数值/布尔字段比较值显式 `::BIGINT`/`::DOUBLE PRECISION`/`::BOOLEAN` cast（TEXT 参数与数值列比较 500）；`ensure_model_table` 系统列（created_at/updated_at）补 ALTER；`pageSize` query 字段名 rename；stats `count(*)` CAST DOUBLE PRECISION；PG 集成测试迁移并发竞态（`MIGRATE_LOCK`）
 - 冒烟（真实 PG + MinIO）：登录/越权 403/审核闭环不变；流程 start → 主管审批（≤3 天自动走到知会节点并 done；>3 天条件分支到人事总监 running）；PUT 落库验证、DELETE 204；stats 返回分组统计；build 导出快照 + i18n 替换 + Chart/FlowViewer 容器 + data-sort 输出
 - 已知限制：`<Filter>` 值为静态（无 `{{}}` 绑定）；`runtime.js` 登录模态框无注册/忘记密码入口（open 模式注册走 API）；审批流无撤回/加签；`kv_flow_instance` 未关联 `storage_object` 等资源清理
+
+### 执行验证记录（2026-08-25，User/Department 字段下拉 + auth mode 下发 + 审批流客户端）
+
+- 命令：`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo test --workspace`（经 `KENVOY_TEST_DATABASE_URL`）、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（kengine 52 + kenvoy 25 + db_pg 5 + doctest 1 = 83 个测试、4 个编译路径）
+- 实现：
+  1. **User/Department 字段下拉**：`FieldType::User` / `::Department` 渲染为受控 `select[data-source="users|departments"]` + `<option value="">加载中…</option>` 占位；`runtime.js` 加载时按 `data-source` 拉 `/__kenvoy/auth/options/{users,departments}` 填充选项（`label` 按 `data-type` 选 `displayName` 或 `name`）
+  2. **公共选项端点**：`GET /__kenvoy/auth/options/users`（仅需登录、返回 `[{id, username, displayName}]`）、`/options/departments`（返回 `[{id, name, parentId}]`）用于表单下拉，不要求管理员
+  3. **auth mode 下发到 runtime**：`dev::page_or_static` / `build_cmd` 注入 `<body data-auth-mode="open|review|hr">`；`runtime.js ensureLoginBox` 读取后隐藏 hr 模式的「注册账号」按钮（仅 `open` / `review` 模式可见，与服务端策略一致）
+  4. **审批流客户端按钮**：`runtime.js` 监听 `[data-kv-flow]` 点击（`action` = `start` / `withdraw` / `approve` / `reject` / `add-sign`，`data-flow` / `data-record-id` / `data-node` / `data-confirm`）；调用对应端点、失败提示、成功后 `location.reload`
+  5. **dev.rs 重构**：`run` 主体只做 wiring，路由拼装抽到 `build_router`（clippy `too_many_lines` 过线）
+  6. **body limit 分层**：`dev` 1MB 全局 / auth 64KB / `PUT data/{id}` 1MB / `upload_file` 走 `upload_body_limit(storage)`
+  7. **AppState.auth**：`AppState` 新增 `auth: AuthConfig` 字段供渲染时读取
+- 修正：
+  - `form_fields_render_by_type` 断言从 `value="{{currentUser.name}}"` 改为 `data-source="users"` / `data-type="user"` / `加载中…`（user 字段不再走 text input）
+  - clippy `match_wildcard_for_single_variants`：render_field `_` 收窄为 `FieldType::Text`
+  - clippy `too_many_lines`：dev::run 拆为 `run` + `build_router`
+  - clippy `collapsible_if`：inject_body_auth_mode 改 let-chain
+- 补充单测：`inject_body_auth_mode_inserts_data_attr` / `_preserves_existing_body_attrs` / `_passthrough_without_body`
+- 变更说明：v0.1.0 tag 仍指向 `fb3faf6`（SMTP 集成后）；本次变更需作 v0.1.1 / v0.2 增量（是否需重发由用户决定）
+- 已知限制：`packages/` 外部库依赖闭源平台分发暂缓（未变更）

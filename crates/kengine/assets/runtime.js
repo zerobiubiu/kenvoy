@@ -40,6 +40,12 @@
       '<button id="kv-logout-btn" class="btn btn-outline-secondary w-100 mt-3" style="display:none">退出登录</button>' +
       "</div></div>";
     document.body.appendChild(box);
+    // hr 模式：隐藏公开注册入口（只能由人事应用创建账户）。
+    var mode = (document.body && document.body.getAttribute("data-auth-mode")) || "open";
+    if (mode === "hr") {
+      var sw = document.getElementById("kv-login-switch");
+      if (sw) sw.parentNode.removeChild(sw);
+    }
   }
 
   var pendingAfterLogin = null; // 登录成功后待重试的请求
@@ -340,6 +346,61 @@
 
   // ---- 加载 User/Department 下拉选项（页面加载后） ----
   document.querySelectorAll("select[data-source]").forEach(function (sel) { loadOptions(sel); });
+
+  // ---- 审批流按钮 ----
+  // DSL 渲染审批操作按钮时使用以下属性：
+  //   <button data-kv-flow="start|withdraw|approve|reject|add-sign"
+  //           data-flow="流程名" data-record-id="1"
+  //           data-node="加签节点名" data-confirm="二次确认文案">
+  // runtime.js 负责调用对应端点，失败提示，成功后刷新页面。
+  // 表单提交到点（e.g. 发起审批）也可由表单字段反填 recordId 后续接上。
+  var FLOW_ENDPOINTS = {
+    start: "start",
+    withdraw: "withdraw",
+    "add-sign": "add-sign",
+  };
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest("[data-kv-flow]");
+    if (!btn) return;
+    ev.preventDefault();
+    var action = btn.getAttribute("data-kv-flow");
+    var flow = btn.getAttribute("data-flow");
+    var recordId = btn.getAttribute("data-record-id");
+    var node = btn.getAttribute("data-node");
+    var confirmMsg = btn.getAttribute("data-confirm");
+    if (!flow || !recordId) { alert("审批按钮缺 data-flow 或 data-record-id"); return; }
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    var url, body = null;
+    if (action === "approve" || action === "reject") {
+      url = "/__kenvoy/flow/" + encodeURIComponent(flow) +
+            "/records/" + encodeURIComponent(recordId) + "/step";
+      body = JSON.stringify({ action: action });
+    } else if (action === "add-sign") {
+      url = "/__kenvoy/flow/" + encodeURIComponent(flow) +
+            "/records/" + encodeURIComponent(recordId) + "/add-sign";
+      body = JSON.stringify({ node: node || "" });
+    } else if (FLOW_ENDPOINTS[action]) {
+      url = "/__kenvoy/flow/" + encodeURIComponent(flow) +
+            "/records/" + encodeURIComponent(recordId) + "/" + FLOW_ENDPOINTS[action];
+    } else {
+      alert("未知审批动作：" + action);
+      return;
+    }
+    var opts = { method: "POST" };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = body;
+    }
+    kvFetch(url, opts).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) {
+          alert("审批操作失败：" + (j.message || j.errors || JSON.stringify(j)));
+          return;
+        }
+        location.reload();
+      });
+    }).catch(function (e) { alert("审批操作异常：" + e); });
+  });
 
   // ---- 统计图表（柱状图） ----
   document.querySelectorAll(".kv-chart").forEach(function (el) {
