@@ -345,3 +345,18 @@
   6. **模板 publish**：admin 四页与 hr 两页新增 `publish.kenvoy.xml`（页面级 `<Import>`），`admin/*` 仅管理员、`hr/*` 限 HR/人事总监/管理员（publish 文件须与 page 同目录并显式 Import）
 - Playwright 冒烟：未登录 dashboard/admin 均立即弹框；bob 导航隐藏 人事中心/系统管理；bob 直访 /admin/users → 403“无权访问”；admin 导航可见且表格 5 行；全程无 JS 错误 PASS
 - 已知限制：`admin` 应用因 HttpOnly cookie 无法被 localStorage 前端逻辑读取（导航按 localStorage 角色过滤——两者一致由登录响应填充）；页面级权限在 build 静态产物中不生效（SSR 仅 dev/build 数据快照场景）
+
+### 执行验证记录（2026-08-25，dev 首页应用门户 + 全套页面权限白名单）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 动机：用户反馈 dev 首页（“选择页面”）未纳入权限体系，直接列出全部页面入口；“要全套的权限配置”
+- 实现：
+  1. **dev 首页改造为应用门户**：
+     - 按当前账号角色过滤页面列表（`publish.allow_roles`，Bearer/cookie 识别身份）：未登录仅显示“请先登录”提示；bob → dashboard + leave 4 页；admin → 全部 10 页；hr 2 页 + admin 4 页等按角色分发
+     - 注入 runtime.js（此前首页是独立 HTML 无脚本）：未登录自动弹登录框、登录态徽章一致
+     - 借锁修复：先 clone 页面元数据释放构建锁再 await 鉴权（future Send 约束）
+  2. **全部页面纳入白名单**：dashboard / leave-list / leave-detail 新增 `publish.kenvoy.xml`（allow 全部业务角色）并页面 `<Import>`；至此无任何公开页面（未登录在首页即被拦截）
+  3. **注册默认角色 `[auth].default_role`**：`open`/`review` 注册成功后自动分配角色（如“普通员工”），新用户无需管理员介入即可进入对应应用；kenvoy.toml 示例配置 `default_role = "普通员工"`
+- 冒烟：未登录首页无链接 + 提示 + runtime 注入；bob cookie 首页 4 项；admin cookie 首页 10 项；注册 `newbie` → 自动分配“普通员工”（DB 验证）；bob 直访 /admin/users 403（上轮）
+- 验证结论：✅ 通过；dev/build 双路径一致（build 静态产物无会话概念，不受影响）

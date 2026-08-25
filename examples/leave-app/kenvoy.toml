@@ -22,6 +22,9 @@ secret_key = "minioadmin"
 [auth]
 # 注册模式：open（公开注册）| review（审核注册）| hr（人事绑定式，关闭公开注册）
 mode = "open"
+# 注册成功后自动分配的角色（open/review 模式；缺省不分配）——
+# 设置后新注册用户立即可访问该角色允许的应用（如 "普通员工"）
+default_role = "普通员工"
 # 管理端点（用户/角色/部门/通讯录、审核）所需最低账号等级
 admin_level = 90
 # 密码强度：none | weak | medium | strong | custom

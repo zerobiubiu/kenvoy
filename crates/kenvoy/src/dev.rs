@@ -340,23 +340,67 @@ fn rebuild(dir: &Path, project_name: &str, locale: Option<&str>, state: &RwLock<
     }
 }
 
-/// 首页：页面索引。
-async fn index(State(state): State<AppState>) -> Html<String> {
-    let ir = &state.build.read().expect("读取状态失败").ir;
+/// 首页：应用门户（按当前账号角色过滤页面入口）。
+///
+/// 未登录 / 无 token → 提示先登录（runtime.js 自动弹框）；
+/// 已登录 → 仅列出该账号角色允许访问的页面（`publish.allow_roles`）。
+/// 注入 runtime.js，保证与业务页面一致的登录态体验。
+async fn index(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
     let desc = state
         .description
         .as_deref()
         .map(|d| format!("<p class=\"kv-desc\">{}</p>", escape_html(d)))
         .unwrap_or_default();
+    // 先 clone 页面元数据（释放构建锁），再 await 鉴权
+    let pages: Vec<(String, String, Vec<String>)> = {
+        let s = state.build.read().expect("读取状态失败");
+        s.ir.pages
+            .iter()
+            .map(|p| {
+                let allowed = p
+                    .publish
+                    .as_ref()
+                    .map(|q| q.allow_roles.clone())
+                    .unwrap_or_default();
+                (
+                    p.path.clone(),
+                    p.title.clone().unwrap_or_else(|| p.path.clone()),
+                    allowed,
+                )
+            })
+            .collect()
+    };
+    // 当前账号角色（Bearer 优先，回退 cookie；未登录为空）
+    let roles: Vec<String> = match auth_user(&state, &headers).await {
+        Ok((_, r)) => r,
+        Err(_) => Vec::new(),
+    };
     let mut links = String::new();
-    for page in &ir.pages {
-        let path = escape_html(&page.path);
-        let title = escape_html(page.title.as_deref().unwrap_or(&page.path));
+    for (path, title, allowed) in &pages {
+        // 无 allow_roles = 公开；有则须命中当前角色
+        if !allowed.is_empty() && !allowed.iter().any(|a| roles.iter().any(|r| r == a)) {
+            continue;
+        }
+        let path = escape_html(path);
+        let title = escape_html(title);
         let _ = write!(links, "<li><a href=\"{path}\">{title}</a></li>");
     }
+    let empty_hint = if links.is_empty() {
+        if roles.is_empty() {
+            "<p class=\"text-secondary\">请先登录，登录后展示你有权访问的应用。</p>"
+        } else {
+            "<p class=\"text-secondary\">当前账号暂无可用应用。</p>"
+        }
+    } else {
+        ""
+    };
     let html = format!(
-        "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Kenvoy dev</title></head>\
-         <body><h1>Kenvoy dev</h1>{desc}<p>选择页面：</p><ul>{links}</ul></body></html>"
+        "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Kenvoy dev</title>\
+         <link rel=\"stylesheet\" href=\"/assets/tabler.min.css\">\
+         </head><body data-auth-mode=\"{}\"><div class=\"page\"><div class=\"page-wrapper\"><div class=\"page-body\"><div class=\"container-xl\">\
+         <h1 class=\"mt-3\">Kenvoy dev</h1>{desc}<p>选择页面：</p>{empty_hint}<ul>{links}</ul>\
+         </div></div></div></div><script src=\"/__kenvoy/runtime.js\"></script></body></html>",
+        escape_html(&state.auth.mode)
     );
     Html(html)
 }

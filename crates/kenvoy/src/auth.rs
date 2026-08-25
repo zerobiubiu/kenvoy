@@ -161,12 +161,28 @@ async fn register(State(state): State<AuthState>, Json(req): Json<RegisterReq>) 
             "注册未开放：账号由人事应用创建后发放",
         )
             .into_response(),
-        // 公开注册（默认）
+        // 公开注册（默认）：成功后按 `[auth].default_role` 分配默认角色（新用户即可进入对应应用）
         _ => match store
             .create_user(&req.username, &req.password, &req.display_name)
             .await
         {
-            Ok(id) => Json(json!({ "id": id })).into_response(),
+            Ok(id) => {
+                if let Some(role_name) = state.auth.default_role.as_deref() {
+                    match store.list_roles().await {
+                        Ok(roles) => {
+                            if let Some(role) = roles.into_iter().find(|r| r.name == role_name) {
+                                if let Err(err) = store.assign_role(id, role.id).await {
+                                    eprintln!("默认角色分配失败（分配）：{err}");
+                                }
+                            } else {
+                                eprintln!("默认角色分配失败：角色不存在 {role_name}");
+                            }
+                        }
+                        Err(err) => eprintln!("默认角色分配失败（查角色）：{err}"),
+                    }
+                }
+                Json(json!({ "id": id })).into_response()
+            }
             Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
         },
     }

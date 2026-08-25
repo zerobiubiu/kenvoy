@@ -73,6 +73,10 @@ pub struct AuthConfig {
     /// 管理端点（用户/角色/部门/通讯录、审核）所需的最低账号等级；缺省 90。
     #[serde(default = "default_admin_level")]
     pub admin_level: i32,
+    /// 注册默认角色：`open` / `review` 模式注册成功后自动分配的角色名（缺省不分配）。
+    /// 配置后新注册用户立即可访问该角色允许的应用（如 `"普通员工"`）。
+    #[serde(default)]
+    pub default_role: Option<String>,
     /// 密码强度策略。
     #[serde(default)]
     pub password: PasswordConfig,
