@@ -9,7 +9,7 @@
 use crate::db::UserStore;
 use crate::db::users::User;
 use axum::Router;
-use axum::extract::{Json, Path, State};
+use axum::extract::{DefaultBodyLimit, Json, Path, State};
 use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -31,14 +31,20 @@ pub struct AuthState {
 }
 
 /// 构建 auth 路由。
+///
+/// 全局 body 兜底 64KB：auth 请求 body 都是 `{username, password, display_name, role, ...}`，
+/// 远小于此值。足够大以容错，不致大 body 拖垮 server。
 pub fn router() -> Router<AuthState> {
     Router::new()
+        .layer(DefaultBodyLimit::max(64 * 1024))
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/logout", post(logout))
         .route("/forgot", post(forgot))
         .route("/reset", post(reset))
         .route("/me", get(me))
+        .route("/options/users", get(list_user_options))
+        .route("/options/departments", get(list_department_options))
         .route("/users", get(list_users))
         .route("/users/{id}/roles", post(assign_role))
         .route("/users/{id}/approve", post(approve_user))
@@ -234,6 +240,61 @@ async fn list_users(State(state): State<AuthState>, headers: HeaderMap) -> Respo
     };
     match UserStore::new(pool).list_users().await {
         Ok(users) => Json(users).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+/// 公共用户选项（`GET /__kenvoy/auth/options/users`）
+///
+/// 仅需登录（任意等级）：用于表单下拉选择，不要求 admin。
+/// 返回 `[{id, username, displayName}]`。
+async fn list_user_options(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    if bearer_token(&headers).is_none() {
+        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
+    }
+    match sqlx::query_as::<_, (i64, String, String)>(
+        "SELECT id, username, display_name FROM users WHERE status = 'active' ORDER BY display_name",
+    )
+    .fetch_all(pool)
+    .await
+    {
+        Ok(rows) => Json(
+            rows.into_iter()
+                .map(|(id, u, d)| serde_json::json!({"id": id, "username": u, "displayName": d}))
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+/// 公共部门选项（`GET /__kenvoy/auth/options/departments`）
+///
+/// 仅需登录。返回 `[{id, name, parentId}]`。
+async fn list_department_options(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    if bearer_token(&headers).is_none() {
+        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
+    }
+    match sqlx::query_as::<_, (i64, String, Option<i64>)>(
+        "SELECT id, name, parent_id FROM departments ORDER BY sort_order, id",
+    )
+    .fetch_all(pool)
+    .await
+    {
+        Ok(rows) => Json(
+            rows.into_iter()
+                .map(|(id, n, p)| serde_json::json!({"id": id, "name": n, "parentId": p}))
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
 }

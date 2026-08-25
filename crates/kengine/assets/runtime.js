@@ -226,6 +226,29 @@
     });
   }
 
+  // ---- 加载 User / Department 下拉选项（仅登录用户可调） ----
+  function loadOptions(select) {
+    var source = select.getAttribute("data-source");
+    if (!source) return;
+    var url = "/__kenvoy/auth/options/" + source;
+    kvFetch(url).then(function (r) {
+      if (!r.ok) { select.innerHTML = '<option value="">(加载失败)</option>'; return; }
+      return r.json();
+    }).then(function (rows) {
+      if (!rows) return;
+      var current = select.value;
+      var label = select.getAttribute("data-type") === "user" ? "displayName" : "name";
+      var html = '<option value="">请选择…</option>';
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var sel = ("" + r.id) === current ? " selected" : "";
+        html += '<option value="' + r.id + '"' + sel + '>' +
+                escapeHtml(r[label] || r.username || r.id) + '</option>';
+      }
+      select.innerHTML = html;
+    }).catch(function () { select.innerHTML = '<option value="">(加载失败)</option>'; });
+  }
+
   // ---- 表格数据渲染 ----
   document.querySelectorAll("table[data-model]").forEach(function (table) {
     var model = encodeURIComponent(table.getAttribute("data-model"));
@@ -315,6 +338,9 @@
     });
   });
 
+  // ---- 加载 User/Department 下拉选项（页面加载后） ----
+  document.querySelectorAll("select[data-source]").forEach(function (sel) { loadOptions(sel); });
+
   // ---- 统计图表（柱状图） ----
   document.querySelectorAll(".kv-chart").forEach(function (el) {
     var model = encodeURIComponent(el.getAttribute("data-model"));
@@ -341,7 +367,6 @@
       .catch(function () { el.innerHTML = '<div class="kv-empty">统计加载失败</div>'; });
   });
 
-  // ---- 登录 / 登出 / Enter 事件 ----
   // ---- 事件绑定（登录 / 登出 / Enter / 模式切换） ----
   ensureLoginBox();
   document.addEventListener("click", function (ev) {

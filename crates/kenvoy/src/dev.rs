@@ -131,7 +131,34 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         storage_cfg: storage.clone(),
         data: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
-    let app = Router::new()
+    // 全局 JSON body 兜底：1MB 足够 DSL 表单与审批数据；auth/上传端点各自更窄。
+    // multipart 端点由 `.layer(DefaultBodyLimit::max(...))` 显式覆盖。
+    let app = build_router(state, auth, mail, db_for_auth);
+
+    let addr = (host, port)
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("无法解析监听地址 {host}:{port}"))?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("kenvoy dev 服务器已启动：http://{addr}");
+    for route in &routes {
+        println!("  http://{addr}{route}");
+    }
+    println!("修改 apps/ 下的 XML 会自动刷新。Ctrl+C 停止。");
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+/// 组装 dev 服务器路由（抽出来保持 `run` 主体简洁）。
+fn build_router(
+    state: AppState,
+    auth: &AuthConfig,
+    mail: &MailConfig,
+    db_for_auth: Option<PgPool>,
+) -> Router {
+    let storage = &state.storage_cfg;
+    Router::new()
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .route("/", get(index))
         .route("/__kenvoy/version", get(version))
         .route("/__kenvoy/runtime.js", get(runtime_js))
@@ -141,7 +168,9 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         .route("/__kenvoy/data/{model}", get(list_data).post(create_data))
         .route(
             "/__kenvoy/data/{model}/{id}",
-            put(update_data).delete(delete_data),
+            put(update_data)
+                .delete(delete_data)
+                .layer(DefaultBodyLimit::max(1024 * 1024)),
         )
         .route("/__kenvoy/stats/{model}", get(stats_data))
         .route(
@@ -178,20 +207,7 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
             }),
         )
         .route("/{*path}", get(page_or_static))
-        .with_state(state);
-
-    let addr = (host, port)
-        .to_socket_addrs()?
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("无法解析监听地址 {host}:{port}"))?;
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    println!("kenvoy dev 服务器已启动：http://{addr}");
-    for route in &routes {
-        println!("  http://{addr}{route}");
-    }
-    println!("修改 apps/ 下的 XML 会自动刷新。Ctrl+C 停止。");
-    axum::serve(listener, app).await?;
-    Ok(())
+        .with_state(state)
 }
 
 /// 扫描 `apps/` 并解析为 `IR`（供 `dev` / `build` 复用）。

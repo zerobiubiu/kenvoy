@@ -127,7 +127,10 @@ mod tests {
         ]);
         let html = render_page(&ir, &ir.pages[0]);
         assert!(html.contains("disabled"));
-        assert!(html.contains("value=\"{{currentUser.name}}\""));
+        // user 字段渲染为受控下拉框（运行时由 runtime.js 拉 /__kenvoy/auth/options/users 填充）
+        assert!(html.contains(r#"data-source="users""#));
+        assert!(html.contains(r#"data-type="user""#));
+        assert!(html.contains("加载中…"));
         assert!(html.contains("<select"));
         assert!(html.contains("<option value=\"年假\">年假</option>"));
         assert!(html.contains("type=\"number\""));

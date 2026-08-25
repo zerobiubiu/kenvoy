@@ -270,7 +270,18 @@ fn render_field(
                 "<input class=\"form-control kv-control\" type=\"file\" name=\"{name}\"{disabled}{required_attr} />"
             )
         }
-        _ => format!(
+        FieldType::User => {
+            // 运行时按 data-source="users" 拉 /__kenvoy/auth/users 填充选项
+            format!(
+                "<select class=\"form-select kv-control\" name=\"{name}\" data-type=\"user\" data-source=\"users\"{disabled}{required_attr}><option value=\"\">加载中…</option></select>"
+            )
+        }
+        FieldType::Department => {
+            format!(
+                "<select class=\"form-select kv-control\" name=\"{name}\" data-type=\"department\" data-source=\"departments\"{disabled}{required_attr}><option value=\"\">加载中…</option></select>"
+            )
+        }
+        FieldType::Text => format!(
             "<input class=\"form-control kv-control\" type=\"text\" name=\"{name}\"{value_attr}{disabled}{required_attr} />"
         ),
     };
