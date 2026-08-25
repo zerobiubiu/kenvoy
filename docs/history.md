@@ -316,3 +316,18 @@
   - 提交：apply 页填表（含 user/部门下拉、附件为空）→ 提交 → 列表页可见新记录，请假天数正确存 2 ✅
   - 审批：bob 提交 6 天单并 start → alice 列表点“通过” → 无报错，流程流转到人事总监审批（API 验证 200 currentNode=人事总监审批）✅
 - 已知限制：审批按钮无角色显隐（点击由后端校验拒绝）；列表页点“撤回/通过”对未启动流程的行会返回“流程未启动”（合理业务错误，UI 已容错提示）
+
+### 执行验证记录（2026-08-25，系统数据源 + 管理/人事/详情应用页面）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 实现：
+  1. **系统数据源 `<Table source>`**：`TableProps.source`（`users` / `roles` / `departments` / `contacts`）；parse 校验放行（source 非空不要求模型）；render 输出 `data-source` / `data-sys`；kenvoy 新增 `GET /__kenvoy/system/{source}`（管理员，账号等级 ≥ `[auth].admin_level`），返回统一 JSON 数组
+  2. **系统管理应用 `apps/admin/`**：users（含 通过/禁用 操作按钮）、roles、departments、contacts 四页；runtime 新增 `data-kv-sys="approve|disable"` 协议（POST `/__kenvoy/auth/users/{id}/approve|disable`）
+  3. **人事中心 `apps/hr/`**：通讯录 + 人员台账（复用 `source` 数据源），展示无账号人员场景
+  4. **module 复用**：`module/进度卡.kenvoy.xml` 全局组件（从 dashboard 私有组件提升），工作台 + 人事中心共用
+  5. **详情页**：`TableProps.detail`（行点击跳转 `/leave/detail?id=N`）；`apps/leave/detail/` 页面；runtime `[data-kv-detail]` 渲染字段键值 + `data-kv-detail-flow` 拉流程实例状态（当前节点 / running/done/驳回）
+  6. **全局导航**：layout navbar 增「人事中心」「系统管理」入口
+  7. **README**：目录结构更新 + review 审核模式说明（管理模式 `open→review` 演示注册审核闭环）
+- Playwright 冒烟（headless chromium）：admin 登录 → 4 管理页表格渲染（users 5 行 / roles 5 / departments 3 / contacts 4）；hr 页 + 进度卡组件 2 处；列表行点击 → 详情页 10 字段 + 流程状态“running · 人事总监审批”；无 JS 错误；API 层 admin 200 / bob 403
+- 已知限制：系统表仅 GET（新增/编辑走 CLI / 管理 API）；详情页未做操作按钮（返回列表即可）

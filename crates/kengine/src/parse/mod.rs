@@ -531,7 +531,11 @@ fn validate_node(
             }
         }
         Node::Table { props, children } => {
-            if !props.model.is_empty() && !models.contains_key(&props.model) {
+            // 系统数据源（users/roles/departments/contacts）不要求模型存在
+            if props.source.is_none()
+                && !props.model.is_empty()
+                && !models.contains_key(&props.model)
+            {
                 return Err(ParseError::ModelNotFound {
                     from: from.to_string(),
                     model: props.model.clone(),

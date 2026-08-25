@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>人员台账</Title>
+  <Content>
+    <进度卡 title="说明">
+      <Text value="本页展示所有系统账号（仅 HR / 管理员可见）。" />
+    </进度卡>
+    <Section title="账号台账">
+      <Table model="__users" source="users" pageSize="50">
+        <Column field="username" label="登录名" />
+        <Column field="display_name" label="显示名" />
+        <Column field="status" label="状态" />
+        <Column field="level" label="等级" />
+        <Column field="roles" label="角色" />
+      </Table>
+    </Section>
+  </Content>
+</Page>

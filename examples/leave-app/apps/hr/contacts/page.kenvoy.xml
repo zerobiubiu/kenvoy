@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>通讯录</Title>
+  <Content>
+    <Row>
+      <Col span="6">
+        <进度卡 title="人事说明">
+          <Text value="仅 HR / 管理员可见。新增人员用 `kv contact add`。" />
+        </进度卡>
+      </Col>
+      <Col span="6">
+        <进度卡 title="无账号人员">
+          <Text value="入职但暂未开通系统账号时先登记（user_id 为空）。" />
+        </进度卡>
+      </Col>
+    </Row>
+    <Section title="全体人员">
+      <Table model="__contacts" source="contacts" pageSize="50">
+        <Column field="name" label="姓名" />
+        <Column field="title" label="职务" />
+        <Column field="email" label="邮箱" />
+        <Column field="phone" label="电话" />
+        <Column field="department_id" label="部门 ID" />
+        <Column field="user_id" label="账号 ID" />
+      </Table>
+    </Section>
+  </Content>
+</Page>

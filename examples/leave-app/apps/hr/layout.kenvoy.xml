@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Layout>
+  <Title>人事中心</Title>
+  <Root>
+    <Section kind="navbar" title="人事中心">
+      <Button value="通讯录" kind="link" size="sm" action="navigate" href="/hr/contacts" />
+      <Button value="人员台账" kind="link" size="sm" action="navigate" href="/hr/staff" />
+      <Button value="工作台" kind="link" size="sm" action="navigate" href="/dashboard" />
+    </Section>
+    <Row>
+      <Slot />
+    </Row>
+  </Root>
+</Layout>

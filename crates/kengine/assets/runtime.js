@@ -322,7 +322,10 @@
 
   // ---- 表格数据渲染 ----
   document.querySelectorAll("table[data-model]").forEach(function (table) {
-    var model = encodeURIComponent(table.getAttribute("data-model"));
+    var sysSource = table.getAttribute("data-source");
+    var model = sysSource
+      ? encodeURIComponent(sysSource)
+      : encodeURIComponent(table.getAttribute("data-model"));
     var cols = Array.prototype.map.call(
       table.querySelectorAll("th[data-field]"),
       function (th) { return { field: th.getAttribute("data-field"), type: th.getAttribute("data-type") || "text" }; }
@@ -333,7 +336,10 @@
       : "";
     if (table.getAttribute("data-sort")) r += "&sort=" + encodeURIComponent(table.getAttribute("data-sort"));
     if (table.getAttribute("data-page-size")) r += "&pageSize=" + table.getAttribute("data-page-size");
-    kvFetch("/__kenvoy/data/" + model + "?" + r.slice(1))
+    var url = sysSource
+      ? "/__kenvoy/system/" + model
+      : "/__kenvoy/data/" + model + "?" + r.slice(1);
+    kvFetch(url)
       .then(function (resp) {
         if (!resp.ok) {
           // 静态快照降级：读相对路径 __kenvoy/data/{model}.json
@@ -352,6 +358,13 @@
           return "<tr data-record-id=\"" + encodeURIComponent(recordId) + "\">" + cols.map(function (c) {
             var v = row[c.field];
             if (c.field === "_actions") {
+              // 系统表操作列（users：通过/禁用）
+              var sysType = table.getAttribute("data-sys");
+              if (sysType === "users") {
+                return "<td class=\"text-nowrap\">" +
+                  "<button data-kv-sys=\"approve\" data-user-id=\"" + r + "\" class=\"btn btn-sm btn-outline-success me-1\">通过</button>" +
+                  "<button data-kv-sys=\"disable\" data-user-id=\"" + r + "\" class=\"btn btn-sm btn-outline-danger\">禁用</button></td>";
+              }
               // 操作列：无流程名则不渲染；有则按协议 data-kv-flow 渲染三个按钮
               if (!flowName) return "<td></td>";
               var r = encodeURIComponent(recordId);
@@ -434,6 +447,55 @@
     });
   });
 
+  // ---- 详情页渲染：`[data-kv-detail="模型名"]`，query `?id=N` ----
+  // 渲染记录字段键值 + （可选 `data-kv-detail-flow="流程名"`）流程实例状态。
+  document.querySelectorAll("[data-kv-detail]").forEach(function (el) {
+    var model = encodeURIComponent(el.getAttribute("data-kv-detail"));
+    var flowName = el.getAttribute("data-kv-detail-flow") || "";
+    var q = new URLSearchParams(location.search);
+    var id = q.get("id");
+    if (!id) { el.innerHTML = '<div class="kv-empty">缺少记录 id（URL ?id=N）</div>'; return; }
+    kvFetch("/__kenvoy/data/" + model + "?filter=id:" + encodeURIComponent(id))
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        if (!rows || !rows.length) { el.innerHTML = '<div class="kv-empty">记录不存在</div>'; return; }
+        var row = rows[0];
+        var html = '<table class="table kv-detail-table"><tbody>';
+        Object.keys(row).forEach(function (k) {
+          if (k === "id" || k === "created_at" || k === "updated_at") return;
+          var v = row[k];
+          if (v && typeof v === "object") v = JSON.stringify(v);
+          html += '<tr><th class="text-secondary" style="width:160px">' + escapeHtml(k) + '</th><td>' + escapeHtml(v) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        if (flowName) {
+          html += '<div class="mt-3 kv-detail-flow">';
+          kvFetch("/__kenvoy/flow/" + encodeURIComponent(flowName) + "/records/" + encodeURIComponent(id))
+            .then(function (r) { return r.json().catch(function () { return null; }); })
+            .then(function (inst) {
+              var box = el.querySelector(".kv-detail-flow");
+              if (!box) return;
+              if (!inst || !inst.instance) { box.innerHTML = '<div class="kv-empty">流程未启动</div>'; return; }
+              var i = inst.instance;
+              box.innerHTML = '<div class="alert alert-info py-2 px-3"><strong>审批状态：</strong>' + escapeHtml(i.status) +
+                (i.current_node ? ' · 当前节点：' + escapeHtml(i.current_node) : '') + '</div>';
+            });
+        }
+        el.innerHTML = html;
+      })
+      .catch(function () { el.innerHTML = '<div class="kv-empty">详情加载失败</div>'; });
+  });
+
+  // ---- 表格行点击跳详情：`data-detail`（按钮点击除外） ----
+  document.addEventListener("click", function (ev) {
+    if (ev.target.closest("button")) return;
+    var tr = ev.target.closest && ev.target.closest("tr[data-record-id]");
+    if (!tr) return;
+    var table = tr.closest("table[data-detail]");
+    if (!table) return;
+    location.href = table.getAttribute("data-detail") + "?id=" + encodeURIComponent(tr.getAttribute("data-record-id"));
+  });
+
   // ---- 加载 User/Department 下拉选项（页面加载后） ----
   document.querySelectorAll("select[data-source]").forEach(function (sel) { loadOptions(sel); });
 
@@ -446,6 +508,24 @@
     if (!form) return; // 无表单（如 guest-hint 登录按钮）由其他 handler 处理
     // 无参 requestSubmit：触发 submit 事件（不经按钮校验），表单 handler 接管
     if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  });
+
+  // ---- 系统管理操作（admin 页）：`data-kv-sys="approve|disable" data-user-id="N"` ----
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest("[data-kv-sys]");
+    if (!btn) return;
+    ev.preventDefault();
+    var act = btn.getAttribute("data-kv-sys");
+    var uid = btn.getAttribute("data-user-id");
+    if (!uid) { alert("操作按钮缺 data-user-id"); return; }
+    var ep = act === "disable" ? "disable" : "approve";
+    kvFetch("/__kenvoy/auth/users/" + encodeURIComponent(uid) + "/" + ep, { method: "POST" })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          if (!r.ok) { alert("操作失败：" + (t || ("HTTP " + r.status))); return; }
+          location.reload();
+        });
+      }).catch(function (e) { alert("操作异常：" + e); });
   });
 
   // ---- 审批流按钮 ----

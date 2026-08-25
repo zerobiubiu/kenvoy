@@ -176,6 +176,7 @@ fn build_router(
                 .layer(DefaultBodyLimit::max(1024 * 1024)),
         )
         .route("/__kenvoy/stats/{model}", get(stats_data))
+        .route("/__kenvoy/system/{source}", get(system_data))
         .route(
             "/__kenvoy/flow/{flow}/records/{record_id}/start",
             post(start_flow),
@@ -824,6 +825,107 @@ fn parse_sort_pairs(s: &str) -> Vec<(String, String)> {
             (!f.is_empty()).then(|| (f.trim().to_string(), dir.to_string()))
         })
         .collect()
+}
+
+/// 系统数据源（管理员）：`GET /__kenvoy/system/{source}`。
+///
+/// `source` ∈ `users` / `roles` / `departments` / `contacts`，返回统一 JSON 数组。
+/// 供 `<Table source="...">` 管理页面使用。
+async fn system_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(source): AxumPath<String>,
+) -> Response {
+    let Some(pool) = &state.db else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response();
+    };
+    let (user, _) = match auth_user(&state, &headers).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let store = crate::db::UserStore::new(pool);
+    let level = match store.user_level(user.id).await {
+        Ok(l) => l,
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    };
+    if level < state.auth.admin_level {
+        return (StatusCode::FORBIDDEN, "需要管理员权限").into_response();
+    }
+    let rows: Vec<serde_json::Value> = match source.as_str() {
+        "users" => match store.list_users().await {
+            Ok(items) => items
+                .into_iter()
+                .map(|d| {
+                    json!({
+                        "id": d.user.id,
+                        "username": d.user.username,
+                        "display_name": d.user.display_name,
+                        "email": d.user.email,
+                        "phone": d.user.phone,
+                        "status": d.user.status,
+                        "level": d.level,
+                        "roles": d.roles,
+                    })
+                })
+                .collect(),
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        },
+        "roles" => match store.list_roles().await {
+            Ok(items) => items
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "level": r.level,
+                        "description": r.description,
+                    })
+                })
+                .collect(),
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        },
+        "departments" => match store.list_departments().await {
+            Ok(items) => items
+                .into_iter()
+                .map(|d| {
+                    json!({
+                        "id": d.id,
+                        "name": d.name,
+                        "parent_id": d.parent_id,
+                    })
+                })
+                .collect(),
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        },
+        "contacts" => match store.list_contacts(None).await {
+            Ok(items) => items
+                .into_iter()
+                .map(|c| {
+                    json!({
+                        "id": c.id,
+                        "name": c.name,
+                        "department_id": c.department_id,
+                        "user_id": c.user_id,
+                        "title": c.title,
+                        "email": c.email,
+                        "phone": c.phone,
+                        "status": c.status,
+                    })
+                })
+                .collect(),
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
+            }
+        },
+        _ => return (StatusCode::NOT_FOUND, "未知数据源").into_response(),
+    };
+    Json(rows).into_response()
 }
 
 /// 分组统计：`GET /__kenvoy/stats/{model}?group=字段&stat=count|sum|avg`（需登录）。

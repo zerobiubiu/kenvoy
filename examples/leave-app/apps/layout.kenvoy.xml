@@ -7,6 +7,8 @@
       <Button value="工作台" kind="link" size="sm" action="navigate" href="/dashboard" />
       <Button value="提交请假" kind="link" size="sm" action="navigate" href="/leave/apply" />
       <Button value="审批列表" kind="link" size="sm" action="navigate" href="/leave/list" />
+      <Button value="人事中心" kind="link" size="sm" action="navigate" href="/hr/contacts" />
+      <Button value="系统管理" kind="link" size="sm" action="navigate" href="/admin/users" />
     </Section>
     <Row>
       <Slot />

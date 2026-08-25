@@ -14,7 +14,7 @@
       </Col>
     </Row>
     <Section title="请假记录">
-      <Table model="请假单" flow="请假审批流" pageSize="20">
+      <Table model="请假单" flow="请假审批流" detail="/leave/detail" pageSize="20">
         <Sort field="请假天数" order="desc" />
         <Column field="请假类型" label="类型" />
         <Column field="开始日期" label="开始" />

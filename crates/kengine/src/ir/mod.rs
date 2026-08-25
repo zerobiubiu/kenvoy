@@ -360,10 +360,17 @@ pub struct Validation {
 pub struct TableProps {
     /// 数据源模型名。
     pub model: String,
+    /// 系统数据源（候选：`users` / `roles` / `departments` / `contacts`）。
+    /// 设置时走 `/__kenvoy/system/{source}`（需管理员），`model` 仅作占位。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     /// 开启行内审批操作（关联的流程名，如 `请假审批流`）。
     /// 存在时行元素带 `data-record-id`，`_actions` 列渲染操作按钮。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flow: Option<String>,
+    /// 行点击跳转的详情页路径（如 `/leave/detail`），运行时拼接 `?id={recordId}`。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
     /// 筛选条件（字段名 → 值，支持 `{{ }}`）。
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub filter: Map<String, Value>,

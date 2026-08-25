@@ -128,7 +128,9 @@ pub(crate) fn parse_node(path: &str, elem: roxmltree::Node<'_, '_>) -> Result<No
             Node::Table {
                 props: TableProps {
                     model: required_attr(path, elem, tag, "model")?,
+                    source: elem.attribute("source").map(str::to_string),
                     flow: elem.attribute("flow").map(str::to_string),
+                    detail: elem.attribute("detail").map(str::to_string),
                     filter,
                     sort,
                     page_size: parse_u32(path, elem, "pageSize")?,

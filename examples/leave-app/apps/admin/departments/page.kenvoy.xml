@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Title>部门管理</Title>
+  <Content>
+    <Section title="组织架构">
+      <Text value="部门支持两级（parent_id）。新增用 `kv dept add --name --parent`。" />
+      <Table model="__departments" source="departments" pageSize="50">
+        <Column field="id" label="ID" width="64" />
+        <Column field="name" label="部门名" />
+        <Column field="parent_id" label="上级 ID" />
+      </Table>
+    </Section>
+  </Content>
+</Page>

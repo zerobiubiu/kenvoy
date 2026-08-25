@@ -378,9 +378,25 @@ fn render_table(
         .as_deref()
         .map(|f| format!(" data-flow=\"{}\"", escape_html(f)))
         .unwrap_or_default();
+    let source_html = props
+        .source
+        .as_deref()
+        .map(|s| {
+            format!(
+                " data-source=\"{}\" data-sys=\"{}\"",
+                escape_html(s),
+                escape_html(s)
+            )
+        })
+        .unwrap_or_default();
+    let detail_html = props
+        .detail
+        .as_deref()
+        .map(|d| format!(" data-detail=\"{}\"", escape_html(d)))
+        .unwrap_or_default();
     format!(
         "<div class=\"table-responsive kv-table-wrap\" data-model=\"{model_name}\"{filter_html}{sort_html}{page_html}>\
-         <table class=\"table table-hover kv-table\" data-model=\"{model_name}\"{flow_html}><thead><tr>{head}</tr></thead>\
+         <table class=\"table table-hover kv-table\" data-model=\"{model_name}\"{flow_html}{source_html}{detail_html}><thead><tr>{head}</tr></thead>\
          <tbody>{empty}</tbody></table></div>"
     )
 }

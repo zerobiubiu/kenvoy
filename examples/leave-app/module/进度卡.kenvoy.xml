@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Component name="进度卡">
+  <!-- 全局可复用组件：`<进度卡 title="标题">内容</进度卡>`，props 绑定 {{title}}，实例子元素注入 <Slot/> -->
+  <Section title="{{title}}">
+    <Slot />
+  </Section>
+</Component>
