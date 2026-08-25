@@ -107,6 +107,24 @@
     }
   }
 
+  // ---- 应用级访问控制：`[data-roles]` / `[data-min-level]` 元素按账号过滤 ----
+  function applyAccessControl() {
+    var u = getUser() || {};
+    var level = u.level || 0;
+    var roles = u.roles || [];
+    document.querySelectorAll("[data-roles]").forEach(function (el) {
+      var allowed = (el.getAttribute("data-roles") || "").split(",").map(function (s) { return s.trim(); });
+      if (!allowed.some(function (r) { return roles.indexOf(r) >= 0; })) {
+        el.style.display = "none";
+      }
+    });
+    document.querySelectorAll("[data-min-level]").forEach(function (el) {
+      if (level < parseInt(el.getAttribute("data-min-level") || "0", 10)) {
+        el.style.display = "none";
+      }
+    });
+  }
+
   var pendingAfterLogin = null; // 登录成功后待重试的请求
 
   function showLogin(onLogin) {
@@ -187,7 +205,8 @@
         return d;
       });
     }).then(function (d) {
-      setAuth(d.token, d.user);
+      // 合并 level/roles 到用户会话（供前端导航按权限过滤）
+      setAuth(d.token, Object.assign({}, d.user, { level: d.level, roles: d.roles || [] }));
       hideLogin();
       var retry = pendingAfterLogin;
       pendingAfterLogin = null;
@@ -638,4 +657,11 @@
       doLogin();
     }
   });
+
+  // ---- 应用级访问控制 + 未登录立即弹登录框 ----
+  applyAccessControl();
+  if (!getUser()) {
+    // 打开任何页面未登录 → 直接弹出登录框（而非等 401 后才弹）
+    showLogin();
+  }
 })();

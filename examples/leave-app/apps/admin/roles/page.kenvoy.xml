@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Page>
+  <Import src="./publish.kenvoy.xml" as="权限配置" />
   <Title>角色管理</Title>
   <Content>
     <Section title="角色定义">

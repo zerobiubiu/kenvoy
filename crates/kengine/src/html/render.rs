@@ -466,8 +466,15 @@ pub(crate) fn render_navbar_section(
             )
         })
         .unwrap_or_default();
+    let extra_html: String = {
+        let mut s = String::new();
+        for (k, v) in &props.extra {
+            let _ = write!(s, " {}=\"{}\"", k, escape_html(v));
+        }
+        s
+    };
     format!(
-        "<nav class=\"navbar navbar-expand-md bg-white border-bottom\">\
+        "<nav class=\"navbar navbar-expand-md bg-white border-bottom\"{extra_html}>\
          {brand}<div class=\"collapse navbar-collapse\" id=\"kv-nav\">\
          <ul class=\"navbar-nav\">{body}</ul></div></nav>"
     )
@@ -484,12 +491,16 @@ fn render_nodes_standalone(nodes: &[Node], bind: &BTreeMap<String, Value>) -> St
                 escape_html(&bind_str(&props.value, bind))
             );
         } else if let Node::Button { props } = n {
-            // 简化：navbar 内 button 不常用，只保留基础结构
             let kind = props.kind.as_deref().unwrap_or("link");
             let text = escape_html(&bind_str(&props.value, bind));
+            // 透传 extra（`data-roles` / `data-min-level` 等，供前端应用级访问控制）
+            let mut extra = String::new();
+            for (k, v) in &props.extra {
+                let _ = write!(extra, " {}=\"{}\"", k, escape_html(v));
+            }
             let _ = write!(
                 out,
-                "<span class=\"nav-item\"><button type=\"button\" class=\"btn btn-{kind} btn-sm\">{text}</button></span>"
+                "<span class=\"nav-item\"><button type=\"button\" class=\"btn btn-{kind} btn-sm\"{extra}>{text}</button></span>"
             );
         }
         // 其他节点类型在 navbar 内不常见，跳过。

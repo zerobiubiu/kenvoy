@@ -331,3 +331,17 @@
   7. **README**：目录结构更新 + review 审核模式说明（管理模式 `open→review` 演示注册审核闭环）
 - Playwright 冒烟（headless chromium）：admin 登录 → 4 管理页表格渲染（users 5 行 / roles 5 / departments 3 / contacts 4）；hr 页 + 进度卡组件 2 处；列表行点击 → 详情页 10 字段 + 流程状态“running · 人事总监审批”；无 JS 错误；API 层 admin 200 / bob 403
 - 已知限制：系统表仅 GET（新增/编辑走 CLI / 管理 API）；详情页未做操作按钮（返回列表即可）
+
+### 执行验证记录（2026-08-25，登录即弹框 + 应用级权限分发）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 实现：
+  1. **打开页面即弹登录**：runtime.js 页面加载末尾 `if (!getUser()) showLogin()`——不再等 401 才弹；未登录访问任何页面（含纯静态页）立即弹出登录框
+  2. **会话携带角色/等级**：`setAuth` 合并 login 响应的 `level` / `roles` 到 localStorage 用户对象（原仅存 user）
+  3. **前端应用级访问控制**：runtime `applyAccessControl()` 过滤 `[data-roles]`（逗号分隔角色，命中任一可见）与 `[data-min-level]` 元素；全局导航「人事中心」`data-roles="HR,人事总监,管理员"`、「系统管理」`data-min-level="90"`；render_nodes_standalone（navbar 内 Button）透传 extra 属性（原来丢弃）
+  4. **SSR 页面级权限**：`page_or_static` 对 `publish.allow_roles` 非空页面——已登录但角色不符 → 403 页面（含账号名与所需角色）；未登录 → 正常渲染（由前端弹框）
+  5. **会话 cookie**：登录响应加 `Set-Cookie: kv_token=…; HttpOnly; SameSite=Lax`（浏览器顶级导航不带 Bearer 头，SSR 需 cookie）；登出清 cookie；`dev::auth_user` 优先 Bearer、回退 cookie
+  6. **模板 publish**：admin 四页与 hr 两页新增 `publish.kenvoy.xml`（页面级 `<Import>`），`admin/*` 仅管理员、`hr/*` 限 HR/人事总监/管理员（publish 文件须与 page 同目录并显式 Import）
+- Playwright 冒烟：未登录 dashboard/admin 均立即弹框；bob 导航隐藏 人事中心/系统管理；bob 直访 /admin/users → 403“无权访问”；admin 导航可见且表格 5 行；全程无 JS 错误 PASS
+- 已知限制：`admin` 应用因 HttpOnly cookie 无法被 localStorage 前端逻辑读取（导航按 localStorage 角色过滤——两者一致由登录响应填充）；页面级权限在 build 静态产物中不生效（SSR 仅 dev/build 数据快照场景）

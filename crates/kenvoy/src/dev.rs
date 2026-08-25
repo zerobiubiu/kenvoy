@@ -372,29 +372,58 @@ async fn version(State(state): State<AppState>) -> String {
 }
 
 /// 页面路由：命中页面 → 渲染 HTML；否则尝试 `public/` 静态资源。
+///
+/// 页面 `publish.allow_roles` 非空时按账号角色校验：已登录但角色不符 → 403；
+/// 未登录 → 正常渲染（由 runtime.js 弹登录框）。
 async fn page_or_static(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(path): AxumPath<String>,
 ) -> Response {
     let path_norm = normalize(&path);
 
-    let (html, version) = {
+    let (html, version, allow_roles) = {
         let s = state.build.read().expect("读取状态失败");
         match s.ir.pages.iter().find(|p| p.path == path_norm) {
-            Some(page) => (Some(render_page(&s.ir, page)), s.version),
-            None => (None, s.version),
+            Some(page) => {
+                let allowed = page
+                    .publish
+                    .as_ref()
+                    .map(|p| p.allow_roles.clone())
+                    .unwrap_or_default();
+                (Some(render_page(&s.ir, page)), s.version, allowed)
+            }
+            None => (None, s.version, Vec::new()),
         }
     };
 
-    match html {
-        Some(html) => {
-            let body = inject_dev_scripts(&html, version);
-            Html(inject_body_auth_mode(&body, state.auth.mode.as_str())).into_response()
+    if let Some(html) = html {
+        // 应用级权限：已登录用户角色不在 allow_roles → 403；未登录放行（前端弹框）
+        if !allow_roles.is_empty()
+            && let Ok((user, roles)) = auth_user(&state, &headers).await
+            && !roles.iter().any(|r| allow_roles.iter().any(|a| a == r))
+        {
+            let name = user.display_name;
+            return (
+                StatusCode::FORBIDDEN,
+                Html(format!(
+                    "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>无权限</title></head>\
+                     <body class=\"page\"><div class=\"page-wrapper\"><div class=\"page-body\"><div class=\"container-xl\">\
+                     <div class=\"card\"><div class=\"card-header\"><h3 class=\"card-title\">无权访问</h3></div>\
+                     <div class=\"card-body\"><p>当前账号（{name}）无权访问该应用。需要角色：{roles}</p>\
+                     <a class=\"btn btn-primary\" href=\"/dashboard\">返回工作台</a></div></div></div></div></div></div></body></html>",
+                    roles = escape_html(&allow_roles.join(" / "))
+                )),
+            )
+                .into_response();
         }
-        None => match serve_static(&state.dir, &path_norm) {
+        let body = inject_dev_scripts(&html, version);
+        Html(inject_body_auth_mode(&body, state.auth.mode.as_str())).into_response()
+    } else {
+        match serve_static(&state.dir, &path_norm) {
             Some(resp) => resp,
             None => (StatusCode::NOT_FOUND, "未找到页面或静态资源").into_response(),
-        },
+        }
     }
 }
 
@@ -1593,12 +1622,16 @@ async fn auth_user(state: &AppState, headers: &HeaderMap) -> Result<(User, Vec<S
     let Some(pool) = &state.db else {
         return Err((StatusCode::SERVICE_UNAVAILABLE, "数据库未配置").into_response());
     };
-    let Some(token) = crate::auth::bearer_token(headers) else {
+    // Bearer 头优先（kvFetch 等 API 调用）；无则回退 `kv_token` cookie（SSR 页面访问）
+    let token = crate::auth::bearer_token(headers)
+        .map(str::to_string)
+        .or_else(|| crate::auth::cookie_token(headers));
+    let Some(token) = token else {
         return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response());
     };
     let store = UserStore::new(pool);
     let Some(user) = store
-        .user_by_session(token)
+        .user_by_session(&token)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response())?
     else {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Publish>
+  <Access>
+    <Allow roles="HR,人事总监,管理员" />
+  </Access>
+</Publish>

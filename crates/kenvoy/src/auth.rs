@@ -71,6 +71,15 @@ pub(crate) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
+/// 读取 `kv_token` cookie（登录时种入；供 SSR 页面访问鉴权，Bearer 头优先）。
+pub(crate) fn cookie_token(headers: &HeaderMap) -> Option<String> {
+    let cookie = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    cookie.split(';').find_map(|part| {
+        let part = part.trim();
+        part.strip_prefix("kv_token=").map(str::to_string)
+    })
+}
+
 /// 管理端点前置校验：数据库可用 + 已登录 + 账号等级达标（`[auth].admin_level`，缺省 90）。
 async fn require_admin(
     state: &AuthState,
@@ -188,9 +197,11 @@ async fn login(State(state): State<AuthState>, Json(req): Json<LoginReq>) -> Res
                 Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response(),
             };
             if let Value::Object(map) = &mut detail {
-                map.insert("token".to_string(), Value::String(token));
+                map.insert("token".to_string(), Value::String(token.clone()));
             }
-            Json(detail).into_response()
+            // 种会话 cookie：供 SSR（页面访问权限）与同源导航使用；Bearer 头仍为首选
+            let cookie = format!("kv_token={token}; Path=/; HttpOnly; SameSite=Lax");
+            ([(axum::http::header::SET_COOKIE, cookie)], Json(detail)).into_response()
         }
         Ok(None) => (StatusCode::UNAUTHORIZED, "用户名或密码错误").into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
@@ -206,7 +217,14 @@ async fn logout(State(state): State<AuthState>, headers: HeaderMap) -> Response 
         return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
     };
     match UserStore::new(pool).delete_session(token).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Ok(()) => {
+            let clear = "kv_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+            (
+                [(axum::http::header::SET_COOKIE, clear)],
+                StatusCode::NO_CONTENT,
+            )
+                .into_response()
+        }
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Page>
+  <Import src="./publish.kenvoy.xml" as="权限配置" />
   <Title>人员台账</Title>
   <Content>
     <进度卡 title="说明">

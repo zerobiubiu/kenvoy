@@ -2,7 +2,7 @@
 <Layout>
   <Title>系统管理</Title>
   <Root>
-    <Section kind="navbar" title="系统管理">
+    <Section kind="navbar" title="系统管理" data-min-level="90">
       <Button value="用户" kind="link" size="sm" action="navigate" href="/admin/users" />
       <Button value="角色" kind="link" size="sm" action="navigate" href="/admin/roles" />
       <Button value="部门" kind="link" size="sm" action="navigate" href="/admin/departments" />
