@@ -15,7 +15,7 @@ categories = ["command-line-utilities", "web-programming", "database"]
 # 默认开启 db + s3（生产集成）；纯解析/渲染场景可用 `--no-default-features`
 default = ["db", "s3"]
 # `db`：PostgreSQL 18+ 持久化（sqlx + argon2）
-db = ["dep:sqlx", "dep:argon2", "dep:chrono"]
+db = ["dep:sqlx", "dep:argon2", "dep:chrono", "dep:sha2"]
 # `s3`：对象存储抽象（rust-s3）
 s3 = ["dep:rust-s3", "dep:uuid"]
 
@@ -34,6 +34,7 @@ rust-s3 = { version = "0.36", default-features = false, features = ["with-tokio"
 argon2 = { version = "0.5", optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 uuid = { version = "1", features = ["v4"], optional = true }
+sha2 = { version = "0.10", optional = true }
 thiserror = "2"
 
 [dev-dependencies]

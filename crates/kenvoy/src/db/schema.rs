@@ -87,6 +87,17 @@ pub const MIGRATIONS: &[&str] = &[
         created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     )
     ",
+    // 密码重置 Token（单向哈希存库；邮件发送后由用户点击重设）
+    r"
+    CREATE TABLE IF NOT EXISTS kv_password_reset (
+        id           BIGSERIAL PRIMARY KEY,
+        user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash   TEXT NOT NULL,
+        expires_at   TIMESTAMPTZ NOT NULL,
+        used_at      TIMESTAMPTZ,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    ",
     // 审批流实例（运行时状态：当前节点与状态）
     r"
     CREATE TABLE IF NOT EXISTS kv_flow_instance (

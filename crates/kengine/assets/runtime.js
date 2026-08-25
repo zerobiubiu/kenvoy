@@ -164,18 +164,36 @@
     });
   }
 
-  // 忘记密码：占位实现（需要邮箱发送链路，后续接入）
-  function doForgot() {
+  // 忘记密码：调 `POST /__kenvoy/auth/forgot` 生成重置 token。
+  // 生产环境该 token 由邮件发送给用户；dev 模式服务端返回 devToken 供调试。
+  function doforgot() {
     var username = document.getElementById("kv-login-user").value.trim();
     var err = document.getElementById("kv-login-err");
     if (!username) {
-      err.textContent = "请输入用户名（联系管理员重置或后续接入邮箱重置）";
+      err.textContent = "请输入用户名";
       err.style.display = "block";
       return;
     }
-    err.style.display = "block";
-    err.className = "alert alert-info py-1 px-2";
-    err.textContent = "重置密码请联系管理员（邮箱重置链路未启用）";
+    fetch("/__kenvoy/auth/forgot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username }),
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        err.className = "alert alert-info py-1 px-2";
+        if (d.devToken) {
+          err.innerHTML = "重置 token 已生成（服务器控制台含明文 token；实际部署请接入邮件发送）" +
+            "<br><code style=\"font-size:.75rem\">" + d.devToken + "</code>";
+        } else {
+          err.textContent = "如果账号存在，重置链接已发送（请检查邮箱）";
+        }
+        err.style.display = "block";
+      })
+      .catch(function (e) {
+        err.className = "alert alert-danger py-1 px-2";
+        err.textContent = "请求失败：" + e.message;
+        err.style.display = "block";
+      });
   }
 
   function doLogout() {

@@ -125,6 +125,46 @@ cargo run -p kenvoy -- contact add --name 李四 --user alice
 
 ## License
 
-开源部分（Kenvoy CLI 与 Kenvoy-Engine 及各 `kengine-*` crate）采用 **MIT** 许可证。
+开源部分（`kengine` + `kenvoy`）采用 **MIT** 许可证。
 
 KenvoySpace 与 Kenvoy-Runtime 为闭源商业产品。
+
+## Workspace
+
+```text
+crates/
+├── kengine/         # 解析核心 + HTML 渲染（feature `html`），可面向 WASM
+└── kenvoy/         # CLI / dev 服务器 / 静态构建，含 db + s3 接线
+```
+
+## Features
+
+| crate | feature | 作用 | 依赖 |
+| :--- | :--- | :--- | :--- |
+| `kengine` | `html`（默认开） | SSR HTML 渲染 + 内嵌 Tabler 资产 | — |
+| `kenvoy` | `db`（默认开） | PostgreSQL 18+ 持久化（sqlx + argon2 + sha2） | sqlx / argon2 / chrono / sha2 |
+| `kenvoy` | `s3`（默认开） | S3 对象存储抽象 | rust-s3 / uuid |
+
+裁剪示例：
+```bash
+# 纯解析器（未来面向 WASM 边缘渲染）
+cargo build -p kengine --no-default-features
+
+# 仅 CLI 接线（不含 db/s3）
+cargo build -p kenvoy --no-default-features
+
+# 默认 build（完整运行时）
+cargo build --workspace
+```
+
+## 快速开始
+
+```bash
+cargo check --workspace
+cargo test --workspace
+cargo run -p kenvoy -- --help
+
+# 项目演示（需要 PostgreSQL 18+ 与 MinIO 容器，见 examples/leave-app/kenvoy.toml）
+cargo run -p kenvoy -- dev --dir examples/leave-app
+cargo run -p kenvoy -- build --dir examples/leave-app
+```

@@ -367,7 +367,7 @@ impl<'a> UserStore<'a> {
         Ok(out)
     }
 
-    /// 删除会话（登出）。
+    /// 注销会话（登出）。
     ///
     /// # Errors
     /// SQL 失败时返回 [`DbError`]。
@@ -376,6 +376,82 @@ impl<'a> UserStore<'a> {
             .bind(token)
             .execute(self.pool)
             .await?;
+        Ok(())
+    }
+
+    /// 创建密码重置 Token（明文 token 返回调用方发送邮件；DB 只存哈希）。
+    ///
+    /// 过期时间 1 小时。返回 `(token_id, plain_token)`。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn create_reset_token(&self, user_id: i64) -> Result<(i64, String), DbError> {
+        use sha2::{Digest, Sha256};
+
+        let plain = Uuid::new_v4().to_string() + &Uuid::new_v4().to_string();
+        let mut hasher = Sha256::new();
+        hasher.update(plain.as_bytes());
+        let token_hash = format!("{:x}", hasher.finalize());
+        let expires = Utc::now() + Duration::hours(1);
+        let row = sqlx::query(
+            "INSERT INTO kv_password_reset (user_id, token_hash, expires_at) \
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(&token_hash)
+        .bind(expires)
+        .fetch_one(self.pool)
+        .await?;
+        Ok((row.get::<i64, _>("id"), plain))
+    }
+
+    /// 按明文 token 查有效（未过期、未使用）的用户 id。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn consume_reset_token(&self, plain: &str) -> Result<Option<i64>, DbError> {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(plain.as_bytes());
+        let token_hash = format!("{:x}", hasher.finalize());
+        let row: Option<(i64,)> = sqlx::query_as(
+            "UPDATE kv_password_reset SET used_at = now() \
+             WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() \
+             RETURNING user_id",
+        )
+        .bind(&token_hash)
+        .fetch_optional(self.pool)
+        .await?;
+        Ok(row.map(|(u,)| u))
+    }
+
+    /// 管理员/CLI 按用户名查 id（重置流程需要 `user_id`）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn user_id_by_username(&self, username: &str) -> Result<Option<i64>, DbError> {
+        let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM users WHERE username = $1")
+            .bind(username)
+            .fetch_optional(self.pool)
+            .await?;
+        Ok(row.map(|(i,)| i))
+    }
+
+    /// 管理员/CLI 重置指定用户的密码（需传入新密码明文，函数内 argon2 哈希）。
+    ///
+    /// # Errors
+    /// 用户不存在或 SQL 失败时返回 [`DbError`]。
+    pub async fn reset_password(&self, user_id: i64, new_password: &str) -> Result<(), DbError> {
+        let hash = hash_password(new_password)?;
+        let row =
+            sqlx::query("UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2")
+                .bind(&hash)
+                .bind(user_id)
+                .execute(self.pool)
+                .await?;
+        if row.rows_affected() == 0 {
+            return Err(DbError::NotFound("用户不存在".to_string()));
+        }
         Ok(())
     }
 

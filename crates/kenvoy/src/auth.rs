@@ -34,6 +34,8 @@ pub fn router() -> Router<AuthState> {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/logout", post(logout))
+        .route("/forgot", post(forgot))
+        .route("/reset", post(reset))
         .route("/me", get(me))
         .route("/users", get(list_users))
         .route("/users/{id}/roles", post(assign_role))
@@ -493,6 +495,75 @@ async fn link_contact(
         .await
     {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ForgotReq {
+    /// 用户名（重置发起的唯一标识）。
+    username: String,
+}
+
+/// 申请重置密码：`POST /__kenvoy/auth/forgot` body `{"username":"..."}`。
+///
+/// 总是返回 200（不泄露账号是否存在）。生产环境应集成邮件发送链路发送重置链接；
+/// 调试/无邮件后端时，响应体包含 `devToken` 供开发调试（带服务器日志告警）。
+async fn forgot(State(state): State<AuthState>, Json(req): Json<ForgotReq>) -> Response {
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    let store = UserStore::new(pool);
+    let Some(uid) = store
+        .user_id_by_username(&req.username)
+        .await
+        .unwrap_or(None)
+    else {
+        // 不泄露用户存在性
+        return Json(json!({ "ok": true })).into_response();
+    };
+    match store.create_reset_token(uid).await {
+        Ok((_, plain)) => {
+            eprintln!(
+                "[kenvoy] 密码重置 token 已生成（user_id={uid}），请部署邮件发送链路将此 token 发给用户：{plain}",
+            );
+            Json(json!({ "ok": true, "devToken": plain })).into_response()
+        }
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ResetReq {
+    /// 重置链接中携带的明文 token。
+    token: String,
+    /// 新密码（明文，argon2 哈希入库）。
+    new_password: String,
+}
+
+/// 重置密码：`POST /__kenvoy/auth/reset` body `{"token":"...","new_password":"..."}`。
+async fn reset(State(state): State<AuthState>, Json(req): Json<ResetReq>) -> Response {
+    let pool = match require_db(&state) {
+        Ok(p) => p,
+        Err(code) => return (code, "数据库未配置").into_response(),
+    };
+    // 复用同一次 `password_policy` 校验
+    let policy = password_policy(&state.auth.password);
+    let errors = policy.validate(&req.new_password, "");
+    if !errors.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
+    }
+    let store = UserStore::new(pool);
+    let Some(uid) = store.consume_reset_token(&req.token).await.unwrap_or(None) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "errors": ["token 无效或已过期"] })),
+        )
+            .into_response();
+    };
+    match store.reset_password(uid, &req.new_password).await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
 }
