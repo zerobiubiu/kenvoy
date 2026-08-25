@@ -148,7 +148,13 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         println!("  http://{addr}{route}");
     }
     println!("修改 apps/ 下的 XML 会自动刷新。Ctrl+C 停止。");
-    axum::serve(listener, app).await?;
+    // 优雅退出：Ctrl+C → 打印提示并以 0 退出码结束（避免 Windows 默认 0xC000013A）
+    tokio::select! {
+        result = axum::serve(listener, app) => result?,
+        _ = tokio::signal::ctrl_c() => {
+            println!("收到 Ctrl+C，正在退出 dev 服务器…");
+        }
+    }
     Ok(())
 }
 

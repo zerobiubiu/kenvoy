@@ -372,3 +372,11 @@
   3. **回首页**：`location.href = "/"`——未登录首页显示“请先登录”+ 自动弹登录框
   4. **防重复点击**：退出按钮置 `disabled` + “退出中…”文案
 - Playwright 冒烟：登录（cookie+localStorage+徽章）→ 点退出 → cookie 清空 / localStorage 清空 / 首页弹框且无页面列表 / 旧 token 调 `/me` 401（session 已删）/ 无 JS 错误 → PASS
+
+### 执行验证记录（2026-08-25，dev Ctrl+C 优雅退出）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 动机：Windows 下 Ctrl+C 退出 dev 时显示 `exit code: 0xc000013a (STATUS_CONTROL_C_EXIT)`，cargo run 报 error
+- 实现：`dev::run` 末尾 `tokio::select!`：`axum::serve` 与 `tokio::signal::ctrl_c()` 竞争——收到 Ctrl+C 打印“收到 Ctrl+C，正在退出 dev 服务器…”并以 0 退出码正常结束（不再触发 Windows 默认终止）；`Cargo.toml` tokio 依赖新增 `signal` feature（Windows 经 `SetConsoleCtrlHandler` 捕获）
+- 验证：编译 + 89 测试 + 4 编译路径通过；Ctrl+C 行为依赖 tokio 标准机制（Windows console 语义），未做自动化信号模拟；用户操作路径：`cargo run -p kenvoy -- dev` → Ctrl+C → 应见退出提示且无 error
