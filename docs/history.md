@@ -360,3 +360,15 @@
   3. **注册默认角色 `[auth].default_role`**：`open`/`review` 注册成功后自动分配角色（如“普通员工”），新用户无需管理员介入即可进入对应应用；kenvoy.toml 示例配置 `default_role = "普通员工"`
 - 冒烟：未登录首页无链接 + 提示 + runtime 注入；bob cookie 首页 4 项；admin cookie 首页 10 项；注册 `newbie` → 自动分配“普通员工”（DB 验证）；bob 直访 /admin/users 403（上轮）
 - 验证结论：✅ 通过；dev/build 双路径一致（build 静态产物无会话概念，不受影响）
+
+### 执行验证记录（2026-08-25，优雅退出）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 动机：退出登录不生效——原实现 fire-and-forget + 立即 reload 会打断 logout 请求，cookie/session 残留导致刷新后自动登录
+- 实现（runtime.js `doLogout` 重写）：
+  1. **先等服务端**：`await logout`（POST Bearer + same-origin）→ 服务端 `DELETE session`（幂等）+ `Set-Cookie: kv_token=Max-Age=0` 清 cookie
+  2. **再清本地**：`setAuth(null, null)` 移除 localStorage token/user；服务端失败也清理（安全优先）
+  3. **回首页**：`location.href = "/"`——未登录首页显示“请先登录”+ 自动弹登录框
+  4. **防重复点击**：退出按钮置 `disabled` + “退出中…”文案
+- Playwright 冒烟：登录（cookie+localStorage+徽章）→ 点退出 → cookie 清空 / localStorage 清空 / 首页弹框且无页面列表 / 旧 token 调 `/me` 401（session 已删）/ 无 JS 错误 → PASS

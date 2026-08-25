@@ -281,15 +281,27 @@
       });
   }
 
+  // 优雅退出：先等服务端清 session + 清 cookie，再清本地并回首页。
+  // 避免“立即 reload 打断 logout 请求 → cookie 仍在 → 刷新后自动登录”。
   function doLogout() {
     var token = getToken();
     hideLogin();
-    setAuth(null, null);
-    if (token) {
-      fetch("/__kenvoy/auth/logout", { method: "POST", headers: { "Authorization": "Bearer " + token } })
-        .catch(function () { /* 忽略登出失败 */ });
-    }
-    location.reload();
+    // 退出按钮置加载态，防止重复点击
+    var btn = document.getElementById("kv-user-logout") || document.getElementById("kv-logout-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "退出中…"; }
+    var finish = function () {
+      // 本地会话一律清理（即使服务端失败，安全优先）
+      setAuth(null, null);
+      location.href = "/";
+    };
+    if (!token) { finish(); return; }
+    fetch("/__kenvoy/auth/logout", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      credentials: "same-origin",
+    })
+      .catch(function () { /* 网络失败：仍清理本地（安全） */ })
+      .then(finish);
   }
 
   // ---- 统一请求：带 token；401 弹登录，登录成功重试 ----
