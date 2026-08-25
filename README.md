@@ -40,11 +40,12 @@ Kenvoy 的解法是**语义化 DSL**：AI 只输出极简的 DSL 描述，核心
 | 组件 | 英文名 | 简称 | 定位 | 开源 |
 | :--- | :--- | :--- | :--- | :--- |
 | **命令行工具** | Kenvoy | `kv` | 开发者入口：`init` / `dev` / `build` / `deploy`，本地实时解析渲染预览 | **开源** |
-| **解析器核心** | Kenvoy-Engine | `kengine` | DSL 解析引擎，输入语义输出布局描述与数据模型 | **开源** |
+| **解析器核心 + HTML 渲染** | Kenvoy-Engine | `kengine` | DSL 解析 + IR 中间表示 + SSR 渲染（feature `html`） | **开源** |
 | **云工作空间** | KenvoySpace | `kspace` | 企业级云平台：控制台、Dashboard、团队协作 | 闭源 |
 | **生产调度器** | Kenvoy-Runtime | `krt` | 生产环境调度中枢：路由分发、CI/CD、版本控制、日志管理、多服务协同 | 闭源 |
 
-**开源部分**：Kenvoy CLI + Kenvoy-Engine 位于同一个 Rust Workspace，发布到 [crates.io](https://crates.io)。开发者可以本地使用 `kv` 命令，也可以将 `kengine` 作为库集成到自己的 Rust 项目中。
+**开源部分**：`kenvoy` CLI + `kengine` 解析/渲染库位于同一个 Rust Workspace，发布到 [crates.io](https://crates.io)。
+开发者可以本地使用 `kenvoy` 命令，也可以将 `kengine` 作为库集成到自己的 Rust 项目中。
 
 **闭源部分**：KenvoySpace + Kenvoy-Runtime 为云平台侧商业组件，提供企业级生产环境能力。
 
@@ -97,13 +98,10 @@ Rust 1.98 / edition 2024 / resolver 3，单 Workspace 多 crate：
 ```text
 kenvoy/
 ├── crates/
-│   ├── kengine       # 解析器核心（纯库，无 I/O）：XML 解析 → IR、表达式引擎、表单校验、审批流状态机、自定义组件解析
-│   ├── kengine-html  # SSR 渲染：IR → HTML（Tabler / Bootstrap 5，kv-* 语义类，移动端断点适配）
-│   ├── kengine-db    # PostgreSQL 18+ 数据层：自动建表迁移、数据访问鉴权（DataFilter / 字段写权限）
-│   ├── kengine-s3    # S3 对象存储抽象（兼容 S3 API 的任何服务，MinIO 联调通过）
-│   └── kenvoy        # CLI：init / dev / build / deploy / user / role / contact / department
-├── examples/leave-app    # 请假审批示例项目
-└── docs/                 # 设计文档（IR 契约、示例计划、项目结构、存储架构、变更记录）
+│   ├── kengine/        # 解析 + IR + 校验/状态机 + HTML 渲染（feature html）
+│   └── kenvoy/         # CLI / dev / build + db 持久化（feature db）+ s3 存储（feature s3）+ mail SMTP（feature mail）
+├── examples/leave-app   # 请假审批示例（含 apps/、module/、I8n/、packages/、kenvoy.toml）
+└── docs/                # 设计文档（IR 契约、示例计划、项目结构、存储架构、变更记录）
 ```
 
 ## 快速开始

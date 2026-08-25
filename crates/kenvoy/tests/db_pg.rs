@@ -3,6 +3,8 @@
 //! 需设置环境变量 `KENVOY_TEST_DATABASE_URL`（如 `postgres://kenvoy:kenvoy@127.0.0.1:5433/kenvoy`），
 //! 未设置时测试自动跳过。
 
+#![cfg(feature = "db")]
+
 use std::collections::HashMap;
 
 use kengine::ir::{FieldDef, FieldType, Model};

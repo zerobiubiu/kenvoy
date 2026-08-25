@@ -352,6 +352,7 @@ mod tests {
         assert!(matches!(cli.command, Some(Commands::Info)));
     }
 
+    #[cfg(all(feature = "db", feature = "s3"))]
     #[test]
     fn cli_parses_dev() {
         let cli = Cli::try_parse_from(["kenvoy", "dev", "--port", "8080"]).unwrap();
@@ -374,6 +375,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "db")]
     #[test]
     fn cli_parses_build() {
         let cli = Cli::try_parse_from(["kenvoy", "build"]).unwrap();
