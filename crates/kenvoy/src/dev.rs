@@ -123,6 +123,7 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         .collect();
 
     let db_for_auth = db.clone();
+    let db_for_shutdown = db.clone();
     let store = connect_store(storage).await;
     let state = AppState {
         dir: dir.to_path_buf(),
@@ -148,13 +149,22 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
         println!("  http://{addr}{route}");
     }
     println!("修改 apps/ 下的 XML 会自动刷新。Ctrl+C 停止。");
-    // 优雅退出：Ctrl+C → 打印提示并以 0 退出码结束（避免 Windows 默认 0xC000013A）
-    tokio::select! {
-        result = axum::serve(listener, app) => result?,
-        _ = tokio::signal::ctrl_c() => {
-            println!("收到 Ctrl+C，正在退出 dev 服务器…");
-        }
+    // 优雅退出三步：等待进行中请求完成（最多 8 秒）→ 关闭 PG 连接池 → 0 退出码
+    let server = axum::serve(listener, app).with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+        println!("收到 Ctrl+C，正在收尾：等待进行中的请求完成（最多 8 秒）…");
+    });
+    let result = tokio::time::timeout(std::time::Duration::from_secs(8), server).await;
+    // 关闭数据库连接池（无 DB 配置则跳过）
+    if let Some(pool) = db_for_shutdown {
+        pool.close().await;
     }
+    match result {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => return Err(err.into()),
+        Err(_) => println!("收尾超时，强制退出。"),
+    }
+    println!("dev 服务器已退出。");
     Ok(())
 }
 

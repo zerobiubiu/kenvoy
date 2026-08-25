@@ -380,3 +380,15 @@
 - 动机：Windows 下 Ctrl+C 退出 dev 时显示 `exit code: 0xc000013a (STATUS_CONTROL_C_EXIT)`，cargo run 报 error
 - 实现：`dev::run` 末尾 `tokio::select!`：`axum::serve` 与 `tokio::signal::ctrl_c()` 竞争——收到 Ctrl+C 打印“收到 Ctrl+C，正在退出 dev 服务器…”并以 0 退出码正常结束（不再触发 Windows 默认终止）；`Cargo.toml` tokio 依赖新增 `signal` feature（Windows 经 `SetConsoleCtrlHandler` 捕获）
 - 验证：编译 + 89 测试 + 4 编译路径通过；Ctrl+C 行为依赖 tokio 标准机制（Windows console 语义），未做自动化信号模拟；用户操作路径：`cargo run -p kenvoy -- dev` → Ctrl+C → 应见退出提示且无 error
+
+### 执行验证记录（2026-08-25，dev 退出安全收尾增强）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 动机：此前 Ctrl+C 仅解决退出码；进行中的请求会被直接掐断、PG 连接池不关闭——补齐安全收尾
+- 实现（`dev::run`）：
+  1. **停止接收新连接 + 等待进行中请求完成**：`axum::serve(...).with_graceful_shutdown(ctrl_c)`——hyper graceful：信号后停止 accept、等待 in-flight 请求写完响应、keep-alive 连接关闭
+  2. **收尾超时兜底**：外层 `tokio::time::timeout(8s)`——极端卡死请求不无限阻塞，超时打印“强制退出”
+  3. **关闭 PG 连接池**：`pool.close().await`（clone 句柄 `db_for_shutdown`，避免与 AppState move 冲突）
+  4. 退出提示明确（收尾中/已退出/强制退出）
+- 安全收尾边界说明：文件监听线程由进程退出回收（无外部资源写操作）；S3 store 无状态无需收尾；Ctrl+C 后未完成请求在 8s 内完成则正常返回（SQL 事务由 PG 回滚/提交原子保证）
