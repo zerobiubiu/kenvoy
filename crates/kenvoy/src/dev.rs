@@ -29,7 +29,7 @@ use notify::Watcher;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
-use crate::config::{AuthConfig, StorageConfig};
+use crate::config::{AuthConfig, MailConfig, StorageConfig};
 
 /// 构建状态：解析后的 `IR` + 版本号（用于自动刷新）。
 struct BuildState {
@@ -77,6 +77,8 @@ pub struct DevOptions<'a> {
     pub storage: &'a StorageConfig,
     /// `[auth]` 配置。
     pub auth: &'a AuthConfig,
+    /// `[mail]` 配置。
+    pub mail: &'a MailConfig,
     /// PostgreSQL 连接池（未配置为 `None`）。
     pub db: Option<PgPool>,
 }
@@ -96,6 +98,7 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
     let description = opts.description;
     let storage = opts.storage;
     let auth = opts.auth;
+    let mail = opts.mail;
     let db = opts.db;
     let build_state = Arc::new(RwLock::new(
         build(dir, project_name, opts.locale.as_deref())
@@ -171,6 +174,7 @@ pub async fn run(opts: DevOptions<'_>) -> anyhow::Result<()> {
             crate::auth::router().with_state(crate::auth::AuthState {
                 db: db_for_auth,
                 auth: auth.clone(),
+                mail: mail.clone(),
             }),
         )
         .route("/{*path}", get(page_or_static))

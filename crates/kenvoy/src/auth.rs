@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
-use crate::config::{AuthConfig, password_policy};
+use crate::config::{AuthConfig, MailConfig, password_policy};
 
 /// auth 路由共享状态。
 #[derive(Clone)]
@@ -26,6 +26,8 @@ pub struct AuthState {
     pub db: Option<PgPool>,
     /// 注册模式与密码策略配置。
     pub auth: AuthConfig,
+    /// 邮件配置（[mail] 段）。
+    pub mail: MailConfig,
 }
 
 /// 构建 auth 路由。
@@ -525,8 +527,25 @@ async fn forgot(State(state): State<AuthState>, Json(req): Json<ForgotReq>) -> R
     };
     match store.create_reset_token(uid).await {
         Ok((_, plain)) => {
+            // 发送重置邮件（配置缺失 / SMTP 错误仅 eprintln，不影响响应）
+            // 邮箱优先用 users.email；未设置时无法发送（仅 eprintln 提示）
+            if let Some(email) = store
+                .user_email_by_id(uid)
+                .await
+                .ok()
+                .flatten()
+                .filter(|e| !e.is_empty())
+            {
+                let _ =
+                    crate::mail::send_password_reset(&state.mail, &email, &req.username, &plain);
+            } else {
+                eprintln!(
+                    "[kenvoy/mail] 用户 {} 无邮箱，无法发送密码重置邮件（token 已通过 eprintln 输出）",
+                    req.username
+                );
+            }
             eprintln!(
-                "[kenvoy] 密码重置 token 已生成（user_id={uid}），请部署邮件发送链路将此 token 发给用户：{plain}",
+                "[kenvoy] 密码重置 token 已生成（user_id={uid}），请部署邮件发送链路或将 token 发给用户：{plain}",
             );
             Json(json!({ "ok": true, "devToken": plain })).into_response()
         }

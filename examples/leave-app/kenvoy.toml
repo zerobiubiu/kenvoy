@@ -27,3 +27,12 @@ admin_level = 90
 # 密码强度：none | weak | medium | strong | custom
 [auth.password]
 strength = "none"
+
+# SMTP 邮件发送（用于密码重置等场景；不配置则跳过邮件，token 仅 eprintln/响应体输出）
+# [mail]
+# smtp_host = "smtp.example.com"
+# smtp_port = 587                # 465=SSL/TLS  587=STARTTLS  25=明文
+# smtp_user = "no-reply@example.com"
+# smtp_pass = "app-password"
+# from = "no-reply@example.com"
+# reset_url_base = "https://your-app.example.com"  # 拼成重置链接

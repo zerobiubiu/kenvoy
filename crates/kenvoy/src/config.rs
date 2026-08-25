@@ -27,6 +27,41 @@ pub struct KenvoyConfig {
     /// `[auth]` 段。
     #[serde(default)]
     pub auth: AuthConfig,
+    /// `[mail]` 段（SMTP 邮件发送；缺省视为关闭邮件通道，forgot 仍生成 token 仅 eprintln）。
+    #[serde(default)]
+    pub mail: MailConfig,
+}
+
+/// `[mail]` 段（SMTP 邮件发送；用于密码重置等场景）。
+///
+/// 不配置或配置不完整时，调用方将不发送邮件（仅 eprintln 记录），
+/// 不会因为邮件通道不可用而中断业务流程。
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct MailConfig {
+    /// SMTP 服务器地址（如 `smtp.gmail.com`）。
+    pub smtp_host: Option<String>,
+    /// SMTP 端口（465 = SSL/TLS、587 = STARTTLS、25 = 明文）。
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    /// SMTP 认证用户名。
+    pub smtp_user: Option<String>,
+    /// SMTP 认证密码。
+    pub smtp_pass: Option<String>,
+    /// 发件人邮箱（如 `no-reply@example.com`）。
+    pub from: Option<String>,
+    /// 重置链接基础 URL（如 `https://your-app.example.com`），邮件中会拼成完整链接。
+    pub reset_url_base: Option<String>,
+}
+
+impl MailConfig {
+    /// 是否配置完整（足以发起邮件）。
+    #[must_use]
+    pub fn is_enabled(&self) -> bool {
+        self.smtp_host.is_some()
+            && self.smtp_user.is_some()
+            && self.smtp_pass.is_some()
+            && self.from.is_some()
+    }
 }
 
 /// `[auth]` 段（注册模式与密码策略）。

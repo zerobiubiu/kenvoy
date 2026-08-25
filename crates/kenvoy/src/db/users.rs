@@ -437,6 +437,19 @@ impl<'a> UserStore<'a> {
         Ok(row.map(|(i,)| i))
     }
 
+    /// 按 id 查邮箱（密码重置发送目标）。
+    ///
+    /// # Errors
+    /// SQL 失败时返回 [`DbError`]。
+    pub async fn user_email_by_id(&self, user_id: i64) -> Result<Option<String>, DbError> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT email FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(self.pool)
+                .await?;
+        Ok(row.and_then(|(e,)| e))
+    }
+
     /// 管理员/CLI 重置指定用户的密码（需传入新密码明文，函数内 argon2 哈希）。
     ///
     /// # Errors

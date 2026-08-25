@@ -144,6 +144,7 @@ crates/
 | `kengine` | `html`（默认开） | SSR HTML 渲染 + 内嵌 Tabler 资产 | — |
 | `kenvoy` | `db`（默认开） | PostgreSQL 18+ 持久化（sqlx + argon2 + sha2） | sqlx / argon2 / chrono / sha2 |
 | `kenvoy` | `s3`（默认开） | S3 对象存储抽象 | rust-s3 / uuid |
+| `kenvoy` | `mail`（默认开） | SMTP 邮件发送（lettre）；发件失败仅 eprintln，不中断业务流程 | lettre |
 
 裁剪示例：
 ```bash

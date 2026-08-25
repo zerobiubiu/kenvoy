@@ -15,6 +15,8 @@ pub mod config;
 #[cfg(all(feature = "db", feature = "s3"))]
 pub mod dev;
 pub mod init;
+#[cfg(feature = "mail")]
+pub mod mail;
 
 #[cfg(feature = "db")]
 pub mod db;
@@ -240,6 +242,7 @@ pub async fn run() -> anyhow::Result<()> {
                 locale: cfg.project.locale.clone(),
                 storage: &cfg.storage,
                 auth: &cfg.auth,
+                mail: &cfg.mail,
                 db,
             })
             .await?;
