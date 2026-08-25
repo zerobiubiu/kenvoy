@@ -9,7 +9,7 @@
         <Section title="请假信息">
           <Form model="请假单">
             <Field name="申请人" readonly="true" default="{{currentUser.name}}" />
-            <Field name="部门" readonly="true" default="{{currentUser.department}}" />
+            <Field name="部门" />
             <Field name="请假类型" />
             <Field name="开始日期" />
             <Field name="结束日期" />
@@ -21,12 +21,10 @@
               <Rule field="事由" expr="事由 非空">请填写请假事由</Rule>
               <Rule field="结束日期" expr="结束日期 &gt;= 开始日期">结束日期不能早于开始日期</Rule>
             </Validation>
-          </Form>
-          <div class="mt-3 d-flex gap-2">
             <Button value="提交申请" kind="primary" icon="ti ti-send" action="submit" />
             <Button value="保存草稿" kind="secondary" icon="ti ti-device-floppy" action="submit" />
             <Button value="返回" kind="link" action="navigate" href="/leave/list" />
-          </div>
+          </Form>
         </Section>
       </Col>
       <Col span="4">

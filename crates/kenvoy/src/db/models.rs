@@ -112,8 +112,8 @@ pub async fn insert_record(
     for (name, ft) in &fields {
         let val = data.get(name).expect("字段存在性已检查");
         query = match ft {
-            FieldType::Number => query.bind(val.as_f64().unwrap_or(0.0)),
-            FieldType::Boolean => query.bind(val.as_bool().unwrap_or(false)),
+            FieldType::Number => query.bind(to_f64(val)),
+            FieldType::Boolean => query.bind(to_bool(val)),
             _ => match val {
                 Value::Null => query.bind(Option::<String>::None),
                 other => query.bind(other.as_str().map(str::to_string)),
@@ -122,6 +122,27 @@ pub async fn insert_record(
     }
     let row = query.fetch_one(pool).await?;
     Ok(row.try_get("id")?)
+}
+
+/// 数值字段值：`Number` 直接取，`String` 尝试解析（如表单提交的 `"2"`）。
+fn to_f64(val: &Value) -> f64 {
+    match val {
+        Value::Number(n) => n.as_f64().unwrap_or(0.0),
+        Value::String(s) => s.trim().parse::<f64>().unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
+/// 布尔字段值：`Bool` 直接取；`String` 按 `"true"/"1"/"yes"` 解析。
+fn to_bool(val: &Value) -> bool {
+    match val {
+        Value::Bool(b) => *b,
+        Value::String(s) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "true" | "1" | "yes" | "on"
+        ),
+        _ => false,
+    }
 }
 
 /// 更新记录的部分字段（`data` 中出现且属于模型定义的字段）。
@@ -162,8 +183,8 @@ pub async fn update_record(
     for (name, ft) in &fields {
         let val = data.get(name).expect("字段存在性已检查");
         query = match ft {
-            FieldType::Number => query.bind(val.as_f64().unwrap_or(0.0)),
-            FieldType::Boolean => query.bind(val.as_bool().unwrap_or(false)),
+            FieldType::Number => query.bind(to_f64(val)),
+            FieldType::Boolean => query.bind(to_bool(val)),
             _ => match val {
                 Value::Null => query.bind(Option::<String>::None),
                 other => query.bind(other.as_str().map(str::to_string)),

@@ -19,6 +19,19 @@
     });
   }
 
+  // ---- `{{currentUser.*}}` 绑定替换（客户端：表单默认值 / 提交 payload） ----
+  // 服务端上下文键：id / username / displayName / email；这里兼容 `name`（→display_name）。
+  function resolveCurrentUserBindings(str) {
+    var u = getUser() || {};
+    return String(str == null ? "" : str).replace(/\{\{currentUser\.([^}]+)\}\}/g, function (_, key) {
+      if (key === "id") return u.id != null ? String(u.id) : "";
+      if (key === "username") return u.username || "";
+      if (key === "name" || key === "displayName") return u.display_name || u.username || "";
+      if (key === "email") return u.email || "";
+      return "";
+    });
+  }
+
   // ---- 登录模态框 ----
   function ensureLoginBox() {
     if (document.getElementById("kv-login-box")) return;
@@ -124,6 +137,7 @@
     var btn = document.getElementById("kv-login-btn");
     var fields = document.getElementById("kv-login-fields");
     var pass = document.getElementById("kv-login-pass");
+    var err = document.getElementById("kv-login-err");
     if (mode === "register") {
       title.textContent = "注册 Kenvoy 账号";
       btn.textContent = "注 册";
@@ -298,6 +312,11 @@
                 escapeHtml(r[label] || r.username || r.id) + '</option>';
       }
       select.innerHTML = html;
+      // user 下拉且当前未选中：自动选中当前登录用户（如 readonly 的“申请人”）
+      if (!current && select.getAttribute("data-type") === "user") {
+        var u = getUser();
+        if (u && u.id != null) select.value = String(u.id);
+      }
     }).catch(function () { select.innerHTML = '<option value="">(加载失败)</option>'; });
   }
 
@@ -336,7 +355,8 @@
               // 操作列：无流程名则不渲染；有则按协议 data-kv-flow 渲染三个按钮
               if (!flowName) return "<td></td>";
               var r = encodeURIComponent(recordId);
-              var f = encodeURIComponent(flowName);
+              // data-flow 存原文（getAttribute 返回原文，handler 内再做 URL 编码）
+              var f = escapeHtml(flowName);
               return "<td class=\"text-nowrap\">" +
                 "<button data-kv-flow=\"withdraw\" data-flow=\"" + f + "\" data-record-id=\"" + r + "\" data-confirm=\"确认撤回该申请？\" class=\"btn btn-sm btn-outline-warning me-1\">撤回</button>" +
                 "<button data-kv-flow=\"approve\" data-flow=\"" + f + "\" data-record-id=\"" + r + "\" class=\"btn btn-sm btn-outline-success me-1\">通过</button>" +
@@ -387,6 +407,18 @@
         }
         var data = {};
         new FormData(form).forEach(function (v, k) { if (!(v instanceof File)) data[k] = v; });
+        // 替换 `{{currentUser.*}}` 绑定（readonly 默认值等）
+        Object.keys(data).forEach(function (k) {
+          if (typeof data[k] === "string") data[k] = resolveCurrentUserBindings(data[k]);
+        });
+        // user 类型 select：disabled（readonly）字段不进 FormData，强制按选中值/当前用户写入
+        var userSel = form.querySelector('select[data-source="users"]');
+        if (userSel) {
+          var u = getUser();
+          if (u && u.id != null) {
+            data[userSel.name] = String(userSel.value || u.id);
+          }
+        }
         results.forEach(function (r) { if (r) data[r.name] = r.id; });
         kvFetch("/__kenvoy/data/" + model, {
           method: "POST",
@@ -404,6 +436,17 @@
 
   // ---- 加载 User/Department 下拉选项（页面加载后） ----
   document.querySelectorAll("select[data-source]").forEach(function (sel) { loadOptions(sel); });
+
+  // ---- `data-kv-action="submit"` 按钮：点击提交所在表单（Button DSL 协议） ----
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-kv-action="submit"]');
+    if (!btn) return;
+    ev.preventDefault();
+    var form = btn.closest("form");
+    if (!form) return; // 无表单（如 guest-hint 登录按钮）由其他 handler 处理
+    // 无参 requestSubmit：触发 submit 事件（不经按钮校验），表单 handler 接管
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  });
 
   // ---- 审批流按钮 ----
   // DSL 渲染审批操作按钮时使用以下属性：
@@ -450,9 +493,11 @@
       opts.body = body;
     }
     kvFetch(url, opts).then(function (r) {
-      return r.json().then(function (j) {
+      return r.text().then(function (t) {
+        var j = null;
+        try { j = JSON.parse(t); } catch (e) { /* 后端可能返回纯文本错误 */ }
         if (!r.ok) {
-          alert("审批操作失败：" + (j.message || j.errors || JSON.stringify(j)));
+          alert("审批操作失败：" + ((j && (j.message || j.errors)) || t || ("HTTP " + r.status)));
           return;
         }
         location.reload();

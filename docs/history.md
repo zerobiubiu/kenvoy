@@ -295,3 +295,24 @@
   13. **README.md**：启动步骤 / 演示账户表 / 端到端演示步骤 / 目录说明 / 重置
 - 冒烟（真实 PG + MinIO）：seed 幂等两跑无重复；5 账户登录 200；bob 提交请假单（5 天）→ start 流程 200（当前节点=部门主管审批）→ alice 审批 → 人事总监审批 → ceo 审批 → done（HR 备案自动）；记录 `审批状态=已通过`、`当前节点=已完成`
 - 已知限制：`list` 页操作列按钮无角色判断（点击由后端 403 拒绝，模板演示足够）；数据库历史脏数据需手动清理（`docker exec kenvoy-pg18 psql -U kenvoy -d kenvoy -c "TRUNCATE contacts, user_roles, kv_flow_instance, sessions RESTART IDENTITY CASCADE; DELETE FROM users; DELETE FROM roles; DELETE FROM departments;"`）
+
+### 执行验证记录（2026-08-25，模板登录/表单/审批 UI 修复 + Playwright 端到端）
+
+- 命令：`cargo fmt --all -- --check`、`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo build -p kenvoy --no-default-features`、`cargo build -p kengine --no-default-features`
+- 结果：全部通过（89 个测试、4 个编译路径）
+- 动机：用户反馈“模板登录功能不可用”
+- 用 Playwright（headless chromium）复现并逐层修复：
+  1. **`setLoginMode` 引用未定义 `err`**（`err.style.display`）——脚本在注册 click listener 前抛错，登录框永不弹出。补 `var err = document.getElementById("kv-login-err")`。**根因**
+  2. **`<Button action="submit">` 不提交表单**：渲染 `type="button"`，runtime 无 handler。新增 `[data-kv-action="submit"]` click → `form.requestSubmit()`（无参，避免非 submit button 参数）
+  3. **按钮须在 Form 内**：模板把提交按钮移到 `<Form>` 内，否则 `closest("form")` 找不到
+  4. **`{{currentUser.*}}` 绑定客户端替换**：readonly 申请人默认值 SSR 不替换。新增 `resolveCurrentUserBindings()`（name→display_name 兼容），表单提交 payload 统一替换
+  5. **readonly user select（disabled）不进 FormData**：提交时强制写入选中的 user 下拉值/当前用户 id；loadOptions 完成后自动选中当前用户
+  6. **字符串数字存 0**：`insert_record`/`update_record` 对 Number 字段 `as_f64()==null→0`。新增 `to_f64`（String 解析）与 `to_bool`（true/1/yes/on）
+  7. **data-flow 双重编码**：表格操作列按钮属性存 `encodeURIComponent` 值，`getAttribute` 后 handler 再编码。改为存原文（escapeHtml）
+  8. **审批错误响应容错**：后端返回纯文本（如“流程未启动”）时 `r.json()` 抛 SyntaxError。改为 `r.text()` + try-parse，错误/成功提示原文
+  9. **create_data 已回传 id**（上一轮）；模板部门字段改可下拉选择（原 `{{currentUser.department}}` 无绑定来源）
+- Playwright 端到端（headless chromium，真实 PG + MinIO）：
+  - 登录：打开 dashboard 401 自动弹框 → bob/demo123 登录 → 徽章“Bob 李”、guest hint 隐藏 ✅
+  - 提交：apply 页填表（含 user/部门下拉、附件为空）→ 提交 → 列表页可见新记录，请假天数正确存 2 ✅
+  - 审批：bob 提交 6 天单并 start → alice 列表点“通过” → 无报错，流程流转到人事总监审批（API 验证 200 currentNode=人事总监审批）✅
+- 已知限制：审批按钮无角色显隐（点击由后端校验拒绝）；列表页点“撤回/通过”对未启动流程的行会返回“流程未启动”（合理业务错误，UI 已容错提示）
