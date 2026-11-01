@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const frameworkPackages = new Set(['react', 'react-dom', 'react-router', '@mui/material', '@emotion/react', '@emotion/styled']);
+// 只共享 React 基础运行时；组件库从应用自己的显式依赖解析。
+const frameworkPackages = new Set(['react', 'react-dom', 'react-router']);
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));
 const filesystemPath = value => value.startsWith('\\\\?\\UNC\\') ? `\\\\${value.slice(8)}` : value.startsWith('\\\\?\\') ? value.slice(4) : value;
 const normalized = value => {

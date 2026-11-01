@@ -4,9 +4,9 @@
 
 ## 当前实现范围
 
-KEngine 理解 JavaScript、TypeScript、JSX、TSX 的通用语言结构；Kenvoy 将声明解释为可运行应用。第一版采用 React + MUI + CSR、Axum + Tokio、SQLite + rusqlite 和受限 JavaScript 执行，客户应用的真实数据闭环已完成验收。
+KEngine 理解 JavaScript、TypeScript、JSX、TSX 的通用语言结构；Kenvoy 将声明解释为可运行应用。第一版采用 React + TypeScript + 原生 CSS + CSR、Axum + Tokio、SQLite + rusqlite 和受限 JavaScript 执行，客户应用的真实数据闭环已完成验收。
 
-已实现通用 KEngine、业务 DSL、Application IR、真实 SQLite、迁移、HTTP、认证、React/MUI 前台及后台、自定义组件与受限 JavaScript Runtime。七个 CLI 命令、版本化产物、原生文件监听和 Vite 开发适配已接入；各项验收状态以最新验证记录为准。
+已实现通用 KEngine、业务 DSL、Application IR、真实 SQLite、迁移、HTTP、认证、React/原生 CSS 前台及后台、自定义组件与受限 JavaScript Runtime。七个 CLI 命令、版本化产物、原生文件监听和 Vite 开发适配已接入；各项验收状态以最新验证记录为准。
 
 ## 组件与职责
 
@@ -21,7 +21,7 @@ flowchart TD
   A --> AUTH[认证与 Permission Runtime]
   A --> JS[受控服务端 JS Runtime]
   R --> DB[专用数据库线程\nSQLite/迁移]
-  P --> FE[通用 React/MUI CSR Runtime]
+  P --> FE[通用 React/原生 CSS CSR Runtime]
   HTTP[Axum/Tokio 应用宿主] --> P
   HTTP --> R
   HTTP --> AUTH

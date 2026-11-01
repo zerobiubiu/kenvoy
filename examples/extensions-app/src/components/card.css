@@ -1,4 +1,7 @@
 .customer-card-example {
-  border-left: 5px solid rgb(15, 118, 110);
+  padding: 24px;
+  border: 1px solid #dce2ea;
   margin-bottom: 24px;
 }
+.customer-card-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.customer-card-actions button { font: inherit; padding: 10px 16px; cursor: pointer; }

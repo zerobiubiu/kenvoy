@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
-import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText,
-  DialogTitle, Divider, Drawer, List, ListItemButton, ListItemText, Paper, Skeleton,
-  Stack, Typography,
-} from '@mui/material';
 import { ApiError } from './api';
 import { RequestError, ResourceForm, ResourceTable, displayValue, useRuntime } from './Runtime';
+import { Loading, NativeDialog, Notice } from './ui';
 import type { RecordData, ResourceDefinition } from './types';
 
 function ResourceWorkspace({ resource }: { resource: ResourceDefinition }) {
@@ -78,64 +74,60 @@ function ResourceWorkspace({ resource }: { resource: ResourceDefinition }) {
     setDeleting(null); setDeleteInfo('');
   };
   const heading = creating ? '新增记录' : mode === 'edit' ? `编辑记录 ${id ?? ''}` : mode === 'detail' ? `记录 ${id ?? ''} 的详情` : resource.name;
-  return <Stack spacing={3} sx={{ minWidth: 0, flex: 1 }}>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-      <Box><Typography component="h1" variant="h1" ref={title} tabIndex={-1}>{heading}</Typography>
-        {listVisible && <Typography color="text.secondary" variant="body2" sx={{ mt: 0.75 }}>查询和维护已保存的数据。</Typography>}
-      </Box>
-      {listVisible ? <Button variant="contained" onClick={() => { setNotice(''); navigate(`${route}?view=create`); }}>新增记录</Button>
-        : <Button onClick={back} sx={{ alignSelf: { xs: 'flex-start', sm: 'auto' } }}>返回列表</Button>}
-    </Stack>
-    {notice && <Alert severity="success" onClose={() => setNotice('')} role="status">{notice}</Alert>}
-    <Box sx={{ display: listVisible ? 'block' : 'none' }}>
+  return <div className="kv-stack spacious kv-resource-workspace">
+    <div className="kv-workspace-heading">
+      <div><h1 className="kv-title" ref={title} tabIndex={-1}>{heading}</h1>
+        {listVisible && <p className="kv-muted kv-small kv-workspace-intro">查询和维护已保存的数据。</p>}
+      </div>
+      {listVisible ? <button className="kv-button primary" type="button" onClick={() => { setNotice(''); navigate(route + '?view=create'); }}>新增记录</button>
+        : <button className="kv-button kv-self-start" type="button" onClick={back}>返回列表</button>}
+    </div>
+    {notice && <Notice kind="success" onClose={() => setNotice('')} role="status">{notice}</Notice>}
+    <div hidden={!listVisible}>
       <ResourceTable resource={resource} highlightedId={highlighted} refreshToken={revision}
-        onEdit={(value) => { setNotice(''); navigate(`${route}?view=edit&id=${value.id}`); }}
-        onInspect={(value) => { setNotice(''); navigate(`${route}?view=detail&id=${value.id}`); }}
+        onEdit={(value) => { setNotice(''); navigate(route + '?view=edit&id=' + value.id); }}
+        onInspect={(value) => { setNotice(''); navigate(route + '?view=detail&id=' + value.id); }}
         onDelete={(value) => { setDeleting(value); setDeleteFailure(null); setDeleteUnknown(false); setDeleteInfo(''); }} />
-    </Box>
-    {creating && <Paper sx={{ p: { xs: 2.5, sm: 4 }, maxWidth: 760, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
-      <ResourceForm key={`${resource.name}-create`} resource={resource} onSaved={saved} onCancel={back} />
-    </Paper>}
+    </div>
+    {creating && <section className="kv-panel kv-record-panel">
+      <ResourceForm key={resource.name + '-create'} resource={resource} onSaved={saved} onCancel={back} />
+    </section>}
     {editing && <>
-      {id === null ? <Alert severity="error">记录编号无效，请返回列表重新选择。</Alert>
+      {id === null ? <Notice kind="error">记录编号无效，请返回列表重新选择。</Notice>
         : failure != null ? <RequestError error={failure} retry={() => setReadAttempt((value) => value + 1)} />
-        : busy || record?.id !== id ? <Skeleton variant="rounded" height={320} aria-label="正在加载记录" />
-        : <Paper sx={{ p: { xs: 2.5, sm: 4 }, maxWidth: 760, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
-          {mode === 'edit' ? <ResourceForm key={`${resource.name}-${record.id}`} resource={resource} initial={record} mode="edit" onSaved={saved} onCancel={back} />
-            : <Stack spacing={3}>
-              <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(120px, 1fr) 3fr' }, columnGap: 3, rowGap: { xs: 1, sm: 2 } }}>
+        : busy || record?.id !== id ? <Loading height={320} label="正在加载记录" />
+        : <section className="kv-panel kv-record-panel">
+          {mode === 'edit' ? <ResourceForm key={resource.name + '-' + record.id} resource={resource} initial={record} mode="edit" onSaved={saved} onCancel={back} />
+            : <div className="kv-stack spacious">
+              <dl className="kv-details">
                 {[{ name: 'id', label: '编号' }, ...resource.fields, { name: 'created_at', label: '创建时间（UTC）' }, { name: 'updated_at', label: '更新时间（UTC）' }].map((field) =>
-                  <Box key={field.name} sx={{ display: 'contents' }}>
-                    <Typography component="dt" variant="body2" color="text.secondary">{field.label || field.name}</Typography>
-                    <Typography component="dd" sx={{ m: 0, mb: { xs: 1.5, sm: 0 }, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', fontVariantNumeric: 'tabular-nums' }}>
-                      {displayValue(record[field.name], resource.fields.find((item) => item.name === field.name))}
-                    </Typography>
-                  </Box>)}
-              </Box>
-              <Button variant="outlined" sx={{ alignSelf: 'flex-start' }} onClick={() => navigate(`${route}?view=edit&id=${record.id}`)}>编辑这条记录</Button>
-            </Stack>}
-        </Paper>}
+                  <div key={field.name} className="kv-details-row">
+                    <dt>{field.label || field.name}</dt>
+                    <dd>{displayValue(record[field.name], resource.fields.find((item) => item.name === field.name))}</dd>
+                  </div>)}
+              </dl>
+              <button className="kv-button outlined kv-self-start" type="button" onClick={() => navigate(route + '?view=edit&id=' + record.id)}>编辑这条记录</button>
+            </div>}
+        </section>}
     </>}
-    <Dialog open={deleting !== null} onClose={closeDelete} fullWidth maxWidth="xs" aria-labelledby="delete-title">
-      <DialogTitle id="delete-title">删除记录 {deleting?.id}？</DialogTitle>
-      <DialogContent><Stack spacing={2}>
-        <DialogContentText>删除后无法在页面中撤销，请核对记录内容。</DialogContentText>
-        {deleting && <Box component="dl" sx={{ m: 0 }}>
-          {resource.fields.slice(0, 3).map((field) => <Box key={field.name} sx={{ mb: 1.5 }}>
-            <Typography component="dt" variant="body2" color="text.secondary">{field.label || field.name}</Typography>
-            <Typography component="dd" sx={{ m: 0, overflowWrap: 'anywhere' }}>{displayValue(deleting[field.name], field)}</Typography>
-          </Box>)}
-        </Box>}
+    <NativeDialog open={deleting !== null} onClose={closeDelete} closeDisabled={deleteBusy} title={'删除记录 ' + (deleting?.id ?? '') + '？'} className="kv-delete-dialog"
+      footer={<>
+        <button className="kv-button" type="button" onClick={closeDelete} disabled={deleteBusy} data-autofocus>{deleteUnknown ? '关闭并核对' : '取消'}</button>
+        <button className="kv-button primary danger" type="button" disabled={deleteBusy || deleteUnknown} onClick={() => { void remove(); }}>{deleteBusy ? '正在处理…' : '确认删除'}</button>
+      </>}>
+      <div className="kv-stack">
+        <p className="kv-muted">删除后无法在页面中撤销，请核对记录内容。</p>
+        {deleting && <dl className="kv-delete-details">
+          {resource.fields.slice(0, 3).map((field) => <div key={field.name}>
+            <dt>{field.label || field.name}</dt><dd>{displayValue(deleting[field.name], field)}</dd>
+          </div>)}
+        </dl>}
         {deleteFailure != null && <RequestError error={deleteFailure} />}
-        {deleteInfo && <Alert severity="info">{deleteInfo}</Alert>}
-        {deleteUnknown && <Button variant="outlined" onClick={() => { void reconcileDelete(); }} disabled={deleteBusy}>查询记录状态</Button>}
-      </Stack></DialogContent>
-      <DialogActions sx={{ p: 3, pt: 1 }}>
-        <Button onClick={closeDelete} disabled={deleteBusy}>{deleteUnknown ? '关闭并核对' : '取消'}</Button>
-        <Button color="error" variant="contained" disabled={deleteBusy || deleteUnknown} onClick={() => { void remove(); }}>{deleteBusy ? '正在处理…' : '确认删除'}</Button>
-      </DialogActions>
-    </Dialog>
-  </Stack>;
+        {deleteInfo && <Notice kind="info">{deleteInfo}</Notice>}
+        {deleteUnknown && <button className="kv-button outlined" type="button" onClick={() => { void reconcileDelete(); }} disabled={deleteBusy}>查询记录状态</button>}
+      </div>
+    </NativeDialog>
+  </div>;
 }
 
 export default function Admin() {
@@ -144,35 +136,32 @@ export default function Admin() {
   const [navigation, setNavigation] = useState(false);
   const resource = application.resources.find((item) => item.name === params.resource);
   useEffect(() => { setNavigation(false); }, [params.resource]);
-  if (session.user?.role !== 'admin') return <Stack spacing={2} sx={{ maxWidth: 640, mx: 'auto' }}>
-    <Typography component="h1" variant="h1">需要管理员权限</Typography>
-    <Alert severity="warning">请使用管理员账号登录后查看和管理数据。</Alert>
-    <Button component={Link} to="/admin/login" variant="outlined">前往登录</Button>
-  </Stack>;
-  if (!params.resource && application.resources[0]) return <Navigate replace to={`/admin/${application.resources[0].name}`} />;
-  const links = <List component="nav" aria-label="管理资源">
-    {application.resources.map((item) => <ListItemButton key={item.name} component={Link} to={`/admin/${item.name}`}
-      selected={item.name === params.resource} aria-current={item.name === params.resource ? 'page' : undefined}
-      sx={{ borderRadius: 1, mb: 0.5 }}><ListItemText primary={item.name} slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }} /></ListItemButton>)}
-  </List>;
-  return <Box sx={{ maxWidth: 1500, mx: 'auto', display: 'flex', gap: 4, alignItems: 'flex-start' }}>
-    <Box component="aside" sx={{ width: 210, flexShrink: 0, display: { xs: 'none', md: 'block' }, position: 'sticky', top: 100 }}>
-      <Typography variant="h3" component="h2" sx={{ mb: 2, px: 2 }}>数据管理</Typography>
-      {links}<Divider sx={{ my: 2 }} />
-      <Typography variant="body2" color="text.secondary" sx={{ px: 2 }}>选择资源，查看和维护记录。</Typography>
-    </Box>
-    <Stack spacing={3} sx={{ flex: 1, minWidth: 0 }}>
-      <Button variant="outlined" onClick={() => setNavigation(true)} sx={{ display: { md: 'none' }, alignSelf: 'flex-start' }}>选择数据资源</Button>
-      {resource ? <ResourceWorkspace key={resource.name} resource={resource} /> : <Stack spacing={2}>
-        <Typography variant="h1" component="h1">{params.resource ? '无法找到此资源' : '暂无可管理的数据'}</Typography>
-        <Typography color="text.secondary">{params.resource ? '请选择导航中的有效资源。' : '应用中尚未开放可管理的数据资源。'}</Typography>
-      </Stack>}
-    </Stack>
-    <Drawer open={navigation} onClose={() => setNavigation(false)}>
-      <Box sx={{ width: 280, maxWidth: '85vw', p: 2 }}>
-        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}><Typography variant="h3" component="h2">数据管理</Typography><Button onClick={() => setNavigation(false)}>关闭</Button></Stack>
-        {links}
-      </Box>
-    </Drawer>
-  </Box>;
+  if (session.user?.role !== 'admin') return <div className="kv-stack kv-access-required">
+    <h1 className="kv-title">需要管理员权限</h1>
+    <Notice kind="warning">请使用管理员账号登录后查看和管理数据。</Notice>
+    <Link className="kv-button outlined" to="/admin/login">前往登录</Link>
+  </div>;
+  if (!params.resource && application.resources[0]) return <Navigate replace to={'/admin/' + application.resources[0].name} />;
+  const links = <nav className="kv-navigation" aria-label="管理资源">
+    {application.resources.map((item) => <Link className="kv-navigation-link" key={item.name} to={'/admin/' + item.name}
+      aria-current={item.name === params.resource ? 'page' : undefined} onClick={() => setNavigation(false)}>{item.name}</Link>)}
+  </nav>;
+  return <div className="kv-admin">
+    <aside className="kv-sidebar">
+      <h2 className="kv-sidebar-title">数据管理</h2>
+      {links}<hr className="kv-divider" />
+      <p className="kv-muted kv-small kv-sidebar-help">选择资源，查看和维护记录。</p>
+    </aside>
+    <div className="kv-stack spacious kv-admin-content">
+      <button className="kv-button outlined kv-resource-switch" type="button" onClick={() => setNavigation(true)} aria-haspopup="dialog" aria-expanded={navigation}>选择数据资源</button>
+      {resource ? <ResourceWorkspace key={resource.name} resource={resource} /> : <div className="kv-stack">
+        <h1 className="kv-title">{params.resource ? '无法找到此资源' : '暂无可管理的数据'}</h1>
+        <p className="kv-muted">{params.resource ? '请选择导航中的有效资源。' : '应用中尚未开放可管理的数据资源。'}</p>
+      </div>}
+    </div>
+    <NativeDialog open={navigation} onClose={() => setNavigation(false)} title="数据管理" className="kv-drawer"
+      footer={<button className="kv-button outlined" type="button" data-autofocus onClick={() => setNavigation(false)}>关闭</button>}>
+      {links}
+    </NativeDialog>
+  </div>;
 }

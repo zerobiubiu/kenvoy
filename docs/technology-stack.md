@@ -46,8 +46,7 @@ Workspace 仍仅有 kengine Library 与 kenvoy Binary。KEngine 正式依赖仅�
 | npm 直接依赖 | 精确版本 | 正式前端用途 |
 |---|---|---|
 | react、react-dom | 各 19.3.1 | 通用 CSR Runtime |
-| @mui/material | 9.5.0 | 表单、表格、导航与反馈 |
-| @emotion/react、@emotion/styled | 11.14.0、11.14.1 | MUI 样式 |
+| @radix-ui/react-slot、clsx | 1.5.0、2.1.1 | 仅开发测试夹具与用户示例依赖；不进入默认 Runtime |
 | react-router | 8.5.1 | Declarative Router |
 | vite、rolldown | 8.3.5、1.2.16 | 锁定开发/构建适配与打包内核 |
 | @vitejs/plugin-react | 6.1.2 | React 转换与 Fast Refresh |
@@ -55,7 +54,7 @@ Workspace 仍仅有 kengine Library 与 kenvoy Binary。KEngine 正式依赖仅�
 | @types/react、@types/react-dom | 各 19.3.0 | 框架前端类型 |
 | @playwright/test | 1.64.1 | 真实浏览器验收 |
 
-本轮 cargo metadata --no-deps --offline --locked --format-version 1 成功读取当前目标和依赖方向；正式 package.json 的 13 项 npm 直接依赖与锁文件均一致。未因此安装或更新依赖。
+默认 Runtime 的生产 npm 依赖仅 React、React DOM 和 React Router。其余是构建或测试工具；应用自己的组件库由应用 package.json 与锁文件管理。MUI/Emotion 已从框架及探针依赖移除，选择原因见 [ADR 0010](adr/0010-native-components-and-data-bindings.md)。
 
 ## 正式实现与技术边界
 
@@ -65,11 +64,11 @@ KEngine 已实现四种语法、UTF-16 保真字符串、表达式结构、变�
 
 Kenvoy 已有正式静态求值、.diu.tsx 展开、Application IR、字段约束/路由/权限检查。普通 UI 函数体不推导 Schema，运行引用保留 import 门面；无法静态确定的 Schema 明确诊断。两层均不是完整 TypeScript 类型检查器，可解析不代表任意程序可静态执行。KEngine 的 external 不证明 npm 包已安装或导出有效；客户端 npm 解析由受控构建工具完成。
 
-### React、MUI 与用户组件
+### React、原生 CSS 与用户组件
 
-通用 React Runtime 消费经权限过滤的应用描述，实际提供七类字段、前台登记、登录与后台搜索/排序/分页/详情/增改删，提交经同源 API 写入真实 SQLite。自定义组件按类型登记，Hooks 交给 React；构建器统一 React/MUI 解析，避免多 React 实例。阶段 08 已在浏览器验证 Props、Hooks、泛型转换、MUI、clsx、barrel CSS、入口闭包与 Server Function，见[扩展验收](verification/0010-typescript-extensions.md)。[createElement](https://react.dev/reference/react/createElement)、[createRoot](https://react.dev/reference/react-dom/client/createRoot)、[重复 React 风险](https://react.dev/warnings/invalid-hook-call-warning)
+通用 React Runtime 消费经权限过滤的应用描述，提供七类字段、前台登记、登录与后台搜索/排序/分页/详情/增改删，提交经同源 API 写入真实 SQLite。默认使用语义 HTML 与 CSS；自定义组件按类型登记，Hooks 交给 React。构建器统一 React 基础包解析以避免重复实例，用户 UI 库按项目依赖解析。阶段 08 的原 MUI 验证保留为[历史证据](verification/0010-typescript-extensions.md)。[createElement](https://react.dev/reference/react/createElement)、[createRoot](https://react.dev/reference/react-dom/client/createRoot)、[重复 React 风险](https://react.dev/warnings/invalid-hook-call-warning)
 
-MUI 控件与 React Router Declarative Mode 已正式接入，适配当前锁定 API。前端使用 Fetch、HttpOnly Session 与内存 CSRF/代际，不以 LocalStorage 作为认证依据。[MUI peer 依赖](https://mui.com/material-ui/getting-started/installation/)、[Router 模式](https://reactrouter.com/start/modes)
+原生控件与 React Router Declarative Mode 统一消费客户端描述。前端使用 Fetch、HttpOnly Session 与内存 CSRF/代际，不以 LocalStorage 作为认证依据。系统重载通过同一字段绑定操作模型，见[组件与选项契约](component-bindings.md)。[React select](https://react.dev/reference/react-dom/components/select)、[Router 模式](https://reactrouter.com/start/modes)
 
 ### Vite/Rolldown 与开发更新
 

@@ -185,6 +185,8 @@ struct State {
 
 /// 重新验证从产物加载的业务标识和约束，避免将伪造 IR 的名称插入 SQL。
 pub fn schema_model(application: &ApplicationIR) -> Result<SchemaModel> {
+    crate::options::validate_definitions(&application.resources)
+        .map_err(|(_, message)| MigrationError::InvalidSchema(message))?;
     let mut tables = BTreeMap::new();
     let mut index_names = BTreeSet::new();
     for resource in &application.resources {
@@ -321,7 +323,7 @@ fn validate_constraints(field: &FieldDefinition) -> Result<()> {
         )));
     }
     if field.kind == FieldKind::Select {
-        if field.options.is_empty() {
+        if field.options.is_empty() && field.options_source.is_none() {
             return Err(MigrationError::InvalidSchema(format!(
                 "选择字段 {} 必须有选项",
                 field.name
@@ -926,7 +928,10 @@ fn column_sql(column: &ColumnModel) -> String {
             format!("instr({name},char(0))=0"),
         ],
     };
-    if column.required && matches!(column.kind, FieldKind::Text | FieldKind::Textarea) {
+    if column.required
+        && (matches!(column.kind, FieldKind::Text | FieldKind::Textarea)
+            || (column.kind == FieldKind::Select && column.options.is_empty()))
+    {
         checks.push(format!(
             "length(trim({name},{}))>0",
             sql_string(UNICODE_WHITESPACE)
@@ -941,7 +946,7 @@ fn column_sql(column: &ColumnModel) -> String {
     if let Some(max) = column.max {
         checks.push(format!("{name}<={max}"));
     }
-    if column.kind == FieldKind::Select {
+    if column.kind == FieldKind::Select && !column.options.is_empty() {
         checks.push(format!(
             "{name} IN ({})",
             column
@@ -1254,6 +1259,7 @@ mod tests {
             unique: false,
             index: false,
             options: vec![],
+            options_source: None,
             source: source(),
         }
     }
@@ -1278,6 +1284,7 @@ mod tests {
             navigation: vec![],
             permissions: vec![],
             module_references: vec![],
+            component_overrides: Default::default(),
         }
     }
     fn rows(connection: &Connection) -> TestResult<i64> {

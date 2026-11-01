@@ -1,50 +1,10 @@
-import { createTheme } from '@mui/material';
-
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: { main: '#1558ba', dark: '#10458f', light: '#e8f0fc' },
-    background: { default: '#f4f6f9', paper: '#ffffff' },
-    text: { primary: '#1e293b', secondary: '#526176' },
-    divider: '#dce2ea',
-    success: { main: '#237344' },
-    error: { main: '#b42332' },
-    warning: { main: '#945600' },
-  },
-  typography: {
-    fontFamily: '"Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
-    fontSize: 14,
-    h1: { fontSize: '1.875rem', fontWeight: 700, lineHeight: 1.35, overflowWrap: 'anywhere' },
-    h2: { fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.4, overflowWrap: 'anywhere' },
-    h3: { fontSize: '1.125rem', fontWeight: 650, lineHeight: 1.45 },
-    body1: { lineHeight: 1.65 },
-    body2: { lineHeight: 1.6 },
-    button: { textTransform: 'none', fontWeight: 600 },
-  },
-  shape: { borderRadius: 8 },
-  components: {
-    MuiButton: {
-      defaultProps: { disableElevation: true },
-      styleOverrides: { root: { minHeight: 40, paddingInline: 18, borderRadius: 7 } },
-    },
-    MuiTextField: { defaultProps: { fullWidth: true, variant: 'outlined' } },
-    MuiOutlinedInput: { styleOverrides: { root: {
-      backgroundColor: '#fff',
-      '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: '#526176', color: '#526176', opacity: 1 },
-      '& .MuiInputBase-input::placeholder': { color: '#526176', opacity: 1 },
-    } } },
-    MuiInputLabel: { styleOverrides: { root: { color: '#526176', '&.Mui-disabled': { color: '#526176' } } } },
-    MuiFormHelperText: { styleOverrides: { root: { marginLeft: 0, marginRight: 0, '&.Mui-disabled': { color: '#526176' } } } },
-    MuiAlert: { defaultProps: { closeText: '关闭提示' }, styleOverrides: { root: { borderRadius: 8, alignItems: 'flex-start' } } },
-    MuiTableCell: {
-      styleOverrides: {
-        head: { color: '#526176', fontWeight: 650, backgroundColor: '#f8fafc', whiteSpace: 'nowrap' },
-        body: { verticalAlign: 'top', paddingTop: 15, paddingBottom: 15 },
-      },
-    },
-    MuiPaper: { defaultProps: { elevation: 0 } },
-    MuiDialog: { styleOverrides: { paper: { borderRadius: 12 } } },
-  },
-});
+/** 默认界面的原生 CSS 变量；用户组件库无需依赖任何 ThemeProvider。 */
+const theme = {
+  '--kv-primary': '#1558ba', '--kv-primary-dark': '#10458f', '--kv-primary-light': '#e8f0fc',
+  '--kv-background': '#f4f6f9', '--kv-paper': '#ffffff', '--kv-text': '#1e293b',
+  '--kv-muted': '#526176', '--kv-border': '#dce2ea', '--kv-table-head': '#f8fafc',
+  '--kv-success': '#237344', '--kv-error': '#b42332', '--kv-warning': '#945600',
+  '--kv-selection': '#d6e6ff', '--kv-selection-text': '#153a6c', '--kv-saved': '#e8f3ec',
+} as const;
 
 export default theme;

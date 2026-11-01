@@ -291,7 +291,12 @@ impl Database {
         let resource = resource.to_owned();
         self.submit(move |state| {
             let definition = state.resource(&resource)?.clone();
-            query::create(&mut state.connection, &definition, &input)
+            query::create(
+                &mut state.connection,
+                &state.application,
+                &definition,
+                &input,
+            )
         })
         .await
     }
@@ -315,7 +320,13 @@ impl Database {
         let resource = resource.to_owned();
         self.submit(move |state| {
             let definition = state.resource(&resource)?.clone();
-            query::update(&mut state.connection, &definition, id, &patch)
+            query::update(
+                &mut state.connection,
+                &state.application,
+                &definition,
+                id,
+                &patch,
+            )
         })
         .await
     }
@@ -325,6 +336,27 @@ impl Database {
         self.submit(move |state| {
             let definition = state.resource(&resource)?.clone();
             query::delete(&mut state.connection, &definition, id)
+        })
+        .await
+    }
+
+    pub async fn options(
+        &self,
+        resource: &str,
+        field: &str,
+        query: super::OptionsQuery,
+    ) -> Result<super::OptionsResult> {
+        let resource = resource.to_owned();
+        let field = field.to_owned();
+        self.submit(move |state| {
+            let definition = state.resource(&resource)?.clone();
+            super::options::query(
+                &mut state.connection,
+                &state.application,
+                &definition,
+                &field,
+                query,
+            )
         })
         .await
     }

@@ -54,7 +54,7 @@ CSRF 值为以 Session token 作 key、固定域标识 kenvoy.csrf.v1 为消息�
 
 静态资源仅从宿主指定且规范化的 client 目录读取；仅注册页面使用 index.html，资源路径拒绝转义/父路径，并 canonicalize 后确认仍在根目录内。私有管理页先授权再读入口文件。已封存的 client 目录与 IR、generation、server bundle 同代发布。此边界假定构建目录由可信宿主管理，不抵抗具有相同文件权限的本机恶意操作者并发篡改文件。
 
-响应统一 no-store、nosniff、same-origin Referrer-Policy、DENY Frame。CSP 默认 self，脚本 self，MUI 样式允许 unsafe-inline，图片允许 self/data；frame-ancestors none、base-uri self。仅 dev 的 connect-src 追加与 public_origin 对应的明确 ws/wss Origin；React Refresh preamble 外置为同源模块，script-src 不允许 inline script。
+响应统一 no-store、nosniff、same-origin Referrer-Policy、DENY Frame。CSP 默认 self，脚本 self，样式保留 unsafe-inline 以兼容用户组件库的运行时样式（内置控件使用外部 CSS），图片允许 self/data；frame-ancestors none、base-uri self。仅 dev 的 connect-src 追加与 public_origin 对应的明确 ws/wss Origin；React Refresh preamble 外置为同源模块，script-src 不允许 inline script。
 
 错误响应有错误码和 request_id，字段校验仅包含字段/原因，不含数据库路径、SQL 或认证秘密。数据库队列拒绝与已接受写入结果不确定分别处理；结果不确定时应联系有权限的管理员核对，不能让匿名提交者查询全部数据，也不能自动重试 Create。
 

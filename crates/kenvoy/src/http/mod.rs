@@ -165,6 +165,7 @@ impl HttpRuntime {
             .route("/_kenvoy/vite/hmr", get(development::websocket))
             .route("/_kenvoy/vite/{*path}", get(development::assets))
             .route("/api/actions/{name}", post(handlers::action))
+            .route("/api/{resource}/options/{field}", post(handlers::options))
             .route(
                 "/api/{resource}",
                 get(handlers::list).post(handlers::create),

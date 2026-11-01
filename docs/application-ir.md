@@ -4,6 +4,8 @@
 
 ## 单一业务模型
 
+新增兼容字段：ApplicationIR.component_overrides 保存系统组件名称到模块引用 ID 的映射，缺省为空；FieldDefinition.options_source 保存受限跨资源选项配置，缺省为空；SelectOption.when 保存静态依赖条件，缺省为空。值仍遵守原字段类型，不因控件重载改变。客户端投影携带渲染所需定义，选项查询仍需独立授权；完整规则见[组件与选项契约](component-bindings.md)。
+
 Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定和表达式结构；分析器只沿入口默认导出的表达式及显式 Schema Component 访问声明。不能将模块中所有 JSX 搜索结果当作应用根。静态求值只存在于 Kenvoy，不改变 KEngine 对标签、标识符和表达式的通用含义。
 
 同一份经过验证的模型驱动 Schema Diff、数据库执行计划、HTTP 权限、页面描述和 Admin。模型构建失败时不产生可激活的半成品。运行时持有不可变版本化快照，请求不重新读取源码。

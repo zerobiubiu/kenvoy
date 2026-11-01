@@ -1,12 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
-import {
-  Alert, AlertTitle, AppBar, Box, Button, Divider, Drawer, List, ListItemButton, ListItemText,
-  Paper, Skeleton, Stack, TextField, Toolbar, Typography,
-} from '@mui/material';
 import { api, ApiError, developmentChange } from './api';
 import { RequestError, RuntimeContext, RuntimePage, errorMessage, useRuntime } from './Runtime';
+import { Loading, NativeDialog, Notice } from './ui';
 import type { ApplicationDescription, DevelopmentStatus, NavigationItem, SessionView } from './types';
 
 const Admin = lazy(() => import('./Admin'));
@@ -55,7 +52,7 @@ function DevelopmentNotice() {
         reconnected = true;
         setConnectionLost(true);
       } finally {
-        // 完成一次请求后再安排下一次，慢请求不会积累；只读取状态，不重试业务写入。
+        // 完成一次请求后再安排下一次，慢请求不会积累；不重试业务写入。
         if (current) timer = setTimeout(() => { void poll(); }, 1000);
       }
     };
@@ -63,14 +60,13 @@ function DevelopmentNotice() {
     return () => { current = false; if (timer !== undefined) clearTimeout(timer); };
   }, [client, enabled, refresh]);
   if (!enabled || (!compilationError && !connectionLost)) return null;
-  return <Stack spacing={1.5} sx={{ maxWidth: 1200, mx: 'auto', mb: 3 }}>
-    {compilationError && <Alert severity="error" sx={{ overflowWrap: 'anywhere' }}>
-      <AlertTitle>开发更新未通过</AlertTitle>
-      <Box sx={{ whiteSpace: 'pre-wrap' }}>{compilationError}</Box>
+  return <div className="kv-stack kv-development-notice">
+    {compilationError && <Notice kind="error" title="开发更新未通过">
+      <p className="kv-pre-wrap">{compilationError}</p>
       当前继续使用上一次有效页面。修复源码后将自动恢复。
-    </Alert>}
-    {connectionLost && <Alert severity="warning">开发服务暂时无法连接，当前页面和填写内容已保留；连接恢复后将自动同步。</Alert>}
-  </Stack>;
+    </Notice>}
+    {connectionLost && <Notice kind="warning">开发服务暂时无法连接，当前页面和填写内容已保留；连接恢复后将自动同步。</Notice>}
+  </div>;
 }
 
 function Shell({ children }: { children: ReactNode }) {
@@ -90,53 +86,47 @@ function Shell({ children }: { children: ReactNode }) {
     catch (error) { setFailure(error); }
     finally { setBusy(false); }
   };
-  const links = pages.map((page, index) => <ListItemButton key={`${page.path}-${index}`} component={Link} to={page.path}
-    selected={location.pathname === page.path} aria-current={location.pathname === page.path ? 'page' : undefined} onClick={() => setMenu(false)}>
-    <ListItemText primary={page.title} />
-  </ListItemButton>);
   return <>
     <a className="skip-link" href="#main-content">跳到主要内容</a>
-    <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-      <Toolbar sx={{ minHeight: { xs: 64, sm: 72 }, gap: 2, px: { xs: 2, sm: 4 } }}>
-        <Typography component={Link} to={first} sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', textDecoration: 'none', overflowWrap: 'anywhere', flex: 1 }}>
-          {application.name}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}>
+    <header className="kv-header">
+      <div className="kv-toolbar">
+        <Link className="kv-brand" to={first}>{application.name}</Link>
+        <div className="kv-row desktop-only">
           {session.user ? <>
-            <Typography variant="body2" color="text.secondary" title={session.user.username} sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.user.username}</Typography>
-            {session.user.role === 'admin' && <Button component={Link} to="/admin" color="primary">管理后台</Button>}
-            <Button onClick={() => { void logout(); }} disabled={busy}>{busy ? '正在退出…' : '退出登录'}</Button>
-          </> : <Button component={Link} to="/admin/login">管理员登录</Button>}
-        </Stack>
-        <Button onClick={() => setMenu(true)} aria-label="打开导航" aria-expanded={menu} sx={{ display: { xs: 'inline-flex', sm: 'none' }, minWidth: 44 }}>菜单</Button>
-      </Toolbar>
-      {(declaredLinks.length > 0 || pages.length > 1) && <Box component="nav" aria-label="页面导航" sx={{ display: { xs: 'none', sm: 'flex' }, px: 4, gap: 1, overflowX: 'auto', pb: 1.5 }}>
-        {pages.map((page, index) => <Button key={`${page.path}-${index}`} component={Link} to={page.path} aria-current={location.pathname === page.path ? 'page' : undefined}
-          variant={location.pathname === page.path ? 'contained' : 'text'} size="small" sx={{ whiteSpace: 'nowrap' }}>{page.title}</Button>)}
-      </Box>}
-    </AppBar>
-    <Drawer anchor="right" open={menu} onClose={() => setMenu(false)}>
-      <Box sx={{ width: 280, maxWidth: '85vw', pt: 2 }}>
-        <Stack direction="row" sx={{ px: 2, pb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography sx={{ fontWeight: 700 }}>导航</Typography><Button onClick={() => setMenu(false)}>关闭</Button>
-        </Stack>
-        <List component="nav" aria-label="移动端页面导航">{links}</List><Divider />
-        <Stack spacing={1.5} sx={{ p: 2 }}>
-          {session.user ? <>
-            <Typography variant="body2">当前账号：{session.user.username}</Typography>
-            {session.user.role === 'admin' && <Button component={Link} to="/admin">管理后台</Button>}
-            <Button variant="outlined" onClick={() => { void logout(); }} disabled={busy}>退出登录</Button>
-          </> : <Button component={Link} to="/admin/login" variant="outlined">管理员登录</Button>}
-        </Stack>
-      </Box>
-    </Drawer>
-    <Box component="main" id="main-content" tabIndex={-1} sx={{ px: { xs: 2, sm: 4 }, py: { xs: 3, sm: 5 }, minHeight: 'calc(100dvh - 72px)' }}>
-      {failure != null && <Box sx={{ maxWidth: 720, mx: 'auto', mb: 3 }}><RequestError error={failure} />
-        <Button onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }} sx={{ mt: 1 }}>刷新登录状态</Button>
-      </Box>}
+            <span className="kv-account kv-muted" title={session.user.username}>{session.user.username}</span>
+            {session.user.role === 'admin' && <Link className="kv-button" to="/admin">管理后台</Link>}
+            <button className="kv-button" type="button" onClick={() => { void logout(); }} disabled={busy}>{busy ? '正在退出…' : '退出登录'}</button>
+          </> : <Link className="kv-button" to="/admin/login">管理员登录</Link>}
+        </div>
+        <button className="kv-button mobile-only" type="button" onClick={() => setMenu(true)} aria-label="打开导航" aria-expanded={menu} aria-haspopup="dialog">菜单</button>
+      </div>
+      {(declaredLinks.length > 0 || pages.length > 1) && <nav aria-label="页面导航" className="kv-page-navigation desktop-only">
+        {pages.map((page, index) => <Link key={page.path + '-' + index} to={page.path} aria-current={location.pathname === page.path ? 'page' : undefined}
+          className={'kv-button compact' + (location.pathname === page.path ? ' primary' : '')}>{page.title}</Link>)}
+      </nav>}
+    </header>
+    <NativeDialog open={menu} onClose={() => setMenu(false)} title="导航" className="kv-drawer kv-drawer-right" closeDisabled={busy}
+      footer={<button className="kv-button outlined" type="button" data-autofocus disabled={busy} onClick={() => setMenu(false)}>关闭</button>}>
+      <nav className="kv-navigation" aria-label="移动端页面导航">
+        {pages.map((page, index) => <Link className="kv-navigation-link" key={page.path + '-' + index} to={page.path}
+          aria-current={location.pathname === page.path ? 'page' : undefined} onClick={() => setMenu(false)}>{page.title}</Link>)}
+      </nav>
+      <hr className="kv-divider" />
+      <div className="kv-stack">
+        {session.user ? <>
+          <p className="kv-small kv-wrap">当前账号：{session.user.username}</p>
+          {session.user.role === 'admin' && <Link className="kv-button" to="/admin" onClick={() => setMenu(false)}>管理后台</Link>}
+          <button className="kv-button outlined" type="button" onClick={() => { void logout(); }} disabled={busy}>{busy ? '正在退出…' : '退出登录'}</button>
+        </> : <Link className="kv-button outlined" to="/admin/login" onClick={() => setMenu(false)}>管理员登录</Link>}
+      </div>
+    </NativeDialog>
+    <main id="main-content" tabIndex={-1} className="kv-main">
+      {failure != null && <div className="kv-stack kv-shell-failure"><RequestError error={failure} />
+        <button className="kv-button" type="button" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>刷新登录状态</button>
+      </div>}
       <DevelopmentNotice />
       {children}
-    </Box>
+    </main>
   </>;
 }
 
@@ -164,37 +154,45 @@ function Login() {
     } catch (error) { setFailure(error); }
     finally { setBusy(false); }
   };
-  return <Box sx={{ width: '100%', maxWidth: 440, mx: 'auto', pt: { sm: 3 } }}>
-    <Typography variant="h1" component="h1" sx={{ mb: 1 }}>管理员登录</Typography>
-    <Typography color="text.secondary" sx={{ mb: 4 }}>登录后可查询和管理授权范围内的数据。</Typography>
-    <Paper sx={{ p: { xs: 2.5, sm: 4 }, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
-      {session.user ? <Stack spacing={2}>
-        <Alert severity={session.user.role === 'admin' ? 'success' : 'warning'}>
-          {session.user.role === 'admin' ? `已登录：${session.user.username}` : '当前账号没有管理权限，请使用管理员账号登录。'}
-        </Alert>
-        {session.user.role === 'admin' && <Button component={Link} to="/admin" variant="contained">进入管理后台</Button>}
-        <Button component={Link} to={application.pages[0]?.path || '/'} variant="outlined">返回应用</Button>
-      </Stack> : <Stack component="form" noValidate onSubmit={submit} spacing={3} aria-busy={busy}>
-        <TextField label="用户名" name="username" value={username} onChange={(event) => setUsername(event.target.value)} required
-          autoComplete="username" disabled={busy} slotProps={{ htmlInput: { maxLength: 64, autoCapitalize: 'none', spellCheck: false } }} />
-        <TextField label="密码" name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" disabled={busy} />
-        {inputError && <Alert severity="error">{inputError}</Alert>}
+  return <div className="kv-login">
+    <h1 className="kv-title">管理员登录</h1>
+    <p className="kv-muted kv-login-intro">登录后可查询和管理授权范围内的数据。</p>
+    <section className="kv-panel">
+      {session.user ? <div className="kv-stack">
+        <Notice kind={session.user.role === 'admin' ? 'success' : 'warning'}>
+          {session.user.role === 'admin' ? '已登录：' + session.user.username : '当前账号没有管理权限，请使用管理员账号登录。'}
+        </Notice>
+        {session.user.role === 'admin' && <Link className="kv-button primary" to="/admin">进入管理后台</Link>}
+        <Link className="kv-button outlined" to={application.pages[0]?.path || '/'}>返回应用</Link>
+      </div> : <form className="kv-stack spacious" noValidate onSubmit={submit} aria-busy={busy}>
+        <div className="kv-field">
+          <label htmlFor="login-username">用户名 <span aria-hidden="true">*</span></label>
+          <input id="login-username" name="username" value={username} onChange={(event) => setUsername(event.target.value)} required
+            autoComplete="username" disabled={busy} maxLength={64} autoCapitalize="none" spellCheck={false}
+            aria-invalid={Boolean(inputError && !username)} aria-describedby={inputError ? 'login-input-error' : undefined} />
+        </div>
+        <div className="kv-field">
+          <label htmlFor="login-password">密码 <span aria-hidden="true">*</span></label>
+          <input id="login-password" name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required
+            autoComplete="current-password" disabled={busy} aria-invalid={Boolean(inputError && !password)} aria-describedby={inputError ? 'login-input-error' : undefined} />
+        </div>
+        {inputError && <div id="login-input-error"><Notice kind="error">{inputError}</Notice></div>}
         {failure != null && <RequestError error={failure} />}
         {failure instanceof ApiError && (failure.outcomeUnknown || ['KV5001', 'KV5013'].includes(failure.code)) &&
-          <Button variant="outlined" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>刷新登录状态</Button>}
-        <Button type="submit" variant="contained" disabled={busy}>{busy ? '正在登录…' : '登录'}</Button>
-      </Stack>}
-    </Paper>
-  </Box>;
+          <button className="kv-button outlined" type="button" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>刷新登录状态</button>}
+        <button className="kv-button primary" type="submit" disabled={busy}>{busy ? '正在登录…' : '登录'}</button>
+      </form>}
+    </section>
+  </div>;
 }
 
 function MissingPage() {
   const { application } = useRuntime();
-  return <Stack spacing={2} sx={{ maxWidth: 560, mx: 'auto', py: 5 }}>
-    <Typography component="h1" variant="h1">无法找到这个页面</Typography>
-    <Typography color="text.secondary">页面可能已经调整，或当前账号没有访问权限。</Typography>
-    <Button component={Link} to={application.pages[0]?.path || '/admin/login'} variant="outlined" sx={{ alignSelf: 'flex-start' }}>返回可访问的页面</Button>
-  </Stack>;
+  return <div className="kv-stack kv-missing">
+    <h1 className="kv-title">无法找到这个页面</h1>
+    <p className="kv-muted">页面可能已经调整，或当前账号没有访问权限。</p>
+    <Link className="kv-button outlined kv-self-start" to={application.pages[0]?.path || '/admin/login'}>返回可访问的页面</Link>
+  </div>;
 }
 
 export default function App() {
@@ -214,20 +212,18 @@ export default function App() {
     finally { setLoading(false); }
   }, [refresh]);
   useEffect(() => { void load(); }, [load]);
-  if (loading) return <Stack spacing={3} sx={{ maxWidth: 720, mx: 'auto', px: 3, py: 8 }} role="status" aria-label="正在加载页面">
-    <Skeleton variant="text" width="55%" height={52} /><Skeleton variant="rounded" height={340} />
-  </Stack>;
-  if (failure != null || !application || !session) return <Stack spacing={2} sx={{ maxWidth: 640, mx: 'auto', p: 4 }}>
-    <Typography variant="h1" component="h1">页面暂时无法加载</Typography>
-    <Alert severity="error">{errorMessage(failure)}</Alert><Button variant="outlined" onClick={() => { void load(); }}>重新加载</Button>
-  </Stack>;
+  if (loading) return <div className="kv-startup"><Loading label="正在加载页面" height={340} /></div>;
+  if (failure != null || !application || !session) return <div className="kv-stack kv-startup">
+    <h1 className="kv-title">页面暂时无法加载</h1>
+    <Notice kind="error">{errorMessage(failure)}</Notice><button className="kv-button outlined" type="button" onClick={() => { void load(); }}>重新加载</button>
+  </div>;
   return <RuntimeContext.Provider value={{ application, session, client: api, refresh }}>
     <Shell><Routes>
       {application.pages.map((page) => <Route key={page.path} path={page.path} element={<RuntimePage page={page} />} />)}
       {!application.pages.some((page) => page.path === '/') && <Route path="/" element={<Navigate to={application.pages[0]?.path || '/admin/login'} replace />} />}
       <Route path="/admin/login" element={<Login />} />
-      <Route path="/admin" element={<Suspense fallback={<Skeleton variant="rounded" height={360} />}><Admin /></Suspense>} />
-      <Route path="/admin/:resource" element={<Suspense fallback={<Skeleton variant="rounded" height={360} />}><Admin /></Suspense>} />
+      <Route path="/admin" element={<Suspense fallback={<Loading height={360} />}><Admin /></Suspense>} />
+      <Route path="/admin/:resource" element={<Suspense fallback={<Loading height={360} />}><Admin /></Suspense>} />
       <Route path="*" element={<MissingPage />} />
     </Routes></Shell>
   </RuntimeContext.Provider>;

@@ -10,7 +10,7 @@
 | 专属 SQLite worker | Connection 生命周期与线程所有权明确 | 读写初版串行，有界队列过载拒绝 |
 | SQLite 自定义迁移 | 能预览并保护已有数据，符合原生宿主 | 不承诺所有改名/类型转换自动完成 |
 | Axum/Tokio | HTTP 与静态资源由 Rust 宿主控制 | 慢请求、退出和发布任务需明确界限 |
-| React/MUI/CSR | 通用组件树支持表单、后台与普通 React 扩展 | 前端源码仍需构建，不能直接序列化函数 |
+| React/TypeScript/原生 CSS/CSR | 通用组件树支持表单、后台与普通 React 扩展 | 前端源码仍需构建，不能直接序列化函数 |
 | Vite 8 + Rolldown + React 插件 | 受控构建与 React Refresh，Axum 提供同源入口 | 仅开发模式启动内部 Node 子进程；真实完整热更新见阶段 09 验证 |
 | Argon2id + 服务端 Session | 密码独立盐，Cookie 仅保存随机凭据 | 同源/CSRF/限流不可由 SameSite 替代，暂无 MFA |
 | QuickJS/rquickjs 执行器 | 正式 Runtime 验证同步、Promise、ESM 与限额 | 不能兼容完整 Node；不可信项目明确拒绝，限额不等于 OS 沙箱 |

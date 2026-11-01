@@ -29,7 +29,7 @@
 
 ## 已确定的选择与明确未实现项
 
-双 Crate、单向依赖、React/MUI/CSR、Axum/Tokio、SQLite/rusqlite 和 SWC/rquickjs 纯计算路线已经进入正式实现。认证参数、客户端投影、Session/CSRF、迁移确认与备份不再是待设计项，分别见[安全契约](security-design.md)、[数据库设计](database-design.md)和[JavaScript Runtime](javascript-runtime.md)。
+双 Crate、单向依赖、React/TypeScript/原生 CSS/CSR、Axum/Tokio、SQLite/rusqlite 和 SWC/rquickjs 纯计算路线已经进入正式实现。认证参数、客户端投影、Session/CSRF、迁移确认与备份不再是待设计项，分别见[安全契约](security-design.md)、[数据库设计](database-design.md)和[JavaScript Runtime](javascript-runtime.md)。
 
 当前未实现完整 TS 类型检查、任意动态 Schema、服务端 npm/Node 兼容、数据库/文件/网络 Host API、不可信代码操作系统隔离、重命名映射执行、关系/上传字段、行级多租户与多框架适配。必须通过诊断或文档明确边界，不能静默忽略或由“解释执行”推导为已支持。
 

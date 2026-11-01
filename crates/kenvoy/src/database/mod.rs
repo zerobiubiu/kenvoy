@@ -2,11 +2,13 @@
 
 pub(crate) mod auth;
 pub mod migration;
+mod options;
 mod query;
 mod worker;
 
 use std::path::PathBuf;
 
+pub use options::{OptionsQuery, OptionsResult};
 pub use query::{FieldFilter, FilterOperator, ListQuery, ListResult, Record};
 pub use worker::{Database, DatabaseInfo};
 

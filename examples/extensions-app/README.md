@@ -9,7 +9,7 @@ kenvoy check
 kenvoy dev --install-deps
 ```
 
-`--install-deps` 明确允许安装本示例 package.json 已声明并由 package-lock.json 锁定的 `clsx 2.1.1`。React、MUI、SDK 与 Vite 由框架缓存管理，不必添加到用户依赖，也不用编写 Vite 配置。
+`--install-deps` 明确允许安装本示例 package.json 已声明并由 package-lock.json 锁定的 `clsx 2.1.1` 和 `@radix-ui/react-slot 1.5.0`。React、SDK 与 Vite 由框架缓存管理，不必添加到用户依赖，也不用编写 Vite 配置。
 
 访问 `http://127.0.0.1:3000/customers`。点击“增加数量”调用捕获 `step` 常量的客户端回调；点击“计算折扣”经同源 CSRF/Session 通道执行服务端函数，返回 0.8。表单提交写入项目 `data/app.sqlite`，与组件内的临时计数状态分开。
 

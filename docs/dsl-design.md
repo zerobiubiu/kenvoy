@@ -14,15 +14,16 @@
 
 | 标签 | 关键属性 | 允许位置/子节点 | 业务语义 |
 |---|---|---|---|
-| app | name | 根；resource、page、action、navigation | 应用容器；当前不支持标题或主题属性 |
+| app | name | 根；resource、page、action、navigation、override | 应用容器；当前不支持标题或主题属性 |
+| override | name、component | app；无子节点 | 将系统显示组件关联到普通 React 引用；不改变字段模型 |
 | resource | name | app；字段、Schema Component | 持久化模型 |
 | page | path、title、可选 resource | app 或根；form、table、字段、UI、group | 可访问页面与组件树 |
 | text/textarea | name、label、required、maxLength、default、unique、index | resource 或页面字段组 | 字符串字段 |
 | number | name、label、required、integer、min、max、default、unique、index | 同上 | 整数或有限实数 |
 | boolean | name、label、required、default、index | 同上 | 布尔字段 |
 | date/datetime | name、label、required、default、index | 同上 | 日期或带时区时间值 |
-| select | name、label、required、default、index | 同上；option | 有限字符串枚举 |
-| option | value、label | select | 枚举选项，value 唯一 |
+| select | name、label、required、default、index、optionsSource | 同上；静态 option 或远程来源 | 字符串选项，提交按来源和依赖重验 |
+| option | value、label、when | select | 静态枚举与依赖条件，value 唯一 |
 | form | resource、mode | page/group | create/edit 表单；缺省模式 create |
 | table | resource、可选列配置 | page/group | 资源列表；不因出现表格开放匿名读 |
 | action | name、handler、runtime、permission | app | 有明确执行位置和策略的操作 |

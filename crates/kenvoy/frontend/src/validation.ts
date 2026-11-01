@@ -44,7 +44,7 @@ export function validateField(field: FieldDefinition, value: unknown): Validatio
     case 'select':
       if (typeof value !== 'string') return invalid(field, 'KV4002', '选项值必须为字符串');
       if (field.required && WHITE_SPACE.test(value)) return invalid(field, 'KV4001', '必填选项值不能为空或全部为空白');
-      if (!field.options.some(option => option.value === value)) return invalid(field, 'KV4008', '值不属于声明的选项');
+      if (!field.options_source && !field.options.some(option => option.value === value)) return invalid(field, 'KV4008', '值不属于声明的选项');
       return valid(value);
   }
 }

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
 use crate::{
-    application::{FieldDefinition, FieldKind, ResourceDefinition},
+    application::{ApplicationIR, FieldDefinition, FieldKind, ResourceDefinition},
     validation::{self, WriteMode},
 };
 
@@ -69,7 +69,7 @@ pub struct ListResult {
 }
 
 /// 所有调用点的名称均已通过 Schema 注册检查；这里仍转义双引号作为第二层防护。
-fn identifier(name: &str) -> String {
+pub(super) fn identifier(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
@@ -87,7 +87,7 @@ fn columns(resource: &ResourceDefinition) -> String {
         .join(", ")
 }
 
-fn sql_value(value: &Value) -> Result<SqlValue> {
+pub(super) fn sql_value(value: &Value) -> Result<SqlValue> {
     match value {
         Value::Null => Ok(SqlValue::Null),
         Value::Bool(value) => Ok(SqlValue::Integer(i64::from(*value))),
@@ -176,11 +176,13 @@ pub(super) fn get(
 
 pub(super) fn create(
     connection: &mut Connection,
+    application: &ApplicationIR,
     resource: &ResourceDefinition,
     input: &Value,
 ) -> Result<Record> {
     let values = validation::validate_record(resource, input, WriteMode::Create)?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    super::options::validate_record(&transaction, application, resource, &values)?;
     let now = timestamp();
     let mut names = vec![identifier("created_at"), identifier("updated_at")];
     let mut params = vec![SqlValue::Text(now.clone()), SqlValue::Text(now)];
@@ -213,6 +215,7 @@ pub(super) fn create(
 
 pub(super) fn update(
     connection: &mut Connection,
+    application: &ApplicationIR,
     resource: &ResourceDefinition,
     id: i64,
     input: &Value,
@@ -223,6 +226,9 @@ pub(super) fn update(
     let Some(existing) = get(&transaction, resource, id)? else {
         return Ok(None);
     };
+    let mut merged = existing.clone();
+    merged.extend(values.clone());
+    super::options::validate_record(&transaction, application, resource, &merged)?;
     if values.is_empty() {
         return Ok(Some(existing));
     }

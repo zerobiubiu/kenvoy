@@ -1,0 +1,9 @@
+.custom-select { display: grid; gap: 8px; }
+.custom-select label { font-weight: 600; }
+.custom-select-control { width: 100%; font: inherit; padding: 12px; border: 1px solid #526176; border-radius: 8px; color: #1e293b; background: #fff; }
+.custom-select-control:focus-visible { outline: 3px solid #1558ba; outline-offset: 3px; }
+.custom-select-control[aria-invalid="true"] { border-color: #b42332; }
+.custom-select-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.custom-select-tools input, .custom-select-tools button { font: inherit; padding: 8px; }
+.custom-select p { margin: 0; }
+.custom-form { min-width: 0; }

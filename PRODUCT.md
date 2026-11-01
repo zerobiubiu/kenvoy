@@ -18,7 +18,7 @@ KEngine 只理解通用源码；Kenvoy 解释业务并提供页面、API、SQLit
 
 ## 技术与行为约束
 
-Rust 双 Crate，React + MUI + React Router，CSR，Axum/Tokio，SQLite/rusqlite。后台复用相同 Resource IR。前后端验证一致，匿名表单提交不授予列表、详情、修改或删除权限。数据库真实持久化，服务端私有模块不进入浏览器。
+Rust 双 Crate，默认界面使用 React + TypeScript + 原生 CSS + React Router，CSR，Axum/Tokio，SQLite/rusqlite。用户可在 React 自定义组件中选择组件库，不依赖框架提供某个第三方主题。后台复用相同 Resource IR；字段重载沿用原生字段、值、验证和提交协议，不另建与后端脱节的数据模型。前后端验证一致，匿名表单提交不授予列表、详情、修改或删除权限。数据库真实持久化，服务端私有模块不进入浏览器。
 
 ## 已确认的界面要求
 

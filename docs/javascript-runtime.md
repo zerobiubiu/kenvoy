@@ -40,7 +40,7 @@ CPU 执行通过 interrupt 检查期限、取消和关闭；Promise 等待同时
 
 ## 客户端模块与源码切片
 
-独立 UI 模块通过 Vite/React 构建，保留 Hooks、Props、泛型、CSS、MUI 和用户依赖。运行引用保留原 import 门面和导出名；即使最终符号由 barrel 转导，也不会跳过门面 CSS/初始化。Schema 展开和静态求值仍追踪实际声明。深层 namespace 组件成员链目前明确要求改为直接导入。
+独立 UI 模块通过 Vite/React 构建，保留 Hooks、Props、泛型、CSS 和用户选择的 React 组件库。运行引用保留原 import 门面和导出名；即使最终符号由 barrel 转导，也不会跳过门面 CSS/初始化。Schema 展开和静态求值仍追踪实际声明。深层 namespace 组件成员链目前明确要求改为直接导入。
 
 应用入口及 `.diu` 文件不会作为浏览器入口整体执行。`ClientExpression`、声明入口中导出的普通组件/函数使用同一个 source_slice 收集器，按 KEngine 词法绑定追踪实际捕获；只选取所需导入、函数和逐项 const，保留源码顺序，剥离 TS 后保留 JSX 给前端工具。动态表达式注册为工厂，函数 Props 保留函数值，不直接 JSON 序列化。
 

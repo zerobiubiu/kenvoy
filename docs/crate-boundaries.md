@@ -12,7 +12,7 @@
 | Generic IR | 定义、版本化、序列化 | 消费 |
 | Application IR | 禁止 | 定义并驱动全部 Runtime |
 | page/resource/field/admin/permission | 只可当普通 JSX 名称 | 定义业务语义 |
-| React/MUI、CSR、构建/HMR | 禁止 | 前端适配 |
+| React/原生 CSS、CSR、构建/HMR | 禁止 | 前端适配 |
 | Axum/Tokio、认证、API | 禁止 | HTTP 与生命周期 |
 | rusqlite、Schema、迁移、CRUD | 禁止 | 数据库适配 |
 | TS 去类型和服务端 JavaScript 执行 | 不提供 Kenvoy 执行流水线 | SWC 转换适配与 rquickjs 执行 |

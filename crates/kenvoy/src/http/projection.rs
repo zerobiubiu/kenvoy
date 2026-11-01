@@ -52,11 +52,11 @@ pub(super) fn application(application: &ApplicationIR, role: Role, generation: u
         })
         .collect();
     let permissions: Vec<_> = application.permissions.iter().filter(|policy|permits(role,policy.role)).filter(|policy|match &policy.target {PermissionTarget::Resource(name)=>visible.contains_key(name),PermissionTarget::Action(_)=>true}).map(|policy|json!({"target":policy.target,"operation":policy.operation,"fields":policy.fields,"form":policy.form})).collect();
-    json!({"format_version":1,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions})
+    json!({"format_version":1,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions,"component_overrides":application.component_overrides})
 }
 
 fn field(field: &FieldDefinition) -> Value {
-    let mut value = json!({"name":field.name,"label":field.label,"kind":field.kind,"required":field.required,"integer":field.integer,"min":field.min,"max":field.max,"max_length":field.max_length,"unique":field.unique,"options":field.options});
+    let mut value = json!({"name":field.name,"label":field.label,"kind":field.kind,"required":field.required,"integer":field.integer,"min":field.min,"max":field.max,"max_length":field.max_length,"unique":field.unique,"options":field.options,"options_source":field.options_source});
     if let Some(default) = &field.default {
         value["default"] = default.clone();
     }

@@ -4,7 +4,7 @@
 
 ## 从哪里开始
 
-- 了解最近交付：先读[0011：最终验收与边界修复](0011-final-acceptance.md)，再读[0010：CLI 完整生命周期](0010-cli-lifecycle.md)。
+- 了解最近交付：先读[0012：原生组件与联动选项](0012-native-components-and-options.md)，再读[0011：最终验收与边界修复](0011-final-acceptance.md)。
 - 核对执行证据：进入[验证记录索引](../verification/README.md)；当前有效行为从[整体架构](../architecture.md)及对应主题文档查询。
 - 追溯实现过程：按下表编号顺序阅读，不把早期阶段的进度或告警当作当前状态。
 
@@ -23,6 +23,7 @@
 | 0009 | [TypeScript 扩展与受限执行](0009-typescript-extensions.md) | 已执行；阶段 08 | 自定义组件、源码切片、TS/QuickJS、Action |
 | 0010 | [CLI 完整生命周期](0010-cli-lifecycle.md) | 已执行；阶段 09 | 开发监督、产物、HMR 与生产宿主 |
 | 0011 | [最终验收与边界修复](0011-final-acceptance.md) | 已执行；阶段 10 | 配置恢复、诊断、配额、统一回归与文档 |
+| 0012 | [原生组件与联动选项](0012-native-components-and-options.md) | 已执行；首版后扩展 | select、系统重载、统一数据绑定、原生 CSS 与用户 React 库 |
 
 ## 关联代码与配置
 

@@ -1,4 +1,4 @@
-import type { ApplicationDescription, DevelopmentStatus, FieldError, JsonValue, ListQuery, ListResult, RecordData, SessionView } from './types.ts';
+import type { ApplicationDescription, DevelopmentStatus, FieldError, JsonValue, ListQuery, ListResult, OptionsQuery, OptionsResult, RecordData, SessionView } from './types.ts';
 
 interface ErrorOptions { status?: number; code?: string; fields?: FieldError[]; request_id?: string; outcomeUnknown?: boolean }
 export class ApiError extends Error {
@@ -18,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; form?: string; write?: boolean }
+interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; form?: string; write?: boolean; csrf?: boolean }
 interface ResponseValue { value: unknown; requestId?: string }
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const positiveInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
@@ -27,13 +27,19 @@ const identifier = (value: string): boolean => /^[a-z][a-z0-9_]*$/.exec(value)?.
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string');
 const nullableString = (value: unknown): boolean => value === null || typeof value === 'string';
 const finiteOrNull = (value: unknown): boolean => value === null || (typeof value === 'number' && Number.isFinite(value));
+const scalar = (value: unknown): boolean => value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+const isOption = (option: unknown): boolean => isObject(option) && typeof option.value === 'string' && typeof option.label === 'string'
+  && (option.when === undefined || (isObject(option.when) && Object.values(option.when).every(scalar)));
 function isField(value: unknown): boolean {
   return isObject(value) && typeof value.name === 'string' && typeof value.label === 'string'
     && ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select'].includes(String(value.kind))
     && typeof value.required === 'boolean' && typeof value.integer === 'boolean' && typeof value.unique === 'boolean'
     && finiteOrNull(value.min) && finiteOrNull(value.max)
     && (value.max_length === null || (typeof value.max_length === 'number' && Number.isSafeInteger(value.max_length) && value.max_length >= 0))
-    && Array.isArray(value.options) && value.options.every(option => isObject(option) && typeof option.value === 'string' && typeof option.label === 'string')
+    && Array.isArray(value.options) && value.options.every(isOption)
+    && (value.options_source == null || (isObject(value.options_source) && typeof value.options_source.resource === 'string'
+      && typeof value.options_source.value === 'string' && typeof value.options_source.label === 'string' && role(value.options_source.permission)
+      && isObject(value.options_source.filters) && Object.values(value.options_source.filters).every(item => typeof item === 'string')))
     && (!Object.prototype.hasOwnProperty.call(value, 'default') || serializable(value.default));
 }
 function isComponent(value: unknown, depth = 0): boolean {
@@ -57,6 +63,7 @@ function isNavigation(value: unknown, depth = 0): boolean {
 }
 function isApplication(value: unknown): value is ApplicationDescription {
   return isObject(value) && value.format_version === 1 && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
+    && (value.component_overrides === undefined || (isObject(value.component_overrides) && Object.entries(value.component_overrides).every(([key, id]) => ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'form', 'table', 'group', 'page'].includes(key) && typeof id === 'string')))
     && (!Object.hasOwn(value, 'development') || typeof value.development === 'boolean')
     && Array.isArray(value.pages) && value.pages.every(page => isObject(page) && typeof page.path === 'string' && typeof page.title === 'string' && role(page.permission) && Array.isArray(page.components) && page.components.every(node => isComponent(node)))
     && Array.isArray(value.resources) && value.resources.every(resource => isObject(resource) && typeof resource.name === 'string' && Array.isArray(resource.fields) && resource.fields.every(isField))
@@ -209,6 +216,21 @@ export class ApiClient {
     return value as unknown as ListResult;
   }
   async get(resource: string, id: number): Promise<RecordData> { return this.#record(await this.#request(pathRecord(resource, id)), false); }
+  async options(resource: string, field: string, query: OptionsQuery, form?: string): Promise<OptionsResult> {
+    if (!identifier(field) || !isObject(query.dependencies) || !Object.values(query.dependencies).every(scalar)
+      || Object.keys(query.dependencies).some(name => !identifier(name))
+      || (query.search !== undefined && (typeof query.search !== 'string' || [...query.search].length > 256))
+      || (query.page !== undefined && !positiveInteger(query.page))
+      || (query.page_size !== undefined && (!positiveInteger(query.page_size) || query.page_size > 100))
+      || (query.selected !== undefined && typeof query.selected !== 'string')) throw new ApiError('选项查询参数无效');
+    await this.#ensureSession();
+    const { value, requestId } = await this.#request(`${pathResource(resource)}/options/${field}`, { method: 'POST', body: query, form, csrf: true });
+    if (!isObject(value) || !Array.isArray(value.data) || !value.data.every(isOption)
+      || !positiveInteger(value.page) || !positiveInteger(value.page_size) || value.page_size > 100
+      || typeof value.total !== 'number' || !Number.isSafeInteger(value.total) || value.total < 0
+      || !positiveInteger(value.generation) || (value.selected !== null && !isOption(value.selected))) throw protocolError(false, requestId);
+    return value as unknown as OptionsResult;
+  }
   async create(resource: string, data: Record<string, JsonValue>, form?: string): Promise<RecordData> {
     const path = pathResource(resource);
     await this.#ensureSession();
@@ -241,7 +263,7 @@ export class ApiClient {
     const write = options.write ?? false;
     const headers = new Headers({ accept: 'application/json' });
     if (this.#generation !== null) headers.set('x-kenvoy-generation', String(this.#generation));
-    if (write) {
+    if (write || options.csrf) {
       if (!this.#session) throw new ApiError('请先获取有效会话', { code: 'KV5001', status: 401 });
       headers.set('x-kenvoy-csrf', this.#session.csrf_token);
     }

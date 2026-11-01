@@ -162,7 +162,9 @@ pub fn validate_field(field: &FieldDefinition, value: &Value) -> Result<Value, V
                     "必填选项值不能为空或全部为空白",
                 ));
             }
-            if !field.options.iter().any(|option| option.value == text) {
+            if field.options_source.is_none()
+                && !field.options.iter().any(|option| option.value == text)
+            {
                 return Err(field_error(field, "KV4008", "值不属于声明的选项"));
             }
             Ok(value.clone())
@@ -382,6 +384,7 @@ mod tests {
             unique: false,
             index: false,
             options: vec![],
+            options_source: None,
             source: SourceLocation {
                 path: "test.tsx".into(),
                 span: kengine::SourceSpan {
@@ -412,6 +415,7 @@ mod tests {
                 definition.options = options
                     .iter()
                     .map(|value| SelectOption {
+                        when: Default::default(),
                         value: value.as_str().unwrap_or_default().into(),
                         label: String::new(),
                     })

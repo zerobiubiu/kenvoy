@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, Card, CardContent, Stack, Typography } from '@mui/material';
+import { Slot } from '@radix-ui/react-slot';
 import clsx from 'clsx';
 import { ApiError, useAction } from '@kenvoy/client';
 
@@ -33,21 +33,17 @@ export function CustomerCard({ title, onIncrement }: CustomerCardProps) {
   }
 
   return (
-    <Card className={clsx('customer-card-example', { active: count > 0 })}>
-      <CardContent>
-        <Stack spacing={2}>
-          <Typography component="h2" variant="h5">{title}</Typography>
-          <Typography>数量：{count}</Typography>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-            <Button variant="outlined" onClick={() => setCount(onIncrement(count))}>增加数量</Button>
-            <Button variant="contained" disabled={busy} onClick={() => { void calculateOnce(); }}>
+    <section className={clsx('customer-card-example', { active: count > 0 })}>
+          <h2>{title}</h2>
+          <p>数量：{count}</p>
+          <div className="customer-card-actions">
+            <Slot onClick={() => setCount(onIncrement(count))}><button type="button">增加数量</button></Slot>
+            <button type="button" disabled={busy} onClick={() => { void calculateOnce(); }}>
               {busy ? '正在计算…' : '计算折扣'}
-            </Button>
-          </Stack>
-          {discount !== null && <Typography>折扣：{discount}</Typography>}
-          {failure && <Alert severity="error">{failure}</Alert>}
-        </Stack>
-      </CardContent>
-    </Card>
+            </button>
+          </div>
+          {discount !== null && <p>折扣：{discount}</p>}
+          {failure && <p role="alert">{failure}</p>}
+    </section>
   );
 }

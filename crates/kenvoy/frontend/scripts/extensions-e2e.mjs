@@ -12,17 +12,17 @@ const secret = 'KV_SERVER_ONLY_DO_NOT_BUNDLE_82571';
 try {
   const source = join(fixture.project, 'src');
   await mkdir(join(source, 'components'));
-  await writeFile(join(fixture.project, 'package.json'), JSON.stringify({ name: 'extensions-acceptance', private: true, version: '0.1.0', dependencies: { clsx: '2.1.1' } }, null, 2));
+  await writeFile(join(fixture.project, 'package.json'), JSON.stringify({ name: 'extensions-acceptance', private: true, version: '0.1.0', dependencies: { clsx: '2.1.1', '@radix-ui/react-slot': '1.5.0' } }, null, 2));
   await writeFile(join(source, 'CustomerFields.diu.tsx'), `export default <><text name="name" label="客户姓名" required maxLength={100}/><text name="phone" label="联系电话"/><number name="age" label="年龄" integer min={0}/></>;`);
   await writeFile(join(source, 'math.ts'), 'export const discount = (amount: number): number => amount >= 10000 ? 0.8 : 0.9;');
   await writeFile(join(source, 'discount.server.ts'), `import {discount} from './math'; export async function calculate(amount:number){if(amount<0)throw new Error('${secret}');return await Promise.resolve(discount(amount));}`);
   await writeFile(join(source, 'components/index.ts'), `import './card.css'; export {CustomerCard} from './CustomerCard';`);
-  await writeFile(join(source, 'components/card.css'), '.customer-card-test { border-left: 5px solid rgb(15, 118, 110); }');
-  await writeFile(join(source, 'components/CustomerCard.tsx'), `import {useState} from 'react';import {Card,CardContent,Button} from '@mui/material';import clsx from 'clsx';import {callAction} from '@kenvoy/client';
+  await writeFile(join(source, 'components/card.css'), '.customer-card-test { padding-inline: 15px; }');
+  await writeFile(join(source, 'components/CustomerCard.tsx'), `import {useState} from 'react';import {Slot} from '@radix-ui/react-slot';import clsx from 'clsx';import {callAction} from '@kenvoy/client';
     export function CustomerCard({title,onIncrement}:{title:string,onIncrement:(count:number)=>number}){
       const [count,setCount]=useState(0);const [discount,setDiscount]=useState('');
-      return <Card className={clsx('customer-card-test',{active:count>0})}><CardContent><h2>{title}</h2><p>数量：{count}</p>
-        <Button onClick={()=>setCount(onIncrement(count))}>增加数量</Button><Button onClick={()=>{void callAction('calculateDiscount',[10000]).then(value=>setDiscount(String(value)));}}>计算折扣</Button><p>折扣：{discount}</p></CardContent></Card>;
+      return <section className={clsx('customer-card-test',{active:count>0})}><h2>{title}</h2><p>数量：{count}</p>
+        <Slot onClick={()=>setCount(onIncrement(count))}><button>增加数量</button></Slot><button onClick={()=>{void callAction('calculateDiscount',[10000]).then(value=>setDiscount(String(value)));}}>计算折扣</button><p>折扣：{discount}</p></section>;
     }`);
   await writeFile(join(source, 'app.tsx'), `import CustomerFields from './CustomerFields.diu';import {CustomerCard} from './components';import {calculate} from './discount.server';const step=2;
     export default <app name="扩展验收"><resource name="customers"><CustomerFields/></resource>
@@ -49,7 +49,7 @@ try {
   await page.goto(server.origin + '/customers');
   try {await expect(page.getByRole('heading', { name: '自定义客户卡片' })).toBeVisible({timeout:15000});}
   catch(error){console.error(JSON.stringify({errors,consoleErrors,failed,server:server.logs()},null,2));throw error;}
-  await expect(page.locator('.customer-card-test')).toHaveCSS('border-left-width', '5px');
+  await expect(page.locator('.customer-card-test')).toHaveCSS('padding-left', '15px');
   await page.getByRole('button', { name: '增加数量', exact: true }).click();
   await expect(page.getByText('数量：2', { exact: true })).toBeVisible();
   const calculation = page.waitForResponse(response => response.url().endsWith('/api/actions/calculateDiscount'));
@@ -63,8 +63,8 @@ try {
   await expect(page.getByRole('button',{name:'继续增加',exact:true})).toBeVisible({timeout:30000});
   await expect(page.getByText('数量：2',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'继续增加',exact:true}).click();await expect(page.getByText('数量：4',{exact:true})).toBeVisible();
-  await writeFile(join(source,'components/card.css'),'.customer-card-test { border-left: 7px solid rgb(15, 118, 110); }');
-  await expect(page.locator('.customer-card-test')).toHaveCSS('border-left-width','7px',{timeout:30000});
+  await writeFile(join(source,'components/card.css'),'.customer-card-test { padding-inline: 21px; }');
+  await expect(page.locator('.customer-card-test')).toHaveCSS('padding-left','21px',{timeout:30000});
   await expect(page.getByText('数量：4',{exact:true})).toBeVisible();
   await writeFile(componentPath,'export function CustomerCard( {');
   await expect(page.getByText('开发更新未通过',{exact:true})).toBeVisible({timeout:15000});
@@ -89,7 +89,7 @@ try {
   });
   assert.equal(failure.status(), 500); assert.equal((await failure.text()).includes(secret), false);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ status: '通过', hooks_props_inline_capture: true, mui_third_party_css_barrel: true, schema_component: true, server_ts_esm_promise: true, private_code_isolated: true, project_manifest_preserved: true, fast_refresh_preserves_hooks: true, css_update_preserves_state: true, invalid_candidate_preserves_mirror_and_recovers: true }, null, 2));
+  console.log(JSON.stringify({ status: '通过', hooks_props_inline_capture: true, radix_third_party_css_barrel: true, schema_component: true, server_ts_esm_promise: true, private_code_isolated: true, project_manifest_preserved: true, fast_refresh_preserves_hooks: true, css_update_preserves_state: true, invalid_candidate_preserves_mirror_and_recovers: true }, null, 2));
   await server.stop();
 } catch(error) {
   const state=diagnosticPage?await diagnosticPage.request.get(diagnosticServer.origin+'/_kenvoy/development').then(response=>response.json()).catch(()=>null):null;

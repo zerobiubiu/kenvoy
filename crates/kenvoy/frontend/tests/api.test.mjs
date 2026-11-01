@@ -23,6 +23,37 @@ function harness(responses) {
   return { client, calls };
 }
 
+test('只读选项 POST 携带当前 CSRF、代际、表单及声明依赖，保留选中值解析', async () => {
+  const result = { data: [{ value: 'sh', label: '上海' }], page: 1, page_size: 20, total: 1, generation: 7, selected: { value: 'sh', label: '上海' } };
+  const { client, calls } = harness([response(application(7)), response(session(7)), response(result)]);
+  await client.getApplication();
+  assert.deepEqual(await client.options('entries', 'city', { dependencies: { region: 'east' }, selected: 'sh', search: '上海', page: 1 }, '/登记#form-1'), result);
+  assert.equal(calls[2].path, '/api/entries/options/city');
+  assert.equal(calls[2].headers.get('x-kenvoy-csrf'), 'a'.repeat(64));
+  assert.equal(calls[2].headers.get('x-kenvoy-generation'), '7');
+  assert.equal(calls[2].headers.get('x-kenvoy-form'), encodeURIComponent('/登记#form-1'));
+  assert.deepEqual(JSON.parse(calls[2].body).dependencies, { region: 'east' });
+});
+
+test('选项读取失败可以重新加载，不标记为写入结果未知；非法查询不发请求', async () => {
+  for (const failure of [new Error('连接中断'), response({ data: [{}] })]) {
+    const { client, calls } = harness([response(session()), failure]);
+    await assert.rejects(client.options('entries', 'city', { dependencies: {} }), error => error instanceof ApiError && !error.outcomeUnknown);
+    assert.equal(calls.length, 2);
+  }
+  const { client, calls } = harness([]);
+  for (const query of [{ dependencies: { region: {} } }, { dependencies: {}, page_size: 101 }, { dependencies: {}, page: 0 }, { dependencies: {}, search: 'x'.repeat(257) }]) {
+    await assert.rejects(client.options('entries', 'city', query), ApiError);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('应用描述拒绝未识别的系统重载目标及无效选项条件', async () => {
+  const bad = application(1); bad.component_overrides = { database: 'component-1' };
+  const { client } = harness([response(bad)]);
+  await assert.rejects(client.getApplication(), error => error.code === 'KV6002');
+});
+
 test('匿名提交携带 CSRF/代际/编码表单标识，真实记录响应剥离 data', async () => {
   const { client, calls } = harness([response(session()), response(application(7)), response({ data: record }, 201)]);
   await client.getSession();

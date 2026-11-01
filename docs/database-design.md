@@ -16,7 +16,7 @@
 
 | 字段 | 存储 | 约束 |
 |---|---|---|
-| text/textarea/select | TEXT | 类型、required、Unicode 标量长度、枚举和 NUL 拒绝 |
+| text/textarea/select | TEXT | 类型、required、Unicode 标量长度和 NUL 拒绝；静态 select 另有全集枚举 CHECK |
 | number integer | INTEGER | 安全整数 ±(2^53−1)、范围，禁止舍入或截断 |
 | number | REAL | 有限数和范围 |
 | boolean | INTEGER | 0/1；CRUD JSON 仍为布尔值 |
@@ -28,7 +28,9 @@
 
 CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/delete；写入及结果读取在事务中完成。列表默认每页 20，上限 100，最多 16 个筛选条件，搜索最多 256 个 Unicode 标量。排序只允许声明字段及系统字段，以 id 补充稳定顺序；LIKE 转义百分号、下划线和反斜杠。计数和分页读取使用同一事务快照。未知资源、内部表、未知字段和非法查询拒绝。
 
-数据库 Runtime 属于内部能力，阶段 04 尚不执行 HTTP 用户授权。后续 HTTP 必须先检查用户与 Resource 策略，再调用数据库；持有句柄不代表公开 API 已经授权。
+数据库 Runtime 属于内部能力，HTTP 先检查用户与 Resource 策略，再调用数据库；持有句柄不代表公开 API 已经授权。
+
+远程 select 的值仍是 TEXT，不生成静态 IN CHECK。选项查询仅取已声明的值/标签列，条件使用参数绑定，分页和 selected 值解析在同一读事务内。创建与 PATCH 在写事务内验证来源值和联动条件；PATCH 先合并已有记录。when/筛选等运行规则不参与物理 Schema hash，规则变更保留存量数据、后续写入重验；静态枚举全集变化或切换远程方式按实际约束 Diff 处理。详见[组件与选项契约](component-bindings.md)。
 
 ## Diff、确认与历史
 

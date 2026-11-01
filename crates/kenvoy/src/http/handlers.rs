@@ -8,7 +8,7 @@ use crate::{
         Role,
     },
     auth::SessionResponse,
-    database::{FieldFilter, FilterOperator, ListQuery},
+    database::{FieldFilter, FilterOperator, ListQuery, OptionsQuery},
     validation,
 };
 use axum::{
@@ -401,6 +401,30 @@ fn id(value: &str) -> Result<i64, ApiError> {
     Ok(id)
 }
 
+fn authorize_option_write(
+    app: &ApplicationIR,
+    resource: &str,
+    input: &Value,
+    actual_role: Role,
+    patch: bool,
+) -> Result<(), ApiError> {
+    let resource = app.resource(resource).ok_or_else(ApiError::missing)?;
+    for field in &resource.fields {
+        if let Some(source) = &field.options_source
+            && !permits(actual_role, source.permission)
+            && (patch
+                || input
+                    .get(&field.name)
+                    .or(field.default.as_ref())
+                    .is_some_and(|value| !value.is_null()))
+        {
+            // PATCH 在事务内重验整条合并记录；先拒绝低权限调用，避免通过候选存在性探测私有数据。
+            return Err(ApiError::denied(actual_role));
+        }
+    }
+    Ok(())
+}
+
 fn list_query(uri: &Uri, app: &ApplicationIR, resource: &str) -> Result<ListQuery, ApiError> {
     let definition = app.resource(resource).ok_or_else(ApiError::missing)?;
     let raw = uri.query().unwrap_or("");
@@ -456,6 +480,65 @@ fn list_query(uri: &Uri, app: &ApplicationIR, resource: &str) -> Result<ListQuer
         }
     }
     Ok(query)
+}
+
+pub(super) async fn options(
+    State(shared): State<Arc<Shared>>,
+    Extension(peer): Extension<ClientPeer>,
+    Path((resource, field_name)): Path<(String, String)>,
+    headers: HeaderMap,
+    uri: Uri,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    no_query(&uri)?;
+    let session = require_write(&shared, &headers).await?;
+    let input = parse_json(&headers, &body)?;
+    let query: OptionsQuery = serde_json::from_value(input)
+        .map_err(|_| ApiError::bad("选项查询仅接受 dependencies/search/page/page_size/selected"))?;
+    let model = shared.model.read().await;
+    check_generation(&headers, model.generation)?;
+    let definition = model
+        .application
+        .resource(&resource)
+        .ok_or_else(ApiError::missing)?;
+    let field = definition
+        .field(&field_name)
+        .ok_or_else(ApiError::missing)?;
+    let source = field
+        .options_source
+        .as_ref()
+        .ok_or_else(ApiError::missing)?;
+    let actual_role = role(Some(&session));
+    if !permits(actual_role, source.permission) {
+        return Err(ApiError::denied(actual_role));
+    }
+    let form = header_once(&headers, "x-kenvoy-form")?
+        .map(decode_uri)
+        .transpose()?;
+    let mut fields = serde_json::Map::new();
+    fields.insert(field.name.clone(), Value::Null);
+    fields.extend(
+        field
+            .option_dependencies()
+            .into_iter()
+            .map(|name| (name.to_owned(), Value::Null)),
+    );
+    policy(
+        &model.application,
+        &resource,
+        Operation::Create,
+        actual_role,
+        form.as_deref(),
+        Some(&fields),
+    )?;
+    limit_requests(&shared, [(format!("options:{}", peer_key(peer.0)), 240)])?;
+    let result = shared
+        .database
+        .options(&resource, &field_name, query)
+        .await?;
+    Ok(Json(
+        json!({"data":result.data,"selected":result.selected,"total":result.total,"page":result.page,"page_size":result.page_size,"generation":model.generation}),
+    ))
 }
 
 pub(super) async fn list(
@@ -547,6 +630,7 @@ pub(super) async fn create(
             ],
         )?;
     }
+    authorize_option_write(&model.application, &resource, &input, role, false)?;
     let mut record = shared.database.create(&resource, input).await?;
     if role != Role::Admin {
         record.retain(|key, _| {
@@ -576,6 +660,13 @@ pub(super) async fn update(
         role(Some(&session)),
         None,
         input.as_object(),
+    )?;
+    authorize_option_write(
+        &model.application,
+        &resource,
+        &input,
+        role(Some(&session)),
+        true,
     )?;
     let record = shared
         .database

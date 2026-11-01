@@ -6,7 +6,7 @@
 
 2026-11-01 在 Windows、Node v24.22.0、npm 12.2.0 和已有 Chromium 156.0.8078.4 上执行：
 
-- JSON 页面描述通过注册表渲染 React/MUI 字段；真实浏览器完成输入和表单交互。
+- JSON 页面描述通过注册表渲染 React 原生字段；真实浏览器完成输入和表单交互。
 - React Router 支持构建产物的 `/customers` 深层地址。
 - 跨文件普通组件支持 Props、Hooks 与 CSS。
 - Vite/Rolldown 生产构建及 manifest/source map 生成成功。
@@ -18,7 +18,7 @@
 
 ## 版本与安装
 
-精确版本写入 `package.json`，解析结果、来源和 integrity 写入 `package-lock.json`：React/React DOM 19.3.1、MUI 9.5.0、Emotion React 11.14.0、Emotion Styled 11.14.1、React Router 8.5.1、Vite 8.3.5、官方 React 插件 6.1.2、Rolldown 1.2.16、Playwright Test 1.64.1。
+精确版本写入 `package.json`，解析结果、来源和 integrity 写入 `package-lock.json`：React/React DOM 19.3.1、React Router 8.5.1、Vite 8.3.5、官方 React 插件 6.1.2、Rolldown 1.2.16、Playwright Test 1.64.1。
 
 本次首先查询 npm registry 的稳定 dist-tag、peer dependencies 和 engines，随后执行锁定安装；没有使用主分支版本作为锁定依据。初次安装产生一项 optional peer 的 extraneous `yaml`，执行 `npm prune --ignore-scripts --no-audit --no-fund` 后移除；再执行 `npm ci --ignore-scripts --no-audit --no-fund` 安装 105 个包，`npm ls --depth=0` 仅列出上述十个直接依赖。
 
@@ -34,7 +34,7 @@ npm.cmd run probe
 
 ## Axum 同端口跨工具验证
 
-补充脚本 `scripts/axum-browser.mjs` 由显式运行的 Rust ignored test 调用；脚本不启动替代 HTTP 服务。Axum 在 loopback 同端口托管本目录真实 `dist` 与 SQLite API。Chromium 验证三个 MUI 字段和 Hooks 计数器交互后，独立同源 `fetch` 创建 `{name: 'Axum浏览器', age: 25}`，收到 HTTP 201 和真实记录；无凭据列表请求为 401，未知资源为 404，错误响应不是 HTML。Rust 关闭服务后重开数据库，确认 1 条记录。
+补充脚本 `scripts/axum-browser.mjs` 由显式运行的 Rust ignored test 调用；脚本不启动替代 HTTP 服务。Axum 在 loopback 同端口托管本目录真实 `dist` 与 SQLite API。Chromium 验证三个 React 字段和 Hooks 计数器交互后，独立同源 `fetch` 创建 `{name: 'Axum浏览器', age: 25}`，收到 HTTP 201 和真实记录；无凭据列表请求为 401，未知资源为 404，错误响应不是 HTML。Rust 关闭服务后重开数据库，确认 1 条记录。
 
 实际命令退出码 0：
 
@@ -60,4 +60,4 @@ cargo test -p kenvoy --test p03_http_sqlite axum_serves_built_react_and_sqlite_t
 
 ## 依据
 
-设计和后续正式适配参考 [Rolldown 能力范围](https://rolldown.rs/guide/introduction)、[Vite 后端集成](https://vite.dev/guide/backend-integration)、[官方 React 插件](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) 及 [MUI 安装说明](https://mui.com/material-ui/getting-started/installation/)。本目录保留显式配置仅便于独立验证；正式用户项目不应被要求手写 Vite 配置。
+设计和后续正式适配参考 [Rolldown 能力范围](https://rolldown.rs/guide/introduction)、[Vite 后端集成](https://vite.dev/guide/backend-integration)、[官方 React 插件](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) 及 [React 受控字段](https://react.dev/reference/react-dom/components/select)。本目录保留显式配置仅便于独立验证；正式用户项目不应被要求手写 Vite 配置。

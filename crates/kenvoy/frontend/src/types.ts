@@ -3,7 +3,11 @@ export type JsonScalar = string | number | boolean | null;
 export type JsonValue = JsonScalar | JsonValue[] | { [key: string]: JsonValue };
 export type Role = 'anonymous' | 'user' | 'admin';
 export type FieldKind = 'text' | 'textarea' | 'number' | 'boolean' | 'date' | 'datetime' | 'select';
-export interface SelectOption { value: string; label: string }
+export interface SelectOption { value: string; label: string; when?: Record<string, JsonScalar> }
+export interface OptionsSource { resource: string; value: string; label: string; filters: Record<string, string>; permission: Role }
+export interface OptionsQuery { dependencies: Record<string, JsonScalar>; search?: string; page?: number; page_size?: number; selected?: string }
+export interface OptionsResult { data: SelectOption[]; page: number; page_size: number; total: number; generation: number; selected: SelectOption | null }
+export type SystemComponentName = FieldKind | 'form' | 'table' | 'group' | 'page';
 export interface FieldDefinition {
   name: string;
   label: string;
@@ -15,6 +19,7 @@ export interface FieldDefinition {
   max_length: number | null;
   unique: boolean;
   options: SelectOption[];
+  options_source?: OptionsSource | null;
   /** 缺失与显式 null 的默认值必须区分。 */
   default?: JsonValue;
 }
@@ -48,6 +53,7 @@ export interface ApplicationDescription {
   navigation: NavigationDefinition[];
   actions: ActionDefinition[];
   permissions: PermissionDefinition[];
+  component_overrides?: Partial<Record<SystemComponentName, string>>;
 }
 export interface DevelopmentStatus {
   revision: number;

@@ -29,8 +29,7 @@ try {
   await page.getByLabel('数量', { exact: false }).fill('12.5');
   await page.getByLabel('登记日期', { exact: false }).fill('2024-02-29');
   await page.getByLabel('发生时间', { exact: false }).fill('2024-02-29T23:30:00');
-  await page.getByRole('combobox', { name: '类别', exact: false }).click();
-  await page.getByRole('option', { name: '乙类', exact: true }).click();
+  await page.getByRole('combobox', { name: '类别', exact: false }).selectOption('b');
   await page.getByRole('button', { name: '提交信息', exact: true }).click();
   await expect(page.getByLabel('发生时间', { exact: false })).toHaveAttribute('aria-invalid', 'true');
   await page.getByLabel('发生时间', { exact: false }).fill('2024-02-29T23:30:00+08:00');

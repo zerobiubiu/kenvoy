@@ -187,6 +187,29 @@ async fn limits_registry_and_untrusted_are_enforced() -> TestResult {
 
 #[tokio::test]
 async fn bounded_queue_cancel_and_shutdown_release_pending_promises() -> TestResult {
+    use std::{
+        future::{Future, poll_fn},
+        pin::Pin,
+        task::Poll,
+    };
+
+    type Call<'a> = Pin<Box<dyn Future<Output = Result<Json, JsError>> + 'a>>;
+    async fn admitted<'a>(
+        runtime: &'a JavascriptRuntime,
+        handler: &'static str,
+    ) -> Result<Call<'a>, JsError> {
+        loop {
+            let mut call: Call<'a> = Box::pin(runtime.call(handler, vec![]));
+            match poll_fn(|cx| Poll::Ready(call.as_mut().poll(cx))).await {
+                Poll::Pending => return Ok(call),
+                // Busy 明确表示未入队；等待真实容量，不以固定 sleep 猜测线程进度。
+                Poll::Ready(Err(JsError::Busy)) => tokio::task::yield_now().await,
+                Poll::Ready(Err(error)) => return Err(error),
+                Poll::Ready(Ok(_)) => panic!("排队场景中的调用不应提前完成"),
+            }
+        }
+    }
+
     let runtime = JavascriptRuntime::start(
         bundle(
             "export function pending(){return new Promise(()=>{});} export function good(){return 42;}",
@@ -199,36 +222,35 @@ async fn bounded_queue_cancel_and_shutdown_release_pending_promises() -> TestRes
         },
         Trust::Project,
     )?;
-    let first = tokio::spawn({
-        let runtime = runtime.clone();
-        async move { runtime.call("pending", vec![]).await }
-    });
-    tokio::time::sleep(Duration::from_millis(30)).await;
-    let second = tokio::spawn({
-        let runtime = runtime.clone();
-        async move { runtime.call("pending", vec![]).await }
-    });
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    let first =
+        tokio::time::timeout(Duration::from_secs(2), admitted(&runtime, "pending")).await??;
+    // 容量为1；第二次已入队证明第一个已被工作线程取走，而且当前队列确实已满。
+    let second =
+        tokio::time::timeout(Duration::from_secs(2), admitted(&runtime, "pending")).await??;
     assert!(matches!(
         runtime.call("good", vec![]).await,
         Err(JsError::Busy)
     ));
-    first.abort();
-    second.abort();
-    let _ = first.await;
-    let _ = second.await;
-    tokio::time::sleep(Duration::from_millis(30)).await;
+    drop(first);
+    drop(second);
     assert_eq!(
-        tokio::time::timeout(Duration::from_millis(500), runtime.call("good", vec![])).await??,
+        tokio::time::timeout(Duration::from_millis(500), async {
+            loop {
+                match runtime.call("good", vec![]).await {
+                    Err(JsError::Busy) => tokio::task::yield_now().await,
+                    result => break result,
+                }
+            }
+        })
+        .await??,
         json!(42)
     );
-    let pending = tokio::spawn({
-        let runtime = runtime.clone();
-        async move { runtime.call("pending", vec![]).await }
-    });
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    let pending =
+        tokio::time::timeout(Duration::from_secs(2), admitted(&runtime, "pending")).await??;
+    let queued = tokio::time::timeout(Duration::from_secs(2), admitted(&runtime, "good")).await??;
     tokio::time::timeout(Duration::from_millis(500), runtime.shutdown()).await??;
-    assert!(matches!(pending.await?, Err(JsError::Closed)));
+    assert!(matches!(pending.await, Err(JsError::Closed)));
+    assert!(matches!(queued.await, Err(JsError::Closed)));
     Ok(())
 }
 

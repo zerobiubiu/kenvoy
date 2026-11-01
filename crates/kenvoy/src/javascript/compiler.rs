@@ -581,6 +581,7 @@ mod tests {
             let application = ApplicationIR {
                 format_version: APPLICATION_IR_VERSION,
                 name: "计算测试".into(),
+                component_overrides: Default::default(),
                 resources: vec![],
                 pages: vec![],
                 actions: vec![],

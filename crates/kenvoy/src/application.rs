@@ -36,6 +36,8 @@ pub struct ApplicationIR {
     pub navigation: Vec<NavigationDefinition>,
     pub permissions: Vec<PermissionDefinition>,
     pub module_references: Vec<ModuleReference>,
+    #[serde(default)]
+    pub component_overrides: BTreeMap<String, String>,
 }
 
 impl ApplicationIR {
@@ -89,6 +91,8 @@ pub struct FieldDefinition {
     pub unique: bool,
     pub index: bool,
     pub options: Vec<SelectOption>,
+    #[serde(default)]
+    pub options_source: Option<OptionsSource>,
     pub source: SourceLocation,
 }
 
@@ -105,11 +109,15 @@ impl FieldDefinition {
             && self.max_length == other.max_length
             && self.unique == other.unique
             && self.index == other.index
+            && self.options_source == other.options_source
             && self
                 .options
                 .iter()
-                .map(|option| &option.value)
-                .eq(other.options.iter().map(|option| &option.value))
+                .map(|option| (&option.value, &option.when))
+                .eq(other
+                    .options
+                    .iter()
+                    .map(|option| (&option.value, &option.when)))
     }
 }
 
@@ -117,6 +125,33 @@ impl FieldDefinition {
 pub struct SelectOption {
     pub value: String,
     pub label: String,
+    #[serde(default)]
+    pub when: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OptionsSource {
+    pub resource: String,
+    pub value: String,
+    pub label: String,
+    #[serde(default)]
+    pub filters: BTreeMap<String, String>,
+    pub permission: Role,
+}
+
+impl FieldDefinition {
+    pub fn option_dependencies(&self) -> std::collections::BTreeSet<&str> {
+        self.options
+            .iter()
+            .flat_map(|option| option.when.keys().map(String::as_str))
+            .chain(
+                self.options_source
+                    .iter()
+                    .flat_map(|source| source.filters.values().map(String::as_str)),
+            )
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

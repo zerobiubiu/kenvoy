@@ -368,18 +368,11 @@ impl Project {
     /// npm 和样式解析是宿主责任，KEngine 只收到精确 external 名称。
     /// 此处只建立允许集合，是否真正可打包在构建阶段验证。
     pub(crate) fn external_packages(&self) -> Result<BTreeSet<String>> {
-        let mut packages: BTreeSet<String> = [
-            "@kenvoy/client",
-            "react",
-            "react-dom",
-            "react-router",
-            "@mui/material",
-            "@emotion/react",
-            "@emotion/styled",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
+        let mut packages: BTreeSet<String> =
+            ["@kenvoy/client", "react", "react-dom", "react-router"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
         let package_path = self.root.join("package.json");
         if package_path.is_file() {
             let data = fs::read(&package_path).map_err(|error| io(&package_path, error))?;
@@ -693,7 +686,7 @@ mod regression_tests {
             "src/app.tsx",
             "import { Widget } from './Widget'; export default <Widget />;",
         )?;
-        let widget = scratch.write("src/Widget.tsx", "import './style.css'; import { Button } from '@mui/material/Button'; export function Widget() { return <Button>甲</Button>; }")?;
+        let widget = scratch.write("src/Widget.tsx", "import './style.css'; import { Fragment } from 'react/jsx-runtime'; export function Widget() { return <Fragment>甲</Fragment>; }")?;
         scratch.write("src/style.css", "body { color: red; }")?;
         let project = Project::load(&scratch.0)?;
         let mut session = AnalysisSession::new();
@@ -711,7 +704,7 @@ mod regression_tests {
         let css = project.analyze(&mut session)?;
         assert_eq!(css.program, noop.program);
         assert!(css.stats.parsed.is_empty());
-        scratch.write("src/Widget.tsx", "import './style.css'; import { Button } from '@mui/material/Button'; export function Widget() { return <Button>乙</Button>; }")?;
+        scratch.write("src/Widget.tsx", "import './style.css'; import { Fragment } from 'react/jsx-runtime'; export function Widget() { return <Fragment>乙</Fragment>; }")?;
         let changed = project.analyze(&mut session)?;
         assert_eq!(changed.stats.parsed, vec![widget]);
         assert_eq!(changed.stats.reused.len(), 1);

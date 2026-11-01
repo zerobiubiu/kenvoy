@@ -69,6 +69,7 @@ pub fn analyze(program: &ProgramIR, entry: &Path, default_name: &str) -> Analyze
         navigation: vec![],
         permissions: vec![],
         modules: vec![],
+        component_overrides: BTreeMap::new(),
         diagnostics: vec![],
     };
     let name = match analyzer.root(&nodes, default_name) {
@@ -119,6 +120,7 @@ pub fn analyze(program: &ProgramIR, entry: &Path, default_name: &str) -> Analyze
             navigation: analyzer.navigation,
             permissions: analyzer.permissions,
             module_references: analyzer.modules,
+            component_overrides: analyzer.component_overrides,
         }),
         diagnostics: vec![],
     }
@@ -133,6 +135,7 @@ struct Analyzer<'a> {
     navigation: Vec<NavigationDefinition>,
     permissions: Vec<PermissionDefinition>,
     modules: Vec<ModuleReference>,
+    component_overrides: BTreeMap<String, String>,
     diagnostics: Vec<DslDiagnostic>,
 }
 
@@ -375,6 +378,7 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
     match kind {
         FieldKind::Text | FieldKind::Textarea => allowed.extend(["maxLength", "unique"]),
         FieldKind::Number => allowed.extend(["integer", "min", "max", "unique"]),
+        FieldKind::Select => allowed.push("optionsSource"),
         _ => {}
     }
     attrs(element, &allowed)?;
@@ -414,6 +418,7 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
         unique: boolean(element, "unique")?,
         index: boolean(element, "index")?,
         options: vec![],
+        options_source: json(element, "optionsSource")?.map(|value| serde_json::from_value(value.clone()).map_err(|_| error(element,"KV2015","optionsSource 必须声明 resource/value/label/permission，可选 filters 为源字段到本资源字段的映射","使用静态对象；permission 显式取 anonymous/user/admin"))).transpose()?,
         source: element.source.clone(),
     };
     if definition
@@ -452,7 +457,7 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
                     "为每个枚举值声明 option",
                 ));
             }
-            attrs(option, &["value", "label"])?;
+            attrs(option, &["value", "label", "when"])?;
             no_children(option)?;
             let value = required_string(option, "value")?;
             if value.contains('\0') {
@@ -472,16 +477,29 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
                 ));
             }
             definition.options.push(SelectOption {
+                when: json(option, "when")?
+                    .map(|value| {
+                        serde_json::from_value(value.clone()).map_err(|_| {
+                            error(
+                                option,
+                                "KV2015",
+                                "option.when 必须是字段到标量的对象",
+                                "使用静态对象声明联动条件",
+                            )
+                        })
+                    })
+                    .transpose()?
+                    .unwrap_or_default(),
                 label: string(option, "label")?.unwrap_or_else(|| value.clone()),
                 value,
             });
         }
-        if definition.options.is_empty() {
+        if definition.options.is_empty() && definition.options_source.is_none() {
             return Err(error(
                 element,
                 "KV2007",
-                "select 至少需要一个 option",
-                "声明静态字符串选项",
+                "select 至少需要一个 option 或 optionsSource",
+                "声明静态字符串选项或受控资源来源",
             ));
         }
     } else {
@@ -597,11 +615,16 @@ impl Analyzer<'_> {
                     }
                 }
                 "navigation" => raw_navigation.push(child),
+                "override" => {
+                    if let Err(error) = self.override_definition(child) {
+                        self.diagnostics.push(error);
+                    }
+                }
                 _ => self.diagnostics.push(error(
                     child,
                     "KV2001",
                     format!("app 内不允许标签 {}", child.name),
-                    "app 只包含 resource、page、action 或 navigation",
+                    "app 只包含 resource、page、action、navigation 或 override",
                 )),
             }
         }
@@ -615,6 +638,40 @@ impl Analyzer<'_> {
             match self.navigation_definition(navigation) {
                 Ok(definition) => self.navigation.push(definition),
                 Err(error) => self.diagnostics.push(error),
+            }
+        }
+        if let Err((source, message)) = crate::options::validate_definitions(
+            &self.resources.values().cloned().collect::<Vec<_>>(),
+        ) {
+            self.diagnostics.push(semantic_error(
+                source,
+                "KV2015",
+                message,
+                "检查选项来源、联动字段及依赖循环",
+            ));
+        }
+        for policy in &self.permissions {
+            let PermissionTarget::Resource(name) = &policy.target else {
+                continue;
+            };
+            let Some(resource) = self.resources.get(name) else {
+                continue;
+            };
+            for field in &resource.fields {
+                if let Some(source) = &field.options_source
+                    && (policy.fields.contains(&field.name)
+                        || field.default.as_ref().is_some_and(|value| !value.is_null()))
+                    && policy.role != Role::Admin
+                    && source.permission != Role::Anonymous
+                    && policy.role != source.permission
+                {
+                    self.diagnostics.push(semantic_error(
+                        field.source.clone(),
+                        "KV2015",
+                        format!("表单权限不足以查询或提交字段 {} 的选项来源", field.name),
+                        "提高页面权限、缩小表单字段范围，或明确降低来源投影权限",
+                    ));
+                }
             }
         }
         Ok(name)
@@ -867,6 +924,24 @@ impl Analyzer<'_> {
                             .collect()
                     });
                     check_projection(element, definition, &fields)?;
+                    if definition
+                        .fields
+                        .iter()
+                        .filter(|field| fields.contains(&field.name))
+                        .any(|field| {
+                            field
+                                .option_dependencies()
+                                .iter()
+                                .any(|dependency| !fields.iter().any(|name| name == dependency))
+                        })
+                    {
+                        return Err(error(
+                            element,
+                            "KV2015",
+                            "表单 fields 必须包含选项联动所需字段",
+                            "将联动父字段加入同一表单，不能跨表单拼接权限",
+                        ));
+                    }
                     if mode == FormMode::Create
                         && definition.fields.iter().any(|field| {
                             field.required
@@ -1055,6 +1130,65 @@ impl Analyzer<'_> {
             source,
             Some(reference.span.clone()),
         )
+    }
+
+    fn override_definition(&mut self, element: &StaticElement) -> Result<()> {
+        intrinsic(element)?;
+        attrs(element, &["name", "component"])?;
+        no_children(element)?;
+        let name = required_string(element, "name")?;
+        if !matches!(
+            name.as_str(),
+            "text"
+                | "textarea"
+                | "number"
+                | "boolean"
+                | "date"
+                | "datetime"
+                | "select"
+                | "form"
+                | "table"
+                | "group"
+                | "page"
+        ) {
+            return Err(error(
+                element,
+                "KV2016",
+                "不支持的系统组件重载目标",
+                "使用字段类型或 form/table/group/page",
+            ));
+        }
+        if self.component_overrides.contains_key(&name) {
+            return Err(error(
+                element,
+                "KV2005",
+                format!("重复组件重载 {name}"),
+                "每个系统组件只注册一个重载",
+            ));
+        }
+        let reference = match element.attributes.get("component") {
+            Some(StaticValue::Reference(reference))
+                if reference.external || self.is_function(reference) =>
+            {
+                reference
+            }
+            _ => {
+                return Err(error(
+                    element,
+                    "KV2016",
+                    "重载 component 必须引用导出的 React 函数组件",
+                    "传入组件引用，不传元素、对象、字符串或调用结果",
+                ));
+            }
+        };
+        let id = self.register_module(
+            reference,
+            ModuleReferenceKind::ClientComponent,
+            &element.source,
+            None,
+        );
+        self.component_overrides.insert(name, id);
+        Ok(())
     }
 
     fn action_definition(&mut self, element: &StaticElement) -> Result<()> {
@@ -1621,6 +1755,65 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.root);
             }
         }
+    }
+
+    #[test]
+    fn linked_options_sources_and_overrides_are_explicit_and_validated() -> TestResult {
+        let source = r#"import {SelectView} from './view'; export default <app name='选项'><override name='select' component={SelectView}/><resource name='cities'><text name='code' unique/><text name='name'/><text name='province'/></resource><resource name='customers'><select name='province'><option value='zj'/><option value='js'/></select><select name='city' optionsSource={{resource:'cities',value:'code',label:'name',filters:{province:'province'},permission:'anonymous'}}/><select name='district'><option value='xihu' when={{province:'zj'}}/><option value='gulou' when={{province:'js'}}/></select></resource><page path='/customers'><form resource='customers'/></page></app>;"#;
+        let files = [(
+            "view.tsx",
+            "export function SelectView(props: unknown){return <select/>;}",
+        )];
+        let app = Fixture::new(source, &files)?.valid()?;
+        assert_eq!(app.component_overrides.len(), 1);
+        assert_eq!(
+            app.module_references[0].kind,
+            ModuleReferenceKind::ClientComponent
+        );
+        let city = app
+            .resource("customers")
+            .ok_or("缺少资源")?
+            .field("city")
+            .ok_or("缺少字段")?;
+        assert_eq!(
+            city.options_source.as_ref().ok_or("缺少来源")?.resource,
+            "cities"
+        );
+        for invalid in [
+            source.replace("value:'code'", "value:'name'"),
+            source.replace("permission:'anonymous'", "permission:'root'"),
+            source.replace("permission:'anonymous'", "permission:'admin'"),
+            source.replace(
+                "filters:{province:'province'}",
+                "filters:{province:'missing'}",
+            ),
+            source.replace("when={{province:'zj'}}", "when={{district:'xihu'}}"),
+            source.replace("component={SelectView}", "component={'SelectView'}"),
+            source.replace("name='select' component", "name='unknown' component"),
+            source.replace(
+                "<resource name='cities'>",
+                "<override name='select' component={SelectView}/><resource name='cities'>",
+            ),
+            source.replace(
+                "<form resource='customers'/>",
+                "<form resource='customers' fields={['city']}/>",
+            ),
+        ] {
+            assert!(
+                Fixture::new(&invalid, &files)?
+                    .analyze()?
+                    .application
+                    .is_none(),
+                "应拒绝 {invalid}"
+            );
+        }
+        let mut old = serde_json::to_value(&app)?;
+        old.as_object_mut()
+            .ok_or("缺少对象")?
+            .remove("component_overrides");
+        let restored: ApplicationIR = serde_json::from_value(old)?;
+        assert!(restored.component_overrides.is_empty());
+        Ok(())
     }
 
     #[test]

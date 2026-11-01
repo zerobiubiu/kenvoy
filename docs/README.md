@@ -62,6 +62,7 @@
 | [CLI](cli-design.md) | 用户命令、参数、输出及失败行为 |
 | [项目配置](project-configuration.md) | 默认值、路径规则、重载与部署配置 |
 | [前端 Runtime](frontend-runtime.md) | 描述解释、表单/后台、组件构建和更新 |
+| [组件重载与联动选项](component-bindings.md) | 原生数据绑定、静态联动、跨资源选项、用户 React 组件库 |
 | [JavaScript Runtime](javascript-runtime.md) | TS 转换、模块、Action、限额及隔离 |
 | [数据库设计](database-design.md) | 连接所有权、字段映射、Schema 和数据一致性 |
 | [迁移执行协议](migration-design.md) | 预览、确认、备份、执行与失败处理 |

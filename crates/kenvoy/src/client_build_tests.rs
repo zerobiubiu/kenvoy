@@ -178,7 +178,7 @@ async fn real_custom_build_installs_only_explicit_user_dependencies_and_reuses_t
     )?;
     fs::write(
         project.root.join("src/Counter.tsx"),
-        r#"import {useState} from 'react'; import {Button} from '@mui/material'; import clsx from 'clsx'; import {useAction} from '@kenvoy/client'; export function Counter({initial,format}:{initial:number,format:(value:number)=>string}){const [value,setValue]=useState(initial);const discount=useAction('discount');return <Button className={clsx('custom-counter',{active:value>0})} onClick={()=>{setValue(value+1);void discount([value]);}}>{format(value)}</Button>;}"#,
+        r#"import {useState} from 'react'; import clsx from 'clsx'; import {useAction} from '@kenvoy/client'; export function Counter({initial,format}:{initial:number,format:(value:number)=>string}){const [value,setValue]=useState(initial);const discount=useAction('discount');return <button className={clsx('custom-counter',{active:value>0})} onClick={()=>{setValue(value+1);void discount([value]);}}>{format(value)}</button>;}"#,
     )?;
     fs::write(
         project.root.join("src/barrel.ts"),

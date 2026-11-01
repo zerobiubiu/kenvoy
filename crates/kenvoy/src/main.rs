@@ -10,6 +10,7 @@ mod frontend;
 mod http;
 mod javascript;
 mod lifecycle;
+mod options;
 mod project;
 mod validation;
 

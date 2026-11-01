@@ -61,8 +61,7 @@ try {
     assert.equal(response.status(), 201);
   }
   await page.getByRole('button', { name: '刷新列表', exact: true }).click();
-  await page.getByRole('combobox', { name: '每页', exact: true }).click();
-  await page.getByRole('option', { name: '20', exact: true }).click();
+  await page.getByRole('combobox', { name: '每页', exact: true }).selectOption('20');
   await expect(page.getByText('1–20 条，共 23 条', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.getByText('21–23 条，共 23 条', { exact: true })).toBeVisible();
@@ -75,8 +74,7 @@ try {
   await page.getByRole('button', { name: '年龄', exact: true }).click();
   await expect(page.getByRole('columnheader', { name: /^年龄/ })).toHaveAttribute('aria-sort', 'ascending');
   await page.getByRole('button', { name: '筛选', exact: true }).click();
-  await page.getByLabel('筛选字段', { exact: true }).click();
-  await page.getByRole('option', { name: '年龄', exact: true }).click();
+  await page.getByLabel('筛选字段', { exact: true }).selectOption('age');
   await page.getByLabel('筛选值', { exact: false }).fill('30');
   await page.getByRole('button', { name: '应用筛选', exact: true }).click();
   await expect(page.getByText('1–1 条，共 1 条', { exact: true })).toBeVisible();
@@ -91,6 +89,15 @@ try {
   await page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('dialog').getByText('张三', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: '确认删除', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true })).toBeFocused();
+  await page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true }).click();
   await page.getByRole('button', { name: '取消', exact: true }).click();
   await expect(page.getByRole('cell', { name: '张三', exact: true })).toBeVisible();
   await page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true }).click();
@@ -109,6 +116,14 @@ try {
   await scrollRegion.focus(); await expect(scrollRegion).toBeFocused();
   await management.click();
   await expect(page.getByRole('menuitem', { name: '查看记录 3', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '查看记录 3', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: '编辑记录 3', exact: true })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('menuitem', { name: '删除记录 3', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(management).toBeFocused();
+  await management.click();
   await page.getByRole('menuitem', { name: '查看记录 3', exact: true }).click();
   await expect(page.getByRole('heading', { name: '记录 3 的详情' })).toBeVisible();
   await page.getByRole('button', { name: '返回列表', exact: true }).click();
@@ -117,12 +132,13 @@ try {
   await page.getByRole('button', { name: '选择数据资源' }).click();
   await expect(page.getByRole('navigation', { name: '管理资源' }).last()).toBeVisible();
   await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.getByRole('button', { name: '选择数据资源' })).toBeFocused();
   await server.stop(); server = await fixture.start();
   await page.goto(server.origin + '/admin/customers');
   await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
   const persisted = await page.request.get(server.origin + `/api/customers/${li.id}`);
   assert.equal(persisted.status(), 200); assert.equal((await persisted.json()).data.age, 30);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ status: '通过', browser: browser.version(), customer_to_admin: true, search_filter_sort_pagination: true, details_create_edit_delete: true, untouched_null_preserved: true, restart_persistence: true, mobile_without_page_overflow: true, screenshots: output }, null, 2));
+  console.log(JSON.stringify({ status: '通过', browser: browser.version(), customer_to_admin: true, search_filter_sort_pagination: true, details_create_edit_delete: true, untouched_null_preserved: true, restart_persistence: true, mobile_without_page_overflow: true, native_dialog_keyboard_focus: true, screenshots: output }, null, 2));
   await server.stop();
 } finally { if (browser) await browser.close(); await fixture.close(); }

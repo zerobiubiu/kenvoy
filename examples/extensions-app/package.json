@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Kenvoy 自定义组件、Schema 组合与服务端动作示例",
   "dependencies": {
+    "@radix-ui/react-slot": "1.5.0",
     "clsx": "2.1.1"
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: Kenvoy
-description: 以清楚标识、可扫描记录和真实操作反馈组织的 React/MUI 界面
+description: 以清楚标识、可扫描记录和真实操作反馈组织的 React 原生 CSS 界面
 colors:
   primary: "#1558ba"
   primary-dark: "#10458f"
@@ -93,7 +93,7 @@ components:
     textColor: "{colors.text-primary}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
-    padding: "16.5px 14px"
+    padding: "11px 13px"
   navigation-item:
     textColor: "{colors.text-primary}"
     typography: "{typography.body}"
@@ -117,7 +117,7 @@ components:
 
 **Creative North Star: "公共信息目录"**
 
-界面用一致的标识、可扫描的记录和明确的操作反馈帮助用户完成登记与数据维护。蓝色主操作、深色文字、白色工作区与浅灰背景构成当前视觉系统；保留 MUI 控件习惯和系统中文字体。
+界面用一致的标识、可扫描的记录和明确的操作反馈帮助用户完成登记与数据维护。蓝色主操作、深色文字、白色工作区与浅灰背景构成当前视觉系统；使用浏览器原生控件、系统中文字体和明确的可见标签。
 
 信息层级服务于实际操作。字段、记录编号、错误原因和下一步动作应当可辨认；不使用没有产品依据的品牌素材、装饰图表或性能承诺。
 
@@ -128,9 +128,9 @@ components:
 - 蓝色主操作，状态色与明确文字共同表达结果。
 - 桌面保留表格密度，窄屏保留可见的记录管理入口。
 
-状态：现行。事实来源为 [theme.ts](crates/kenvoy/frontend/src/theme.ts)、[styles.css](crates/kenvoy/frontend/src/styles.css)、[Runtime.tsx](crates/kenvoy/frontend/src/Runtime.tsx)、[Admin.tsx](crates/kenvoy/frontend/src/Admin.tsx) 和 [App.tsx](crates/kenvoy/frontend/src/App.tsx)。未覆盖的默认值来自已安装且锁定的 MUI 9.5.0；字体、断点和间距已通过实际主题对象提取。设计方向沿用 [PRODUCT.md](PRODUCT.md) 与[当前界面方向](.impeccable/surfaces/crates-kenvoy-frontend.md)，不引入新的跨项目规则。
+状态：现行。事实来源为 [theme.ts](crates/kenvoy/frontend/src/theme.ts)、[styles.css](crates/kenvoy/frontend/src/styles.css)、[ui.tsx](crates/kenvoy/frontend/src/ui.tsx)、[Runtime.tsx](crates/kenvoy/frontend/src/Runtime.tsx)、[Admin.tsx](crates/kenvoy/frontend/src/Admin.tsx) 和 [App.tsx](crates/kenvoy/frontend/src/App.tsx)。默认组件使用 React、TypeScript 和原生 CSS，不依赖第三方 UI 库；theme.ts 只定义 CSS 变量，无 ThemeProvider。设计方向沿用 [PRODUCT.md](PRODUCT.md) 与[当前界面方向](.impeccable/surfaces/crates-kenvoy-frontend.md)，不引入新的跨项目规则。
 
-本轮视觉复核包括登记桌面、390px 登记、提交成功、桌面后台及修补后的 390px 后台截图；最终视觉结论为 ready。本轮截图不证明开发模式横幅、所有错误状态或全部交互。正式功能覆盖以 [docs/verification/README.md](docs/verification/README.md) 为准。
+阶段 06/07 的登记与后台截图保留为迁移前的视觉参考，不能替代原生组件迁移后的验收。此次迁移保留页面层级、颜色、间距、操作反馈及窄屏管理入口；新实现的功能与视觉证据以 [docs/verification/README.md](docs/verification/README.md) 为准。
 
 ## Colors
 
@@ -144,7 +144,7 @@ components:
 - **浏览器表面**：文字选择使用 `selection-background` 与 `selection-text`；插入光标使用主色。
 - **保存定位**：`saved-row` 是更新行短暂淡出的起始底色。
 
-MUI 为悬停、选中和提示派生的透明色沿用库行为，不额外创造命名色阶。主题源值计算显示，辅助文字对白色为 6.31:1，主按钮白字为 6.69:1；这两项计算不替代完整页面的对比度检查。
+原生 CSS 明确定义悬停、选中、禁用与提示背景。主题主色和辅助色沿用迁移前数值：辅助文字对白色为 6.31:1，主按钮白字为 6.69:1；这两项颜色计算不替代完整页面的对比度检查。
 
 ## Typography
 
@@ -157,17 +157,17 @@ MUI 为悬停、选中和提示派生的透明色沿用库行为，不额外创�
 
 ## Layout
 
-间距来自 MUI 的 8px 基础步长及当前使用的半步值，前言保留源码中的数值键。表单字段之间为 24px；公共页面横向留白在窄屏为 16px、宽屏为 32px。
+间距保留 8px 基础步长及半步值，直接由原生 CSS 定义。表单字段之间为 24px；公共页面横向留白在窄屏为 16px、宽屏为 32px。
 
 登记页容器最大宽度为 720px，含表格的普通页面为 1200px；后台总容器最大宽度为 1500px，桌面资源导航宽 210px、与内容间距 32px。表单工作区在窄屏使用 20px 内边距，宽屏使用 32px。顶部工具栏在窄屏至少 64px、宽屏至少 72px。
 
-当前主题断点为 xs 0、sm 600、md 900、lg 1200、xl 1536px。小于 sm 时，顶部导航收进菜单，表格搜索框独占一行，其余查询动作在下一行按可用宽度排布；小于 md 时，后台资源导航改为抽屉入口。
+当前布局断点为 600px 与 900px。小于 600px 时，顶部导航收进菜单，表格搜索框独占一行，其余查询动作在下一行按可用宽度排布；小于 900px 时，后台资源导航改为抽屉入口。
 
 窄屏数据表仍使用表格：可横向滚动区域提供提示、名称和键盘焦点；操作列固定在右侧，显示“管理”按钮及详情、编辑、删除菜单。固定列宽 96px，管理按钮至少 72px 宽、44px 高。桌面继续显示直接操作按钮，不改为卡片列表。
 
 ## Elevation & Depth
 
-页面和表单工作区以白色、浅灰底色与细边界区分层级。Paper 默认 elevation 为 0，主按钮关闭 elevation，顶部栏也明确关闭阴影。菜单和对话框沿用 MUI 覆盖层行为；工程没有另设自定义阴影序列，不把库默认浮层阴影记录成自创品牌 token。
+页面和表单工作区以白色、浅灰底色与细边界区分层级；工作区、主按钮和顶部栏不使用阴影。确认对话框及抽屉使用原生 dialog.showModal，在浏览器顶层显示；浮层使用向下偏移 12px、模糊 40px 的阴影，与底层内容分离。
 
 ## Shapes
 
@@ -185,13 +185,13 @@ MUI 为悬停、选中和提示派生的透明色沿用库行为，不额外创�
 
 ### Inputs / Fields
 
-默认使用全宽 outlined 字段。标签、禁用文字和 placeholder 保持辅助文字色，禁用值不降低为不可读的透明文本。帮助或错误位于对应字段下方，错误同时使用颜色和具体说明。
+默认使用全宽原生 input、textarea、select 和 checkbox。标签位于控件上方，通过 htmlFor/id 建立关联；字段高度至少 48px。标签、禁用文字和 placeholder 保持辅助文字色，禁用值不降低为不可读的透明文本。帮助或错误位于对应字段下方，错误同时使用颜色、aria-invalid 和具体说明。
 
 前端校验失败聚焦首个错误字段。成功后保留已提交内容和记录编号；结果未知时保留填写内容并禁止重复提交。此处记录源码行为，全部状态的运行覆盖仍以验证记录为准。
 
 ### Navigation
 
-桌面顶部提供应用名、账号及导航，后台使用左侧资源列表。选中项沿用 MUI 主色透明底，当前资源同时以页面标题表达。窄屏通过菜单和资源抽屉维持可达性。
+桌面顶部提供应用名、账号及导航，后台使用左侧资源列表。选中项使用浅蓝背景、深蓝文字及 aria-current，当前资源同时以页面标题表达。窄屏通过原生 dialog 抽屉维持可达性；浏览器约束模态焦点，Esc 可关闭，关闭后焦点返回触发按钮。处理中禁止关闭的对话框同步禁用取消、Esc 与背景关闭。
 
 ### Cards / Containers
 
@@ -205,9 +205,9 @@ MUI 为悬停、选中和提示派生的透明色沿用库行为，不额外创�
 
 ### Development Feedback
 
-仅开发模式显示编译失败与连接中断的 MUI Alert，位置在现有主内容区域上方，复用状态色与正文排印。编译失败保留当前有效页面和填写内容，修复并成功发布后清除；普通生产页面不轮询该状态。协议和真实热更新的验证边界见 [前端 Runtime](docs/frontend-runtime.md)，本次既有 ready 视觉结论不自动扩大到开发横幅。
+仅开发模式显示编译失败与连接中断的原生 Notice，位置在现有主内容区域上方，复用状态色与正文排印。错误和警告使用 alert，成功或信息反馈使用 status。编译失败保留当前有效页面和填写内容，修复并成功发布后清除；普通生产页面不轮询该状态。协议和真实热更新的验证边界见 [前端 Runtime](docs/frontend-runtime.md)。
 
-现有 detector 对 `crates/kenvoy/frontend/src` 与入口 HTML 扫描退出 0，结果为 `[]`。此为静态检查结果，未改变主题 token 或组件视觉样例，因此无需重新生成 `.impeccable/design.json` 的提取数据。
+此前 detector 与 `.impeccable/design.json` 来自迁移前界面，保留为历史工具数据；当前事实以组件和 CSS 为准。本次不将旧扫描或样例当作新组件的验证结果。
 
 ## Do's and Don'ts
 

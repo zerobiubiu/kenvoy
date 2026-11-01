@@ -4,7 +4,9 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 ## 当前进度
 
-第一版基础框架已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、React/MUI 前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；完整命令与边界见[最终验收](docs/verification/0012-final-acceptance.md)。
+当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。用法见[组件与选项契约](docs/component-bindings.md)和[完整示例](examples/options-app/README.md)。
+
+首版基线已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。当时 201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；历史命令与边界见[首版验收](docs/verification/0012-final-acceptance.md)，后续变更见[变更索引](docs/changes/README.md)。
 
 Workspace 只有两个自有包：crates/kengine（Library）和 crates/kenvoy（Binary），依赖方向为 Kenvoy → KEngine。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
 

@@ -45,9 +45,9 @@ async function execute(request, root) {
   });
 }
 
-test('真实 Vite 自定义组件构建保留 Hooks、MUI、barrel CSS 和静态切片，未打包服务端入口', async t => {
+test('真实 Vite 自定义组件构建保留 Hooks、用户 React 组件库、barrel CSS 和静态切片，未打包服务端入口', async t => {
   const { root, request, destination } = await fixture(t, {
-    'src/Card.tsx': `import {useState} from 'react'; import {Button} from '@mui/material'; import {useAction} from '@kenvoy/client'; import clsx from 'clsx'; export function CustomerCard({label='客户'}) { const [count,setCount]=useState(0); const calculate=useAction('discount'); return <Button className={clsx('custom-provenance-marker',{active:count>0})} onClick={()=>{setCount(count+1);void calculate([count]);}}>{label}:{count}</Button>; }`,
+    'src/Card.tsx': `import {useState} from 'react'; import {Slot} from '@radix-ui/react-slot'; import {useAction} from '@kenvoy/client'; import clsx from 'clsx'; export function CustomerCard({label='客户'}) { const [count,setCount]=useState(0); const calculate=useAction('discount'); return <Slot className={clsx('custom-provenance-marker',{active:count>0})} onClick={()=>{setCount(count+1);void calculate([count]);}}><button>{label}:{count}</button></Slot>; }`,
     'src/barrel.ts': `import './card.css'; export {CustomerCard} from './Card';`,
     'src/card.css': '.custom-provenance-marker { color: rgb(11,22,33); }',
     'src/private.server.ts': 'export const PRIVATE_SERVER_ONLY_SENTINEL = "private-secret";',
@@ -56,13 +56,16 @@ test('真实 Vite 自定义组件构建保留 Hooks、MUI、barrel CSS 和静态
   });
   await mkdir(path.join(root, 'node_modules'), { recursive: true });
   await cp(path.join(framework, 'node_modules/clsx'), path.join(root, 'node_modules/clsx'), { recursive: true });
-  await writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: { clsx: '2.1.1' } }));
-  request.external_packages.push('clsx');
+  for (const name of ['@radix-ui/react-slot', '@radix-ui/react-compose-refs']) {
+    await cp(path.join(framework, 'node_modules', name), path.join(root, 'node_modules', name), { recursive: true });
+  }
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: { clsx: '2.1.1', '@radix-ui/react-slot': '1.5.0' } }));
+  request.external_packages.push('clsx', '@radix-ui/react-slot');
   request.references.push({ id: 'inline-expression', kind: 'expression', module: path.join(root, 'src/app.tsx'), export_name: '', slice: {
     code: 'export const expression = () => ({label:"切片独立标记"});', export_name: 'expression', imports: {},
   } });
   request.references.push({ id: 'inline-component', kind: 'component', module: path.join(root, 'src/app.tsx'), export_name: '', slice: {
-    code: 'import {Button} from "@mui/material"; export const component = () => <Button>内联JSX切片</Button>;', export_name: 'component', imports: { '@mui/material': { kind: 'external', module: '@mui/material' } },
+    code: 'import {Slot} from "@radix-ui/react-slot"; export const component = () => <Slot><button>内联JSX切片</button></Slot>;', export_name: 'component', imports: { '@radix-ui/react-slot': { kind: 'external', module: '@radix-ui/react-slot' } },
   } });
   const result = await execute(request, root);
   assert.equal(result.code, 0, result.output);
@@ -75,6 +78,8 @@ test('真实 Vite 自定义组件构建保留 Hooks、MUI、barrel CSS 和静态
   const report = JSON.parse(await readFile(request.report, 'utf8'));
   assert.equal(report.version, 1);
   assert.ok(report.dependencies.some(item => item.name === 'clsx' && item.version === '2.1.1' && item.scope === 'project'));
+  assert.ok(report.dependencies.some(item => item.name === '@radix-ui/react-slot' && item.scope === 'project'));
+  assert.ok(report.dependencies.every(item => !item.name.startsWith('@mui/') && !item.name.startsWith('@emotion/')));
 });
 
 test('客户端拒绝服务端模块、未分析的动态模块、源码变化和 CSS 私有资源', async t => {

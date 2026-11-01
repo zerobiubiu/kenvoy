@@ -2,11 +2,13 @@
 
 状态：现行；阶段 06/07 登记与后台、阶段 08 自定义组件和 Server Function 已通过各自的真实浏览器验收；阶段 09 的组件状态保留、CSS 更新、语法错误恢复及带开发 WebSocket 的优雅退出已通过专项真实验证。最终统一验证范围以阶段记录为准。交互模式为 Operate，采用代码实现后真实浏览器验证。
 
-用户已明确授权自主实施，产品事实取自 [PRODUCT.md](../PRODUCT.md) 和原始工程规范，不重复请求已经确定的 React/MUI、布局和业务流程批准。本轮设计决定只服务本项目，不写入跨项目偏好。
+用户已明确授权自主实施，产品事实取自 [PRODUCT.md](../PRODUCT.md) 和原始工程规范，不重复请求用户要求的 React/原生 CSS、布局和业务流程批准。本轮设计决定只服务本项目，不写入跨项目偏好。
 
 ## 结构与构建
 
-React + MUI + React Router 根据 `/_kenvoy/application` 的受控投影渲染通用组件；普通表单和后台使用同一资源字段、验证和 API。函数/自定义组件只通过注册 ID 连接，不能 JSON 序列化函数或把完整应用入口打包给浏览器。
+当前默认组件已改用原生 React 控件与 CSS；系统组件重载和自定义数据组件使用统一字段绑定。新增 select 联动、跨资源选项与 SDK 详见[组件与选项契约](component-bindings.md)。下文阶段 06—10 的 MUI 测试结论仅为迁移前历史证据；新实现的验证以本次变更记录为准。
+
+React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的受控投影渲染通用组件；普通表单和后台使用同一资源字段、验证和 API。函数/自定义组件只通过注册 ID 连接，不能 JSON 序列化函数或把完整应用入口打包给浏览器。
 
 框架源码位于 crates/kenvoy/frontend，Vite/Rolldown 先生成 dist，再由 crates/kenvoy/build.rs 将公开 index/assets 嵌入 Rust Binary。基础 DSL 使用内置资产，应用启动不要求 Node、不安装 npm 依赖；开发框架源码时先在 frontend 执行 npm ci --ignore-scripts、npm run check、npm run build，再编译 Rust。当前依赖锁定于该目录 package-lock.json，缺少 dist 会明确阻止发行构建。
 
@@ -20,7 +22,7 @@ React + MUI + React Router 根据 `/_kenvoy/application` 的受控投影渲染�
 
 框架的 package.json、package-lock.json、Runtime 源码和构建脚本嵌入 CLI。锁定工具链位于项目 `.kenvoy/client-toolchain`，按锁文件、操作系统、架构、Node 主版本分开；源码缓存另按内容指纹分开。首次准备工具链使用 `npm ci --ignore-scripts --include=dev`，此后验证标记、固定源码和工具可加载性后复用，不在每次启动重新安装。用户项目的 package.json 不被生成或修改；只有显式 `--install-deps` 才准备用户锁文件并安装其已声明依赖。第一版自动安装仅接受 npm registry 版本，不接受 Git、文件或 workspace 依赖说明符。
 
-普通 React 组件沿原始 import/barrel 入口打包，保留 CSS 副作用、Hooks、Props、MUI 与第三方组件的 ESM 行为；React 和 MUI 等框架依赖统一解析到工具链，避免双 React 实例。声明入口及 `.diu` 文件不直接打包；可证明的函数、const 和客户端表达式由 Kenvoy 的同一词法闭包切片器提取，复杂可变捕获明确诊断并建议拆成独立客户端模块。切片表达式以 factory 注册，函数与组件以稳定引用 ID 注册，运行时不使用 `eval`。
+普通 React 组件沿原始 import/barrel 入口打包，保留 CSS 副作用、Hooks、Props 与用户选择的第三方组件的 ESM 行为；仅 React、React DOM 和 React Router 统一解析到工具链，其他 UI 库解析到用户项目依赖，避免双 React 实例。声明入口及 `.diu` 文件不直接打包；可证明的函数、const 和客户端表达式由 Kenvoy 的同一词法闭包切片器提取，复杂可变捕获明确诊断并建议拆成独立客户端模块。切片表达式以 factory 注册，函数与组件以稳定引用 ID 注册，运行时不使用 `eval`。
 
 浏览器通过 `@kenvoy/client` 的 `useAction(name)` 或 `callAction(name,args)` 调用声明的服务端动作。SDK 复用页面的 ApiClient、同源 Cookie、CSRF 与应用代际；JSON 参数和返回值不包含函数对象。动作写请求同样不自动重试；网络中断或超时保留结果待核对状态。`useAction` 共享通用 Runtime 的 React Context，不创建另一套认证状态。
 
@@ -38,7 +40,7 @@ Vite 仅监听随机 loopback 端口，HTTP 与 WebSocket 均要求父进程的�
 
 仅开发宿主在应用描述中增加 `development: true`，浏览器才请求 `GET /_kenvoy/development`；缺省或 `false` 均不轮询。生产宿主的该端点返回 404。状态协议为 `{revision,generation,state,error?,reload}`：`state` 为 `ready`、`building` 或 `error`，`revision` 随状态变化递增，`generation` 仅随有效应用发布变化；`error` 是宿主提供的脱敏摘要。
 
-前端在一次请求完成后等待 1 秒再读取，避免慢请求累积。编译失败时以 MUI Alert 显示“开发更新未通过”，继续保留有效页面与填写内容；`building` 不提前消除已有错误，`ready` 才清除。断线使用独立警告，恢复连接、观察到修订号回退或有效代际变化后重新获取 Session 与应用描述。通知本身不升级 API 的写入代际，也不重试任何提交、修改、删除或 Action。
+前端在一次请求完成后等待 1 秒再读取，避免慢请求累积。编译失败时以原生语义提示显示“开发更新未通过”，继续保留有效页面与填写内容；`building` 不提前消除已有错误，`ready` 才清除。断线使用独立警告，恢复连接、观察到修订号回退或有效代际变化后重新获取 Session 与应用描述。通知本身不升级 API 的写入代际，也不重试任何提交、修改、删除或 Action。
 
 首次读取状态只建立刷新基线；后续新修订明确携带 `reload: true` 时才整页重载，同一代际也可表达从开发代理退回静态资产的必要重载。普通组件更新交给 Vite Fast Refresh，前端状态轮询不会自行调用整页刷新；结构更新可按开发适配器策略重新挂载。浏览器组件错误边界同时覆盖自定义组件和表达式 factory，避免局部异常替代整个应用。
 
@@ -48,7 +50,7 @@ Vite 仅监听随机 loopback 端口，HTTP 与 WebSocket 均要求父进程的�
 
 THESIS：登记人完成准确提交，管理员快速定位和修改记录；所有状态围绕真实操作反馈组织。
 
-OWN-WORLD：采用公共信息目录的清楚标识与一致索引，蓝色主操作、深色文字、白色工作区和浅灰背景；MUI 标准控件、系统中文字体、均匀间距。界面不使用地图、纸张纹理或代码装饰。
+OWN-WORLD：采用公共信息目录的清楚标识与一致索引，蓝色主操作、深色文字、白色工作区和浅灰背景；原生语义控件、系统中文字体、均匀间距。界面不使用地图、纸张纹理或代码装饰。
 
 STORY：访问者读标题、填写字段、提交后看到真实结果。管理员登录后从资源导航进入列表，搜索定位记录，在可返回的编辑表单完成修改。
 

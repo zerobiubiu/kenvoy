@@ -30,7 +30,7 @@ HttpRuntime 持有 Application IR、generation、client 目录与不可变 JavaS
 
 已实现 `kenvoy admin init --username <name>` 与 `admin add-user --username <name> --role user|admin`。本机终端隐藏密码并二次确认，自动化必须显式 `--password-stdin`；不提供密码命令参数，不写凭据日志。账号创建使用事务和已有管理员检查，重复初始化不能覆盖已有账号。详细输入限制见 [安全设计](security-design.md)。
 
-基础 DSL 项目使用随 CLI 内嵌的预构建 React/MUI Runtime，无需 Node 开发服务器。自定义 UI 使用锁定前端工具链及独立框架缓存；用户依赖缺失时需显式 --install-deps，不静默改写 package.json。缓存命中时不重新安装全部依赖。CLI 仍是 Rust 原生宿主，HTTP、SQLite 和业务解释均不交给 Node。
+基础 DSL 项目使用随 CLI 内嵌的预构建 React 原生 CSS Runtime，无需 Node 开发服务器。自定义 UI 使用锁定前端工具链及独立框架缓存；用户依赖缺失时需显式 --install-deps，不静默改写 package.json。缓存命中时不重新安装全部依赖。CLI 仍是 Rust 原生宿主，HTTP、SQLite 和业务解释均不交给 Node。
 
 ## HTTP 和 Resource Runtime
 
@@ -60,11 +60,11 @@ React 默认转义文本；不允许从描述注入原始 HTML、危险 URL、�
 
 客户端接收版本化 ClientApplicationDescription：页面 ID、route/title、组件树、字段约束、资源/动作 ID、模块注册 ID 与展示权限。注册表选择 text/number/boolean/date/select/form/table 等通用组件，自定义 UI 以组件类型注册，并由 React 渲染以保留 Hooks 语义。事件引用通过明确 ID 与模块桥接，不把函数序列化成 JSON。
 
-React Router Declarative Mode 负责客户端匹配，MUI Theme 统一布局。表单有加载、字段错误、提交中、成功与失败状态；请求完成前防重复提交，服务端始终重验。number/日期/空值转换与 Resource 规则一致，不信任浏览器原生校验足够完备。
+React Router Declarative Mode 负责客户端匹配，原生 CSS tokens 统一布局。表单有加载、字段错误、提交中、成功与失败状态；请求完成前防重复提交，服务端始终重验。number/日期/空值转换与 Resource 规则一致，不信任浏览器原生校验足够完备。
 
 Admin 复用相同 Resource IR 和 API，提供左侧资源导航、顶部栏、列表、搜索、分页、排序、详情、新增、编辑、删除确认、通知、错误/加载/空状态。删除确认展示具体记录，权限在服务端执行。未认证先登录；登录成功再加载授权资源，不能将受保护数据内嵌在公开 shell。
 
-基础 DSL 使用框架内置预构建资产；自定义组件用独立 Client 注册入口打包，不能直接打包完整 app.tsx 而顺带引入 action 的 server 实现。用户 UI、Runtime 和 MUI 必须共享兼容的单份 React/React DOM。样式与第三方包由实际构建器处理，不能用静态 HTML 假装 React 应用。
+基础 DSL 使用框架内置预构建资产；自定义组件用独立 Client 注册入口打包，不能直接打包完整 app.tsx 而顺带引入 action 的 server 实现。用户 UI、Runtime 和第三方 React 组件库 必须共享兼容的单份 React/React DOM。样式与第三方包由实际构建器处理，不能用静态 HTML 假装 React 应用。
 
 ## JavaScript Runtime
 

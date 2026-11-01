@@ -18,6 +18,7 @@
 | Permission | 服务端按一次操作选择完整策略 | role、operation、form、fields 同时匹配 |
 | API | Axum 通用资源路由 | 会话、Origin、CSRF、代际、请求大小和参数查重 |
 | Page/Component | 受控 DTO 驱动 React 注册表 | 无宿主路径或函数对象，数据仍通过 API |
+| Override/Options | 模块引用替换显示组件；受控选项查询与联动 | 原生字段绑定、来源权限、最小投影、写事务重验 |
 | Admin | 与普通页面共享资源和 API | 管理员授权，列表、详情、搜索、筛选、排序、分页与 CRUD |
 | Action | TS 去类型、白名单 ESM、独立 QuickJS 上下文、JSON/Promise | Execute 权限、CSRF、代际、时间/内存/队列限额；无文件或网络宿主 API |
 

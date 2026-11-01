@@ -44,6 +44,12 @@ try {
   await page.getByRole('button', { name: '再登记一条', exact: true }).click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
   await page.screenshot({ path: output + '/form-mobile.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: '打开导航', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '导航', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '关闭', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '打开导航', exact: true })).toBeFocused();
   await page.goto(server.origin + '/admin/login');
   await page.getByLabel('用户名', { exact: false }).fill('admin');
   await page.getByLabel('密码', { exact: false }).fill('browser-only-test-password-729');
