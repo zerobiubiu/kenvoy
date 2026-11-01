@@ -1,0 +1,10 @@
+{
+  "name": "kenvoy-extensions-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kenvoy 自定义组件、Schema 组合与服务端动作示例",
+  "dependencies": {
+    "clsx": "2.1.1"
+  }
+}

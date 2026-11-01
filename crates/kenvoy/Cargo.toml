@@ -6,43 +6,40 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "kenvoy — CLI / dev 服务器 / 静态构建（基于 kengine）"
-readme = "README.md"
-keywords = ["cli", "dev-server", "axum", "s3", "postgres", "smtp"]
-categories = ["command-line-utilities", "web-programming", "database", "email"]
-
-[features]
-# 默认开启 db + s3 + mail（生产集成）；纯解析/渲染场景可用 `--no-default-features`
-default = ["db", "s3", "mail"]
-# `db`：PostgreSQL 18+ 持久化（sqlx + argon2）
-db = ["dep:sqlx", "dep:argon2", "dep:chrono", "dep:sha2", "dep:lettre"]
-# `s3`：对象存储抽象（rust-s3）
-s3 = ["dep:rust-s3", "dep:uuid"]
-# `mail`：SMTP 邮件发送（lettre）；发件失败仅 eprintln，不中断业务流程
-mail = ["dep:lettre"]
 
 [dependencies]
-kengine = { workspace = true, features = ["html"] }
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1"
-axum = { version = "0.8", features = ["macros", "multipart"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
-notify = "7"
-toml = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "derive"], optional = true }
-rust-s3 = { version = "0.36", default-features = false, features = ["with-tokio"], optional = true }
-argon2 = { version = "0.5", optional = true }
-chrono = { version = "0.4", features = ["serde"], optional = true }
-uuid = { version = "1", features = ["v4"], optional = true }
-sha2 = { version = "0.10", optional = true }
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "tokio1-rustls-tls"], optional = true }
-thiserror = "2"
+kengine = { path = "../kengine" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+clap.workspace = true
+toml.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+tokio.workspace = true
+sha2.workspace = true
+argon2.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+rpassword.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+swc_common.workspace = true
+swc_ecma_ast.workspace = true
+swc_ecma_parser.workspace = true
+swc_ecma_visit.workspace = true
+swc_ecma_codegen.workspace = true
+swc_ecma_transforms_base.workspace = true
+swc_ecma_transforms_typescript.workspace = true
+rquickjs.workspace = true
+notify.workspace = true
+reqwest.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
 
-[dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-
-[lints]
-workspace = true
+[build-dependencies]
+sha2.workspace = true

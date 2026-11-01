@@ -4,27 +4,17 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Kenvoy 核心引擎：DSL 解析、IR、表达式/校验/审批流状态机、HTML 渲染"
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
-keywords = ["engine", "dsl", "low-code", "ssr"]
-categories = ["parser-implementations", "compilers", "web-programming"]
-
-[features]
-# 默认开：含 html 渲染模块（纯函数 + 内嵌资产）
-default = ["html"]
-# `html` = SSR HTML 渲染（Tabler/Bootstrap5 + 图标 + 客户端运行时）；纯函数无外部依赖
-html = []
 
 [dependencies]
-roxmltree = "0.20"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
+swc_common.workspace = true
+swc_ecma_ast.workspace = true
+swc_ecma_parser.workspace = true
+swc_ecma_visit.workspace = true
+swc_ecma_transforms_base.workspace = true
+serde.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
-serde_json = "1"
-
-[lints]
-workspace = true
+serde_json.workspace = true

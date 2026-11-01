@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "page": {
+    "id": "customers",
+    "path": "/customers",
+    "title": "客户登记技术探针",
+    "fields": [
+      { "kind": "text", "name": "name", "label": "客户姓名", "required": true, "maxLength": 100 },
+      { "kind": "text", "name": "phone", "label": "联系电话", "required": false },
+      { "kind": "number", "name": "age", "label": "年龄", "integer": true, "min": 0 }
+    ]
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T13:09:40Z",
+  "title": "Design System: Kenvoy",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "主操作蓝"
+      },
+      "primary-dark": {
+        "role": "primary",
+        "displayName": "主操作悬停蓝"
+      },
+      "primary-light": {
+        "role": "primary",
+        "displayName": "主题浅蓝"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "浅灰页面背景"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "白色工作区"
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "深色正文"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "辅助文字"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "细边界"
+      },
+      "table-head": {
+        "role": "neutral",
+        "displayName": "表头浅底"
+      },
+      "success": {
+        "role": "success",
+        "displayName": "成功绿"
+      },
+      "error": {
+        "role": "error",
+        "displayName": "错误红"
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "核对警告色"
+      },
+      "selection-background": {
+        "role": "neutral",
+        "displayName": "文字选择背景"
+      },
+      "selection-text": {
+        "role": "neutral",
+        "displayName": "文字选择前景"
+      },
+      "saved-row": {
+        "role": "success",
+        "displayName": "更新行起始底色"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "页面标题",
+        "purpose": "对应 theme.typography.h1。"
+      },
+      "section": {
+        "displayName": "分区标题",
+        "purpose": "对应 theme.typography.h2。"
+      },
+      "title": {
+        "displayName": "局部标题",
+        "purpose": "对应 theme.typography.h3。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "对应 theme.typography.body1。"
+      },
+      "body-small": {
+        "displayName": "辅助正文",
+        "purpose": "对应 theme.typography.body2。"
+      },
+      "label": {
+        "displayName": "按钮标签",
+        "purpose": "对应 theme.typography.button；保留原始大小写。"
+      },
+      "caption": {
+        "displayName": "帮助文字",
+        "purpose": "对应 MUI caption；用于帮助文字与核对编号。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-default",
+        "value": "none",
+        "purpose": "Paper 默认 elevation=0；主按钮关闭 elevation，顶部栏明确无阴影。浮层继续采用 MUI 默认行为。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "saved-row",
+        "value": "saved-row 1.8s ease-out",
+        "purpose": "更新行从已有 saved-row 底色淡至透明，并同时保留文字通知。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "减少动态效果偏好下的动画和过渡时长；同时 scroll-behavior:auto。"
+      },
+      {
+        "name": "button-transition",
+        "value": "250ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "已安装 MUI Button 的背景、边框、颜色过渡；不是新增的项目动效体系。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xs",
+        "value": "0px"
+      },
+      {
+        "name": "sm",
+        "value": "600px"
+      },
+      {
+        "name": "md",
+        "value": "900px"
+      },
+      {
+        "name": "lg",
+        "value": "1200px"
+      },
+      {
+        "name": "xl",
+        "value": "1536px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主操作按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "登记提交与新增记录使用的实心蓝色按钮；样例只呈现视觉属性。",
+      "html": "<button type=\"button\" class=\"ds-button-primary\">提交信息</button>",
+      "css": ".ds-button-primary{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:0.875rem;font-weight:600;line-height:1.75;text-transform:none;min-width:64px;min-height:40px;padding:6px 18px;border:0;border-radius:7px;background:#1558ba;color:#fff;cursor:pointer;transition:background-color 250ms cubic-bezier(0.4,0,0.2,1),border-color 250ms cubic-bezier(0.4,0,0.2,1),color 250ms cubic-bezier(0.4,0,0.2,1)}.ds-button-primary:focus-visible{outline:3px solid #1558ba;outline-offset:3px}.ds-button-primary:disabled{color:rgba(0,0,0,0.26);cursor:default}.ds-button-primary:hover{background:#10458f}.ds-button-primary:disabled{background:rgba(0,0,0,0.12)}"
+    },
+    {
+      "name": "描边按钮",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "搜索、再登记一条和次级动作使用的描边按钮。",
+      "html": "<button type=\"button\" class=\"ds-button-outlined\">搜索</button>",
+      "css": ".ds-button-outlined{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:0.875rem;font-weight:600;line-height:1.75;text-transform:none;min-width:64px;min-height:40px;padding:5px 18px;border:1px solid rgba(21,88,186,0.5);border-radius:7px;background:transparent;color:#1558ba;cursor:pointer;transition:background-color 250ms cubic-bezier(0.4,0,0.2,1),border-color 250ms cubic-bezier(0.4,0,0.2,1),color 250ms cubic-bezier(0.4,0,0.2,1)}.ds-button-outlined:focus-visible{outline:3px solid #1558ba;outline-offset:3px}.ds-button-outlined:disabled{color:rgba(0,0,0,0.26);cursor:default}.ds-button-outlined:hover{border-color:#1558ba;background:rgba(21,88,186,0.04)}.ds-button-outlined:disabled{border-color:rgba(0,0,0,0.12)}"
+    },
+    {
+      "name": "文字按钮",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "筛选、刷新列表和辅助导航使用的文字按钮。",
+      "html": "<button type=\"button\" class=\"ds-button-text\">刷新列表</button>",
+      "css": ".ds-button-text{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:0.875rem;font-weight:600;line-height:1.75;text-transform:none;min-width:64px;min-height:40px;padding:6px 18px;border:0;border-radius:7px;background:transparent;color:#1558ba;cursor:pointer;transition:background-color 250ms cubic-bezier(0.4,0,0.2,1),border-color 250ms cubic-bezier(0.4,0,0.2,1),color 250ms cubic-bezier(0.4,0,0.2,1)}.ds-button-text:focus-visible{outline:3px solid #1558ba;outline-offset:3px}.ds-button-text:disabled{color:rgba(0,0,0,0.26);cursor:default}.ds-button-text:hover{background:rgba(21,88,186,0.04)}"
+    },
+    {
+      "name": "描边输入字段",
+      "kind": "input",
+      "refersTo": "input-outlined",
+      "description": "已填写状态的普通字段；浮动标签、白底与轮廓来自 MUI outlined 输入。静态样例不承担实际校验。",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-customer-name\">客户姓名 *</label><div class=\"ds-field-control\"><input class=\"ds-field-input\" id=\"ds-customer-name\" value=\"张三\" required /><fieldset class=\"ds-field-outline\" aria-hidden=\"true\"><legend class=\"ds-field-legend\"><span class=\"ds-field-notch\">客户姓名 *</span></legend></fieldset></div></div>",
+      "css": ".ds-field{position:relative;width:100%;font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:1rem;color:#1e293b}.ds-field-label{position:absolute;left:0;top:0;z-index:1;transform:translate(14px,-9px) scale(0.75);transform-origin:top left;color:#526176;font-size:1rem;line-height:1.4375}.ds-field-control{position:relative;border-radius:8px;background:#fff;line-height:1.4375em}.ds-field-input{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:1rem;line-height:1.4375em;height:1.4375em;padding:16.5px 14px;border:0;width:100%;box-sizing:border-box;min-height:56px;background:transparent;color:#1e293b;caret-color:#1558ba;border-radius:8px}.ds-field-input::placeholder{color:#526176;opacity:1}.ds-field-outline{position:absolute;inset:-5px 0 0;margin:0;padding:0 8px;pointer-events:none;border:1px solid rgba(0,0,0,0.23);border-radius:8px;min-width:0}.ds-field-legend{width:auto;float:unset;padding:0;height:11px;font-size:0.75em;visibility:hidden;max-width:100%;white-space:nowrap}.ds-field-notch{padding:0 5px}.ds-field-control:hover .ds-field-outline{border-color:#1e293b}.ds-field-control:focus-within .ds-field-outline{border-color:#1558ba;border-width:2px}.ds-field:focus-within .ds-field-label{color:#1558ba}.ds-field-input:focus-visible{outline:3px solid #1558ba;outline-offset:3px}.ds-field-input:disabled{color:#526176;-webkit-text-fill-color:#526176;opacity:1}"
+    },
+    {
+      "name": "资源导航项",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "后台资源列表的当前项，使用 MUI 主色透明选中底色。",
+      "html": "<nav class=\"ds-navigation\" aria-label=\"管理资源\"><a class=\"ds-navigation-item\" href=\"#customers\" aria-current=\"page\">customers</a></nav>",
+      "css": ".ds-navigation{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif}.ds-navigation-item{display:flex;padding:8px 16px;border-radius:8px;color:#1e293b;font-size:1rem;font-weight:400;line-height:1.65;text-decoration:none;background:rgba(21,88,186,0.08);align-items:center}.ds-navigation-item:hover{background:rgba(21,88,186,0.12)}.ds-navigation-item:focus-visible{outline:3px solid #1558ba;outline-offset:3px;background:rgba(21,88,186,0.2)}"
+    },
+    {
+      "name": "表单工作区",
+      "kind": "card",
+      "refersTo": "surface-form",
+      "description": "登记与编辑使用的平面白色工作区；样例内文只说明容器用途。",
+      "html": "<section class=\"ds-surface\">填写客户资料</section>",
+      "css": ".ds-surface{font-family:\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif;font-size:1rem;line-height:1.65;color:#1e293b;background:#ffffff;border:1px solid #dce2ea;border-radius:12px;padding:20px;box-shadow:none}@media(min-width:600px){.ds-surface{padding:32px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "公共信息目录",
+    "overview": "界面用一致的标识、可扫描的记录和明确的操作反馈帮助用户完成登记与数据维护。蓝色主操作、深色文字、白色工作区与浅灰背景构成当前视觉系统；保留 MUI 控件习惯和系统中文字体。\n\n信息层级服务于实际操作。字段、记录编号、错误原因和下一步动作应当可辨认；不使用没有产品依据的品牌素材、装饰图表或性能承诺。",
+    "keyCharacteristics": [
+      "清楚的标题与业务字段，使用简体中文。",
+      "白色工作区、细边界与均匀间距。",
+      "蓝色主操作，状态色与明确文字共同表达结果。",
+      "桌面保留表格密度，窄屏保留可见的记录管理入口。"
+    ],
+    "rules": [],
+    "dos": [
+      "**Do** 用字段标签、记录编号和具体动作帮助定位内容。",
+      "**Do** 保留可见键盘焦点、可读辅助文字与移动端记录管理入口。",
+      "**Do** 让成功、错误和结果待核对同时具备文字说明与下一步动作。",
+      "**Do** 从主题、组件源码和已验证截图更新设计文档。"
+    ],
+    "donts": [
+      "**Don't** 为普通登记和管理流程添加没有依据的图表、品牌素材或装饰纹理。",
+      "**Don't** 用成功色替代真实结果，或对未知提交结果提供直接重试。",
+      "**Don't** 将详情、编辑、删除的全部入口隐藏到窄屏初始视野之外。",
+      "**Don't** 将静态设计样例视为真实业务或完整无障碍验收。"
+    ]
+  }
+}

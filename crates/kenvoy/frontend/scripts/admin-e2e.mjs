@@ -1,0 +1,128 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { chromium, expect } from '@playwright/test';
+import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+
+const fixture = await projectFixture();
+let browser;
+const password = 'admin-browser-test-password-825';
+const output = fileURLToPath(new URL('../../../../artifacts/phase07/', import.meta.url));
+await mkdir(output, { recursive: true });
+try {
+  await fixture.command(['--project', 'app', 'admin', 'init', '--username', 'admin', '--password-stdin'], password + '\n');
+  let server = await fixture.start();
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' });
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto(server.origin + '/customers');
+  await page.getByLabel('客户姓名', { exact: false }).fill('张三');
+  await page.getByLabel('联系电话', { exact: false }).fill('13800000000');
+  await page.getByLabel('年龄', { exact: false }).fill('25');
+  let result = page.waitForResponse(response => response.url().endsWith('/api/customers') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '提交信息', exact: true }).click();
+  const zhang = (await (await result).json()).data;
+  await expect(page.getByText('提交成功', { exact: true })).toBeVisible();
+  await page.goto(server.origin + '/admin/customers');
+  await expect(page.getByRole('heading', { name: '管理员登录' })).toBeVisible();
+  await page.getByLabel('用户名', { exact: false }).fill('admin');
+  await page.getByLabel('密码', { exact: false }).fill(password);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '张三', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: `查看记录 ${zhang.id}`, exact: true }).click();
+  await expect(page.getByRole('heading', { name: `记录 ${zhang.id} 的详情` })).toBeVisible();
+  await expect(page.locator('dd').filter({ hasText: '13800000000' })).toBeVisible();
+  await page.getByRole('button', { name: '编辑这条记录' }).click();
+  await page.getByLabel('年龄', { exact: false }).fill('26');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(page.getByText(`记录 ${zhang.id} 已更新。`, { exact: true })).toBeVisible();
+  assert.equal((await (await page.request.get(server.origin + `/api/customers/${zhang.id}`)).json()).data.age, 26);
+
+  await page.getByRole('button', { name: '新增记录', exact: true }).click();
+  await page.getByLabel('客户姓名', { exact: false }).fill('李四');
+  result = page.waitForResponse(response => response.url().endsWith('/api/customers') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '提交信息', exact: true }).click();
+  const li = (await (await result).json()).data;
+  assert.equal(li.phone, null); assert.equal(li.age, null);
+  await page.getByRole('button', { name: `编辑记录 ${li.id}`, exact: true }).click();
+  await page.getByLabel('年龄', { exact: false }).fill('30');
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(page.getByText(`记录 ${li.id} 已更新。`, { exact: true })).toBeVisible();
+  assert.equal((await (await page.request.get(server.origin + `/api/customers/${li.id}`)).json()).data.phone, null);
+
+  // 分页夹具也经过同一个真实授权 API 创建，不模拟列表或数据库。
+  const session = await (await page.request.get(server.origin + '/_kenvoy/session')).json();
+  for (let i = 0; i < 21; i++) {
+    const response = await page.request.post(server.origin + '/api/customers', {
+      headers: { origin: server.origin, 'x-kenvoy-csrf': session.csrf_token, 'x-kenvoy-generation': String(session.generation) },
+      data: { name: `分页客户${String(i).padStart(2, '0')}`, age: i },
+    });
+    assert.equal(response.status(), 201);
+  }
+  await page.getByRole('button', { name: '刷新列表', exact: true }).click();
+  await page.getByRole('combobox', { name: '每页', exact: true }).click();
+  await page.getByRole('option', { name: '20', exact: true }).click();
+  await expect(page.getByText('1–20 条，共 23 条', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.getByText('21–23 条，共 23 条', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '上一页', exact: true }).click();
+  await page.getByLabel('搜索记录', { exact: true }).fill('张三');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('1–1 条，共 1 条', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '清除搜索', exact: true }).click();
+  await expect(page.getByText('1–20 条，共 23 条', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '年龄', exact: true }).click();
+  await expect(page.getByRole('columnheader', { name: /^年龄/ })).toHaveAttribute('aria-sort', 'ascending');
+  await page.getByRole('button', { name: '筛选', exact: true }).click();
+  await page.getByLabel('筛选字段', { exact: true }).click();
+  await page.getByRole('option', { name: '年龄', exact: true }).click();
+  await page.getByLabel('筛选值', { exact: false }).fill('30');
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click();
+  await expect(page.getByText('1–1 条，共 1 条', { exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '李四', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '清除筛选', exact: true }).click();
+  await page.getByRole('button', { name: '筛选', exact: true }).click();
+  await expect(page.getByText('1–20 条，共 23 条', { exact: true })).toBeVisible();
+  await page.screenshot({ path: output + '/admin-desktop.png', fullPage: true, animations: 'disabled' });
+
+  await page.getByLabel('搜索记录', { exact: true }).fill('张三');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('张三', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(page.getByRole('cell', { name: '张三', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: `删除记录 ${zhang.id}`, exact: true }).click();
+  await page.getByRole('button', { name: '确认删除', exact: true }).click();
+  await expect(page.getByText(`记录 ${zhang.id} 已删除。`, { exact: true })).toBeVisible();
+  assert.equal((await page.request.get(server.origin + `/api/customers/${zhang.id}`)).status(), 404);
+  await page.getByRole('button', { name: '清除搜索', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('button', { name: '选择数据资源' })).toBeVisible();
+  const management = page.getByRole('button', { name: '管理记录 3', exact: true });
+  await expect(management).toBeVisible();
+  const managementBounds = await management.boundingBox();
+  assert.ok(managementBounds.x >= 0 && managementBounds.x + managementBounds.width <= 390);
+  await expect(page.getByText('左右滑动查看完整字段，右侧可管理记录。', { exact: true })).toBeVisible();
+  const scrollRegion = page.getByRole('region', { name: /左右滚动/ });
+  await scrollRegion.focus(); await expect(scrollRegion).toBeFocused();
+  await management.click();
+  await expect(page.getByRole('menuitem', { name: '查看记录 3', exact: true })).toBeVisible();
+  await page.getByRole('menuitem', { name: '查看记录 3', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '记录 3 的详情' })).toBeVisible();
+  await page.getByRole('button', { name: '返回列表', exact: true }).click();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+  await page.screenshot({ path: output + '/admin-mobile.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: '选择数据资源' }).click();
+  await expect(page.getByRole('navigation', { name: '管理资源' }).last()).toBeVisible();
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await server.stop(); server = await fixture.start();
+  await page.goto(server.origin + '/admin/customers');
+  await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
+  const persisted = await page.request.get(server.origin + `/api/customers/${li.id}`);
+  assert.equal(persisted.status(), 200); assert.equal((await persisted.json()).data.age, 30);
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ status: '通过', browser: browser.version(), customer_to_admin: true, search_filter_sort_pagination: true, details_create_edit_delete: true, untouched_null_preserved: true, restart_persistence: true, mobile_without_page_overflow: true, screenshots: output }, null, 2));
+  await server.stop();
+} finally { if (browser) await browser.close(); await fixture.close(); }

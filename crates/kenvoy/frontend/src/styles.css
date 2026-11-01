@@ -1,0 +1,19 @@
+:root { font-synthesis: none; text-rendering: optimizeLegibility; }
+body { margin: 0; }
+* { box-sizing: border-box; }
+::selection { background: #d6e6ff; color: #153a6c; }
+input, textarea { caret-color: #1558ba; }
+a { text-underline-offset: 0.22em; }
+:focus-visible { outline: 3px solid #1558ba; outline-offset: 3px; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+.skip-link { position: fixed; top: -80px; left: 20px; z-index: 2000; padding: 12px 20px; background: #fff; color: #1558ba; }
+.skip-link:focus { top: 12px; }
+.data-cell { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 360px; }
+.page-content { width: 100%; min-width: 0; }
+.field-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.form-feedback { scroll-margin-top: 100px; }
+.row-updated { animation: saved-row 1.8s ease-out; }
+@keyframes saved-row { from { background-color: #e8f3ec; } to { background-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

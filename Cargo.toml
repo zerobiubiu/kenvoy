@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/kengine", "crates/kenvoy"]
 
 [workspace.package]
 edition = "2024"
@@ -9,13 +9,35 @@ authors = ["zerobiubiu"]
 license = "MIT"
 repository = "https://github.com/zerobiubiu/kenvoy"
 
-
-[workspace.lints.rust]
-warnings = "warn"
-
-[workspace.lints.clippy]
-pedantic = "warn"
-
 [workspace.dependencies]
-# `kenvoy` 的 features（db / s3）由其 Cargo.toml 直接声明
-kengine = { path = "crates/kengine", version = "0.1" }
+swc_common = "=27.0.0"
+swc_ecma_ast = "=30.0.0"
+swc_ecma_parser = "=47.0.0"
+swc_ecma_visit = "=30.0.0"
+swc_ecma_codegen = "=33.0.0"
+swc_ecma_transforms_base = "=51.0.0"
+swc_ecma_transforms_typescript = "=57.0.0"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+thiserror = "=2.0.21"
+rquickjs = { version = "=0.14.0", default-features = false, features = ["std", "loader", "futures"] }
+axum = { version = "=0.8.9", features = ["ws"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "net", "io-util", "sync", "time", "signal", "process"] }
+tower = { version = "=0.5.3", features = ["util"] }
+tower-http = { version = "=0.7.1", features = ["fs", "limit"] }
+rusqlite = { version = "=0.41.1", features = ["bundled", "backup"] }
+notify = "=8.2.1"
+clap = { version = "=4.6.7", features = ["derive"] }
+toml = "=0.9.8"
+chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
+sha2 = "=0.11.1"
+argon2 = "=0.6.0"
+getrandom = "=0.4.3"
+hmac = "=0.13.0"
+rpassword = "=7.5.4"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"] }
+url = "=2.5.8"
+reqwest = { version = "=0.13.5", default-features = false }
+tokio-tungstenite = { version = "=0.29.0", default-features = false, features = ["connect", "handshake"] }
+futures-util = { version = "=0.3.34", features = ["sink"] }

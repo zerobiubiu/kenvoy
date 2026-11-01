@@ -1,14 +1,62 @@
-# AGENTS.md — kenvoy
+# AGENTS.md — Kenvoy
 
-Rust 1.98 / edition 2024 / resolver 3。`crates/*` 自动发现；`kengine`(lib) → `kenvoy`(bin)。
+本文件适用于本仓库及其子目录，补充用户的全局工作约定。面向用户的说明、项目文档、注释和错误信息使用简体中文；代码标识符、公开 API 名称及技术术语保留英文。当前明确用户指令优先；不得借项目规则扩大操作授权。
 
-```bash
+## 开工检查与文档入口
+
+- 修改前检查适用规则、`git status --short`、当前分支、最近提交、`.gitignore`、Cargo Workspace 及相关现有实现。
+- 从 [docs/README.md](docs/README.md) 进入设计与验证文档；阶段任务和验收见 [development-roadmap.md](docs/development-roadmap.md)，职责边界见 [crate-boundaries.md](docs/crate-boundaries.md)。
+- 优先复用当前有效实现。Git 历史中的 XML、SSR、PostgreSQL 路线已退出当前基线，不得未经审查恢复或视为现有能力。
+- 只创建实际需要的模块、测试和文档，不批量建立空目录、空实现或无依据的脚手架。
+
+## 不可变架构边界
+
+- Workspace 只能包含两个自有 Rust Crate：`crates/kengine` 为 Library，`crates/kenvoy` 为唯一用户 Binary。内部使用 Rust Module，不增加第三个自有 Crate，不为 KEngine 添加 Binary Target。
+- 依赖方向只能是 `kenvoy → kengine`，通过 KEngine 公共 API 交互。外部成熟 Cargo 依赖不属于自有 Workspace 成员数量限制。
+- KEngine 只负责 JS/TS/JSX/TSX 解析、通用 Generic IR、模块图、作用域、符号、引用、源码位置和诊断；不得引入 Web 业务模型、数据库、CRUD、HTTP、认证、React 或页面语义。
+- Kenvoy 定义 DSL、Application IR、权限、数据库迁移、统一运行时、CLI、构建和服务生命周期。Generic IR 与 Application IR 分开定义、分别版本化，不公开 SWC 内部类型作为长期公共契约。
+- 使用 SWC 解析真实语言，不重写完整 Parser 或 TypeScript 类型检查器。无法静态求值的表达式必须保留可追踪引用；Schema 无法静态确定时明确报错，不能忽略字段。
+- 普通 React UI 组件不参与 Schema 推导；Schema Component、Client、Server 和 Shared 模块区分处理。服务端实现和敏感配置不得进入客户端产物。
+- 页面、API、后台与数据库共用同一份已验证 Application IR。HTTP 请求不重新解析 TSX、构建前端或初始化整库；不按资源和页面生成重复业务源码作为主要执行方式。
+
+## 安全、数据与依赖
+
+- 默认技术路线为 Rust 2024、Axum/Tokio/Tower、SQLite/rusqlite、React/MUI/CSR；JavaScript 优先验证 rquickjs。具体版本、feature 与前端开发适配须实测后锁定，不把候选写成已验证组合。
+- 一般遵循全局依赖批准规则。本项目用户已明确授权“我同意，不需要等我审批，你可以自主决定”：可自主选择并安装本工程实施与验证必要的依赖和工具，记录版本、feature、来源、位置、目的及锁文件，不再逐项请求批准。该授权不扩大为任务无关安装、费用、对外发布或破坏用户数据；这些高影响操作仍按具体范围处理。
+- 依赖获批后保留锁文件及来源信息，不在每次启动时重新安装，不静默修改用户项目依赖。
+- SQLite 使用独立持久化目录，dev/run 路径一致；构建、部署和解析错误不能删除或重建业务数据库。迁移先生成 Diff，保留版本和校验值，事务失败回滚；字段删除、候选重命名、类型和约束变化不能静默破坏数据。
+- 高影响操作先确认具体对象、范围和后果；包含删除、不可恢复覆盖、数据迁移、对外发送、费用和安全设置变更。安全自动迁移也必须符合已经批准的具体运行策略。
+- 管理 API 必须认证并在服务端授权。公开表单的 create 许可不开放匿名列表、详情、修改或删除。密码不得明文存储，不硬编码默认管理员密码。
+- SQL 标识符仅来自验证后的 IR，输入值使用绑定参数；JavaScript 不获得任意宿主权限。不可信代码在更强隔离能力实现并验证前拒绝执行。
+
+## Git 与版本
+
+- 保留未提交改动，不擅自覆盖、删除、stash 或清理任务范围外内容。未经明确要求，不提交、推送、切分支、合并、变基或打标签。
+- 禁止为工作区整洁而重置用户内容。改写共享历史等高风险操作须先备份并取得具体确认。
+- 当前版本来源为两个包各自的 `Cargo.toml`；edition/MSRV 等共用属性来自根 manifest。现有版本均为 0.1.0，尚无已建立的发布流程。
+- 不按每次源码修改机械递增版本；纯文档、注释和本文件变更不单独触发版本更新。真正涉及发布前先查明并确认发布流程、SemVer 规则、同步位置及 CHANGELOG/tag 处理，不擅自建立规则或发布。
+- 不提交密钥、个人配置、依赖目录或构建产物；新增持久化数据和前端依赖目录前检查相应 ignore 保护。
+
+## 阶段执行与验证
+
+- 按阶段依次审查、设计、实施、编译、测试、验收、更新文档；前一阶段核心验收失败时不叠加后续业务功能。技术探针保持最小范围，不借验证同时开发 HTTP、数据库和前端业务。
+- 当前阶段与未完成项以路线和最新验证记录为准，不把某一轮“仅文档”的范围写成永久停工规则；用户已授权的工作与具体批准范围继续执行。
+- 从现有项目配置和脚本发现验证方式；按影响选择最低充分检查，不为验证擅自安装工具。当前 Rust 验证入口为：
+
+```text
 cargo check --workspace
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
 cargo test --workspace
-cargo package -p kengine --list --allow-dirty
-cargo publish -p kengine --dry-run --allow-dirty  # 先发 kengine，再发 kenvoy
+cargo clippy --workspace --all-targets
+cargo fmt --all -- --check
 ```
 
-约束：LICENSE 为 MIT；`[workspace.dependencies]` 统一版本；不提交 `target/`。
+- 锁文件和依赖已准备时优先使用 `--locked`，可离线时使用 `--offline`；不要通过关闭错误检查让构建通过。KEngine 相关变更还需独立执行 `cargo check -p kengine` 和 `cargo test -p kengine`。
+- 只报告实际观察到的命令、输出和退出码；0 tests 不等于功能通过。资料调研、代码推断、临时探针和生产行为分开表述；失败说明原因、替代验证和残余风险。
+- 每阶段结束报告完成情况、文件变更、关键实现与边界、验证结果、遗留问题和下一阶段计划。Playwright E2E 只在真实实现及获批工具到位后执行，不能以模拟结果代替。
+
+## 文档同步与执行记录
+
+- 详细文档统一从 `docs/README.md` 索引；沿用当前主题文档与 `adr/` 结构，新增分类在首次有实际内容时建立 README 并同步总索引。阶段 00 明确指定的根目录文件不为套模板而迁移。
+- 现状文档区分已实现、设计、候选和待验证。源码任务完成前同步新增变更记录，包含背景、方案、文件清单、环境、命令、实际输出、退出码、结论、限制和后续建议；接口、配置、默认行为改变时同步更新现状文档。
+- 定稿变更记录、验证记录和 ADR 保留历史事实；后续变化或勘误另建记录并维护索引替代关系。纯文档和本文件维护不递归创建变更记录。
+- 项目相关回复末尾按用户全局格式附执行记录：能力、Skill，以及存在失败、阻碍或残余风险时的例外；标识必须来自实际可见规则或工具。

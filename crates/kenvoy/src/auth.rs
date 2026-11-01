@@ -1,683 +1,342 @@
-//! 用户与权限 HTTP API（`/__kenvoy/auth/*`），需要 `db` feature。
-//!
-//! 覆盖：注册（可配置：公开 / 审核 / 人事绑定式）、登录、登出、当前用户、
-//! 用户与角色管理（账号等级）、部门、通讯录（含「人事新增人员但不需要账号」与账号关联）。
-//! 管理端点（用户/角色/部门/通讯录、审核）要求登录；注册模式与密码强度由 `kenvoy.toml [auth]` 配置。
+//! 服务端身份与 Session；持久化层只接收摘要，不保存 Cookie 原文。
+use crate::{
+    application::Role,
+    database::{
+        Database, DatabaseError,
+        auth::{StoreError, StoredSession},
+    },
+};
+use argon2::{
+    Algorithm, Argon2, Params, PasswordHasher, PasswordVerifier, Version,
+    password_hash::phc::PasswordHash,
+};
+use hmac::{Hmac, KeyInit, Mac};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::sync::Semaphore;
 
-#![cfg(feature = "db")]
+const ANONYMOUS_TTL: i64 = 900;
+const AUTHENTICATED_TTL: i64 = 28_800;
+const CSRF_LABEL: &[u8] = b"kenvoy.csrf.v1";
 
-use crate::db::UserStore;
-use crate::db::users::User;
-use axum::Router;
-use axum::extract::{DefaultBodyLimit, Json, Path, State};
-use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use serde::Deserialize;
-use serde_json::{Value, json};
-use sqlx::PgPool;
+#[derive(Debug, thiserror::Error)]
+pub enum AuthError {
+    #[error("用户名或密码错误")]
+    InvalidCredentials,
+    #[error("Session 无效或已经过期，请重新获取登录上下文")]
+    InvalidSession,
+    #[error("认证输入无效：{0}")]
+    InvalidInput(String),
+    #[error("管理员已经初始化，不能重复覆盖")]
+    AlreadyInitialized,
+    #[error("请先初始化管理员")]
+    NotInitialized,
+    #[error("用户名已经存在")]
+    UsernameExists,
+    #[error("密码处理任务已满，请稍后再试")]
+    Overloaded,
+    #[error("Session 容量已满，请稍后再试")]
+    SessionCapacity,
+    #[error("认证密码学操作失败")]
+    Crypto,
+    #[error("系统时钟无法提供有效的认证期限")]
+    Clock,
+    #[error(transparent)]
+    Database(DatabaseError),
+}
+impl From<DatabaseError> for AuthError {
+    fn from(error: DatabaseError) -> Self {
+        match error {
+            DatabaseError::Auth(StoreError::InvalidSession) => Self::InvalidSession,
+            DatabaseError::Auth(StoreError::AlreadyInitialized) => Self::AlreadyInitialized,
+            DatabaseError::Auth(StoreError::NotInitialized) => Self::NotInitialized,
+            DatabaseError::Auth(StoreError::UsernameExists) => Self::UsernameExists,
+            DatabaseError::Auth(StoreError::SessionCapacity) => Self::SessionCapacity,
+            other => Self::Database(other),
+        }
+    }
+}
+pub type Result<T> = std::result::Result<T, AuthError>;
 
-use crate::config::{AuthConfig, MailConfig, password_policy};
-
-/// auth 路由共享状态。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UserView {
+    pub id: i64,
+    pub username: String,
+    pub role: Role,
+}
+#[derive(Clone, Serialize)]
+pub struct SessionView {
+    pub user: Option<UserView>,
+    pub csrf_token: String,
+    pub expires_at: i64,
+}
+// 不实现 Debug/Serialize，防止日志或 JSON 意外输出 Cookie 原文。
+pub struct SessionResponse {
+    pub view: SessionView,
+    pub set_token: Option<String>,
+}
 #[derive(Clone)]
-pub struct AuthState {
-    /// 数据库连接池（未配置时为 `None`）。
-    pub db: Option<PgPool>,
-    /// 注册模式与密码策略配置。
-    pub auth: AuthConfig,
-    /// 邮件配置（[mail] 段）。
-    pub mail: MailConfig,
+pub struct Auth {
+    database: Database,
+    password_slots: Arc<Semaphore>,
+    dummy_hash: Arc<String>,
 }
 
-/// 构建 auth 路由。
-///
-/// 全局 body 兜底 64KB：auth 请求 body 都是 `{username, password, display_name, role, ...}`，
-/// 远小于此值。足够大以容错，不致大 body 拖垮 server。
-pub fn router() -> Router<AuthState> {
-    Router::new()
-        .layer(DefaultBodyLimit::max(64 * 1024))
-        .route("/register", post(register))
-        .route("/login", post(login))
-        .route("/logout", post(logout))
-        .route("/forgot", post(forgot))
-        .route("/reset", post(reset))
-        .route("/me", get(me))
-        .route("/options/users", get(list_user_options))
-        .route("/options/departments", get(list_department_options))
-        .route("/users", get(list_users))
-        .route("/users/{id}/roles", post(assign_role))
-        .route("/users/{id}/approve", post(approve_user))
-        .route("/users/{id}/disable", post(disable_user))
-        .route("/roles", get(list_roles).post(create_role))
-        .route("/roles/{id}/level", post(set_role_level))
-        .route(
-            "/departments",
-            get(list_departments).post(create_department),
-        )
-        .route("/contacts", get(list_contacts).post(add_contact))
-        .route("/contacts/{id}/link-user", post(link_contact))
+impl Auth {
+    pub async fn new(database: Database) -> Result<Self> {
+        database.auth_initialize().await?;
+        let dummy_password = hex(&random::<32>()?);
+        let dummy_hash =
+            tokio::task::spawn_blocking(move || hash_password(dummy_password.as_bytes()))
+                .await
+                .map_err(|_| AuthError::Crypto)??;
+        Ok(Self {
+            database,
+            password_slots: Arc::new(Semaphore::new(2)),
+            dummy_hash: Arc::new(dummy_hash),
+        })
+    }
+    pub async fn init_admin(&self, username: &str, password: &str) -> Result<UserView> {
+        self.create_user(username, password, Role::Admin, true)
+            .await
+    }
+    pub async fn add_user(&self, username: &str, password: &str, role: Role) -> Result<UserView> {
+        self.create_user(username, password, role, false).await
+    }
+    async fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+        role: Role,
+        initial: bool,
+    ) -> Result<UserView> {
+        let username = normalize_username(username)?;
+        validate_password(password)?;
+        if role == Role::Anonymous {
+            return Err(AuthError::InvalidInput("匿名身份不能创建账号".into()));
+        }
+        let permit = self
+            .password_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| AuthError::Overloaded)?;
+        let password = password.as_bytes().to_vec();
+        let hash = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            hash_password(&password)
+        })
+        .await
+        .map_err(|_| AuthError::Crypto)??;
+        Ok(self
+            .database
+            .auth_add_user(username, hash, role, initial, now()?)
+            .await?)
+    }
+    pub async fn session(&self, raw: Option<&str>) -> Result<SessionResponse> {
+        if let Some(raw) = raw
+            && let Some(view) = self.authenticate(raw).await?
+        {
+            return Ok(SessionResponse {
+                view,
+                set_token: None,
+            });
+        }
+        self.rotate(None, None).await
+    }
+    pub async fn authenticate(&self, raw: &str) -> Result<Option<SessionView>> {
+        let Some(token) = decode_token(raw) else {
+            return Ok(None);
+        };
+        let session = self
+            .database
+            .auth_lookup(hex(&Sha256::digest(token)), now()?)
+            .await?;
+        session.map(|session| view(raw, session)).transpose()
+    }
+    pub async fn login(
+        &self,
+        raw: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<SessionResponse> {
+        if self.authenticate(raw).await?.is_none() {
+            return Err(AuthError::InvalidSession);
+        }
+        // 非法用户名与不存在账号都执行相同的固定参数哈希，避免直接暴露账号存在性。
+        if password.len() > 128 {
+            return Err(AuthError::InvalidCredentials);
+        }
+        let user = match normalize_username(username) {
+            Ok(username) => self.database.auth_find_user(username).await?,
+            Err(_) => None,
+        };
+        let hash = user
+            .as_ref()
+            .map(|record| record.password_hash.clone())
+            .unwrap_or_else(|| self.dummy_hash.as_ref().clone());
+        let password = password.as_bytes().to_vec();
+        let permit = self
+            .password_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| AuthError::Overloaded)?;
+        let valid = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            verify_password(&password, &hash)
+        })
+        .await
+        .map_err(|_| AuthError::Crypto)??;
+        let Some(user) = user.filter(|_| valid) else {
+            return Err(AuthError::InvalidCredentials);
+        };
+        self.rotate(Some(raw), Some(user.user.id)).await
+    }
+    pub async fn logout(&self, raw: &str) -> Result<SessionResponse> {
+        self.rotate(Some(raw), None).await
+    }
+    async fn rotate(&self, old: Option<&str>, user_id: Option<i64>) -> Result<SessionResponse> {
+        let old_hash = old
+            .map(|raw| {
+                decode_token(raw)
+                    .map(|token| hex(&Sha256::digest(token)))
+                    .ok_or(AuthError::InvalidSession)
+            })
+            .transpose()?;
+        let token = random::<32>()?;
+        let raw = hex(&token);
+        let now = now()?;
+        let expires = now
+            .checked_add(if user_id.is_some() {
+                AUTHENTICATED_TTL
+            } else {
+                ANONYMOUS_TTL
+            })
+            .ok_or(AuthError::Clock)?;
+        let session = self
+            .database
+            .auth_rotate(old_hash, hex(&Sha256::digest(token)), user_id, now, expires)
+            .await?;
+        Ok(SessionResponse {
+            view: view(&raw, session)?,
+            set_token: Some(raw),
+        })
+    }
+    pub fn verify_csrf(raw: &str, header: &str) -> bool {
+        let (Some(token), Some(expected)) = (decode_token(raw), decode_token(header)) else {
+            return false;
+        };
+        let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(&token) else {
+            return false;
+        };
+        mac.update(CSRF_LABEL);
+        mac.verify_slice(&expected).is_ok()
+    }
 }
-
-fn require_db(state: &AuthState) -> Result<&PgPool, StatusCode> {
-    state.db.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)
-}
-
-pub(crate) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
-    headers
-        .get(AUTHORIZATION)?
-        .to_str()
-        .ok()?
-        .strip_prefix("Bearer ")
-}
-
-/// 读取 `kv_token` cookie（登录时种入；供 SSR 页面访问鉴权，Bearer 头优先）。
-pub(crate) fn cookie_token(headers: &HeaderMap) -> Option<String> {
-    let cookie = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
-    cookie.split(';').find_map(|part| {
-        let part = part.trim();
-        part.strip_prefix("kv_token=").map(str::to_string)
+fn view(raw: &str, session: StoredSession) -> Result<SessionView> {
+    let token = decode_token(raw).ok_or(AuthError::InvalidSession)?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(&token).map_err(|_| AuthError::Crypto)?;
+    mac.update(CSRF_LABEL);
+    Ok(SessionView {
+        user: session.user,
+        csrf_token: hex(&mac.finalize().into_bytes()),
+        expires_at: session.expires_at,
     })
 }
-
-/// 管理端点前置校验：数据库可用 + 已登录 + 账号等级达标（`[auth].admin_level`，缺省 90）。
-async fn require_admin(
-    state: &AuthState,
-    headers: &HeaderMap,
-) -> Result<User, (StatusCode, String)> {
-    let pool = require_db(state).map_err(|c| (c, "数据库未配置".to_string()))?;
-    let Some(token) = bearer_token(headers) else {
-        return Err((StatusCode::UNAUTHORIZED, "缺少 Bearer token".to_string()));
-    };
-    let store = UserStore::new(pool);
-    let user = store
-        .user_by_session(token)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误".to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "会话无效或已过期".to_string()))?;
-    let level = store
-        .user_level(user.id)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误".to_string()))?;
-    if level < state.auth.admin_level {
-        return Err((
-            StatusCode::FORBIDDEN,
-            format!(
-                "账号等级不足：管理操作需等级不低于 {}",
-                state.auth.admin_level
-            ),
+fn normalize_username(value: &str) -> Result<String> {
+    if !(3..=64).contains(&value.len())
+        || !value
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_.@-".contains(&b))
+    {
+        return Err(AuthError::InvalidInput("用户名须为 3 至 64 个 ASCII 字符，以字母或数字开头，仅允许字母、数字、下划线、点、@ 和连字符".into()));
+    }
+    Ok(value.to_ascii_lowercase())
+}
+fn validate_password(value: &str) -> Result<()> {
+    if !(12..=128).contains(&value.len())
+        || value.chars().any(char::is_control)
+        || value.chars().all(char::is_whitespace)
+    {
+        return Err(AuthError::InvalidInput(
+            "密码须为 12 至 128 个 UTF-8 字节，不能全为空白或含控制字符".into(),
         ));
     }
-    Ok(user)
+    Ok(())
 }
-
-async fn user_detail_json(
-    store: &UserStore<'_>,
-    user: &crate::db::users::User,
-) -> Result<Value, String> {
-    let roles = store.user_roles(user.id).await.map_err(|e| e.to_string())?;
-    let level = store.user_level(user.id).await.map_err(|e| e.to_string())?;
-    Ok(json!({
-        "user": user,
-        "roles": roles.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
-        "level": level,
-    }))
+fn argon() -> Result<Argon2<'static>> {
+    Ok(Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(19456, 2, 1, Some(32)).map_err(|_| AuthError::Crypto)?,
+    ))
 }
-
-#[derive(Deserialize)]
-struct RegisterReq {
-    username: String,
-    password: String,
-    display_name: String,
+fn hash_password(password: &[u8]) -> Result<String> {
+    let salt = random::<16>()?;
+    Ok(argon()?
+        .hash_password_with_salt(password, &salt)
+        .map_err(|_| AuthError::Crypto)?
+        .to_string())
 }
-
-async fn register(State(state): State<AuthState>, Json(req): Json<RegisterReq>) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    // 密码强度校验（`[auth].password`，默认无校验）
-    let policy = password_policy(&state.auth.password);
-    let errors = policy.validate(&req.password, &req.username);
-    if !errors.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
+fn verify_password(password: &[u8], hash: &str) -> Result<bool> {
+    // 持久化 PHC 同样是不可信输入，禁止其改变算法成本并耗尽内存。
+    if hash.len() != 97 || !hash.starts_with("$argon2id$v=19$m=19456,t=2,p=1$") {
+        return Err(AuthError::Crypto);
     }
-    let store = UserStore::new(pool);
-    match state.auth.mode.as_str() {
-        // 审核注册：账号进入 `pending`，审核通过后方可登录
-        "review" => match store
-            .create_user_with_status(&req.username, &req.password, &req.display_name, "pending")
-            .await
-        {
-            Ok(id) => Json(
-                json!({ "id": id, "status": "pending", "message": "注册已提交，等待管理员审核" }),
-            )
-            .into_response(),
-            Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
-        },
-        // 人事绑定式：关闭公开注册，账号由人事/管理员创建后发放
-        "hr" => (
-            StatusCode::FORBIDDEN,
-            "注册未开放：账号由人事应用创建后发放",
-        )
-            .into_response(),
-        // 公开注册（默认）：成功后按 `[auth].default_role` 分配默认角色（新用户即可进入对应应用）
-        _ => match store
-            .create_user(&req.username, &req.password, &req.display_name)
-            .await
-        {
-            Ok(id) => {
-                if let Some(role_name) = state.auth.default_role.as_deref() {
-                    match store.list_roles().await {
-                        Ok(roles) => {
-                            if let Some(role) = roles.into_iter().find(|r| r.name == role_name) {
-                                if let Err(err) = store.assign_role(id, role.id).await {
-                                    eprintln!("默认角色分配失败（分配）：{err}");
-                                }
-                            } else {
-                                eprintln!("默认角色分配失败：角色不存在 {role_name}");
-                            }
-                        }
-                        Err(err) => eprintln!("默认角色分配失败（查角色）：{err}"),
-                    }
-                }
-                Json(json!({ "id": id })).into_response()
-            }
-            Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
-        },
+    let parsed = PasswordHash::new(hash).map_err(|_| AuthError::Crypto)?;
+    if parsed.salt.as_ref().is_none_or(|salt| salt.len() != 16)
+        || parsed.hash.as_ref().is_none_or(|output| output.len() != 32)
+    {
+        return Err(AuthError::Crypto);
     }
+    Ok(argon()?.verify_password(password, &parsed).is_ok())
 }
-
-#[derive(Deserialize)]
-struct LoginReq {
-    username: String,
-    password: String,
+fn random<const N: usize>() -> Result<[u8; N]> {
+    let mut bytes = [0; N];
+    getrandom::fill(&mut bytes).map_err(|_| AuthError::Crypto)?;
+    Ok(bytes)
 }
-
-async fn login(State(state): State<AuthState>, Json(req): Json<LoginReq>) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    let store = UserStore::new(pool);
-    match store.verify_login(&req.username, &req.password).await {
-        Ok(Some(user)) => {
-            let token = match store.create_session(user.id).await {
-                Ok(t) => t,
-                Err(err) => {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response();
-                }
-            };
-            let mut detail = match user_detail_json(&store, &user).await {
-                Ok(d) => d,
-                Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response(),
-            };
-            if let Value::Object(map) = &mut detail {
-                map.insert("token".to_string(), Value::String(token.clone()));
-            }
-            // 种会话 cookie：供 SSR（页面访问权限）与同源导航使用；Bearer 头仍为首选
-            let cookie = format!("kv_token={token}; Path=/; HttpOnly; SameSite=Lax");
-            ([(axum::http::header::SET_COOKIE, cookie)], Json(detail)).into_response()
-        }
-        Ok(None) => (StatusCode::UNAUTHORIZED, "用户名或密码错误").into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-async fn logout(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    let Some(token) = bearer_token(&headers) else {
-        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
-    };
-    match UserStore::new(pool).delete_session(token).await {
-        Ok(()) => {
-            let clear = "kv_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
-            (
-                [(axum::http::header::SET_COOKIE, clear)],
-                StatusCode::NO_CONTENT,
-            )
-                .into_response()
-        }
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-async fn me(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    let Some(token) = bearer_token(&headers) else {
-        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
-    };
-    let store = UserStore::new(pool);
-    match store.user_by_session(token).await {
-        Ok(Some(user)) => match user_detail_json(&store, &user).await {
-            Ok(detail) => Json(detail).into_response(),
-            Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err).into_response(),
-        },
-        Ok(None) => (StatusCode::UNAUTHORIZED, "会话无效或已过期").into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-async fn list_users(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).list_users().await {
-        Ok(users) => Json(users).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-/// 公共用户选项（`GET /__kenvoy/auth/options/users`）
-///
-/// 仅需登录（任意等级）：用于表单下拉选择，不要求 admin。
-/// 返回 `[{id, username, displayName}]`。
-async fn list_user_options(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    if bearer_token(&headers).is_none() {
-        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
-    }
-    match sqlx::query_as::<_, (i64, String, String)>(
-        "SELECT id, username, display_name FROM users WHERE status = 'active' ORDER BY display_name",
+fn now() -> Result<i64> {
+    i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| AuthError::Clock)?
+            .as_secs(),
     )
-    .fetch_all(pool)
-    .await
+    .map_err(|_| AuthError::Clock)
+}
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+fn decode_token(raw: &str) -> Option<[u8; 32]> {
+    if raw.len() != 64
+        || !raw
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     {
-        Ok(rows) => Json(
-            rows.into_iter()
-                .map(|(id, u, d)| serde_json::json!({"id": id, "username": u, "displayName": d}))
-                .collect::<Vec<_>>(),
-        )
-        .into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+        return None;
     }
-}
-
-/// 公共部门选项（`GET /__kenvoy/auth/options/departments`）
-///
-/// 仅需登录。返回 `[{id, name, parentId}]`。
-async fn list_department_options(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    if bearer_token(&headers).is_none() {
-        return (StatusCode::UNAUTHORIZED, "缺少 Bearer token").into_response();
-    }
-    match sqlx::query_as::<_, (i64, String, Option<i64>)>(
-        "SELECT id, name, parent_id FROM departments ORDER BY sort_order, id",
-    )
-    .fetch_all(pool)
-    .await
-    {
-        Ok(rows) => Json(
-            rows.into_iter()
-                .map(|(id, n, p)| serde_json::json!({"id": id, "name": n, "parentId": p}))
-                .collect::<Vec<_>>(),
-        )
-        .into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct AssignRoleReq {
-    role_id: i64,
-}
-
-async fn assign_role(
-    State(state): State<AuthState>,
-    Path(user_id): Path<i64>,
-    headers: HeaderMap,
-    Json(req): Json<AssignRoleReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).assign_role(user_id, req.role_id).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct RoleReq {
-    name: String,
-    level: i32,
-    description: Option<String>,
-}
-
-async fn create_role(
-    State(state): State<AuthState>,
-    headers: HeaderMap,
-    Json(req): Json<RoleReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .create_role(&req.name, req.level, req.description.as_deref())
-        .await
-    {
-        Ok(id) => Json(json!({ "id": id })).into_response(),
-        Err(err) => (StatusCode::CONFLICT, err.to_string()).into_response(),
-    }
-}
-
-async fn list_roles(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).list_roles().await {
-        Ok(roles) => Json(roles).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct LevelReq {
-    level: i32,
-}
-
-async fn set_role_level(
-    State(state): State<AuthState>,
-    Path(role_id): Path<i64>,
-    headers: HeaderMap,
-    Json(req): Json<LevelReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .set_role_level(role_id, req.level)
-        .await
-    {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct DepartmentReq {
-    name: String,
-    parent_id: Option<i64>,
-}
-
-async fn create_department(
-    State(state): State<AuthState>,
-    headers: HeaderMap,
-    Json(req): Json<DepartmentReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .create_department(&req.name, req.parent_id)
-        .await
-    {
-        Ok(id) => Json(json!({ "id": id })).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-async fn list_departments(State(state): State<AuthState>, headers: HeaderMap) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).list_departments().await {
-        Ok(depts) => Json(depts).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct ContactReq {
-    name: String,
-    department_id: Option<i64>,
-    user_id: Option<i64>,
-    email: Option<String>,
-    phone: Option<String>,
-    title: Option<String>,
-}
-
-async fn add_contact(
-    State(state): State<AuthState>,
-    headers: HeaderMap,
-    Json(req): Json<ContactReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .add_contact(
-            &req.name,
-            req.department_id,
-            req.user_id,
-            req.email.as_deref(),
-            req.phone.as_deref(),
-            req.title.as_deref(),
-        )
-        .await
-    {
-        Ok(id) => Json(json!({ "id": id })).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-async fn list_contacts(
-    State(state): State<AuthState>,
-    headers: HeaderMap,
-    axum::extract::Query(params): axum::extract::Query<ContactListParams>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .list_contacts(params.keyword.as_deref())
-        .await
-    {
-        Ok(contacts) => Json(contacts).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct ContactListParams {
-    keyword: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct LinkUserReq {
-    user_id: Option<i64>,
-}
-
-/// 审核通过用户（`pending` → `active`，审核注册模式）。
-async fn approve_user(
-    State(state): State<AuthState>,
-    Path(user_id): Path<i64>,
-    headers: HeaderMap,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).approve_user(user_id).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::NOT_FOUND, err.to_string()).into_response(),
-    }
-}
-
-/// 禁用账号（`active` → `disabled`，不得登录）。
-async fn disable_user(
-    State(state): State<AuthState>,
-    Path(user_id): Path<i64>,
-    headers: HeaderMap,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool).disable_user(user_id).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::NOT_FOUND, err.to_string()).into_response(),
-    }
-}
-/// 通讯录人员关联账号（人事 app 自动关联；`user_id` 为 `null` 时解除关联）。
-async fn link_contact(
-    State(state): State<AuthState>,
-    Path(contact_id): Path<i64>,
-    headers: HeaderMap,
-    Json(req): Json<LinkUserReq>,
-) -> Response {
-    if let Err((code, msg)) = require_admin(&state, &headers).await {
-        return (code, msg).into_response();
-    }
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    match UserStore::new(pool)
-        .link_contact(contact_id, req.user_id)
-        .await
-    {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-struct ForgotReq {
-    /// 用户名（重置发起的唯一标识）。
-    username: String,
-}
-
-/// 申请重置密码：`POST /__kenvoy/auth/forgot` body `{"username":"..."}`。
-///
-/// 总是返回 200（不泄露账号是否存在）。生产环境应集成邮件发送链路发送重置链接；
-/// 调试/无邮件后端时，响应体包含 `devToken` 供开发调试（带服务器日志告警）。
-async fn forgot(State(state): State<AuthState>, Json(req): Json<ForgotReq>) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    let store = UserStore::new(pool);
-    let Some(uid) = store
-        .user_id_by_username(&req.username)
-        .await
-        .unwrap_or(None)
-    else {
-        // 不泄露用户存在性
-        return Json(json!({ "ok": true })).into_response();
-    };
-    match store.create_reset_token(uid).await {
-        Ok((_, plain)) => {
-            // 发送重置邮件（配置缺失 / SMTP 错误仅 eprintln，不影响响应）
-            // 邮箱优先用 users.email；未设置时无法发送（仅 eprintln 提示）
-            if let Some(email) = store
-                .user_email_by_id(uid)
-                .await
-                .ok()
-                .flatten()
-                .filter(|e| !e.is_empty())
-            {
-                let _ =
-                    crate::mail::send_password_reset(&state.mail, &email, &req.username, &plain);
+    let mut bytes = [0; 32];
+    for (index, pair) in raw.as_bytes().as_chunks::<2>().0.iter().enumerate() {
+        let digit = |b: u8| {
+            if b.is_ascii_digit() {
+                b - b'0'
             } else {
-                eprintln!(
-                    "[kenvoy/mail] 用户 {} 无邮箱，无法发送密码重置邮件（token 已通过 eprintln 输出）",
-                    req.username
-                );
+                b - b'a' + 10
             }
-            eprintln!(
-                "[kenvoy] 密码重置 token 已生成（user_id={uid}），请部署邮件发送链路或将 token 发给用户：{plain}",
-            );
-            Json(json!({ "ok": true, "devToken": plain })).into_response()
-        }
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+        };
+        bytes[index] = digit(pair[0]) * 16 + digit(pair[1]);
     }
+    Some(bytes)
 }
 
-#[derive(Deserialize)]
-struct ResetReq {
-    /// 重置链接中携带的明文 token。
-    token: String,
-    /// 新密码（明文，argon2 哈希入库）。
-    new_password: String,
-}
-
-/// 重置密码：`POST /__kenvoy/auth/reset` body `{"token":"...","new_password":"..."}`。
-async fn reset(State(state): State<AuthState>, Json(req): Json<ResetReq>) -> Response {
-    let pool = match require_db(&state) {
-        Ok(p) => p,
-        Err(code) => return (code, "数据库未配置").into_response(),
-    };
-    // 复用同一次 `password_policy` 校验
-    let policy = password_policy(&state.auth.password);
-    let errors = policy.validate(&req.new_password, "");
-    if !errors.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "errors": errors }))).into_response();
-    }
-    let store = UserStore::new(pool);
-    let Some(uid) = store.consume_reset_token(&req.token).await.unwrap_or(None) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "errors": ["token 无效或已过期"] })),
-        )
-            .into_response();
-    };
-    match store.reset_password(uid, &req.new_password).await {
-        Ok(()) => Json(json!({ "ok": true })).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-    }
-}
+#[cfg(test)]
+#[path = "auth_tests.rs"]
+mod tests;

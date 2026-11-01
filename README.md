@@ -1,169 +1,65 @@
-# Kenvoy
+# Kenvoy / KEngine
 
-**汇批呈览 · 面向 AI 时代的语义化低代码平台**
+Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQLite 持久化的完整应用。KEngine 是其中独立、通用的 Rust 源码解析库，不包含 Web 业务语义。
 
-开发者用专有的 DSL（领域特定语言）描述业务，Kenvoy 自动解析并生成桌面/移动端前端页面，同时关联数据模型与后台逻辑。
+## 当前进度
 
-> 一句话定位：**写语义，出全端。**
+第一版基础框架已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、React/MUI 前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；完整命令与边界见[最终验收](docs/verification/0012-final-acceptance.md)。
 
-## 命名来历
+Workspace 只有两个自有包：crates/kengine（Library）和 crates/kenvoy（Binary），依赖方向为 Kenvoy → KEngine。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
 
-**Kenvoy** 读作 `/ˈkɛn.vɔɪ/`，是一个生造词（非现成英文单词，词根可辨）：
+## 从源码构建与验证
 
-| 词根 | 来源 | 含义 |
-| :--- | :--- | :--- |
-| **Ken** | 古英语 | 「知悉 / 看见 / 视野」，对应**览**（总览全局） |
-| **voy** | Voyage（旅程/流转） | 「流转」，对应**汇 / 批 / 呈**（信息汇聚与流程流转） |
+需要 Rust 1.98 或以上、原生 C 构建环境及 Node 24.22.0 或以上/npm。Kenvoy 构建脚本嵌入真实前端产物，首次 Cargo 构建前先准备前端；不会在 Cargo 构建脚本里自动下载依赖。仓库保留 Rust/npm 锁文件：
 
-中文名 **「汇批呈览」** 对应 ToB 企业场景的完整业务闭环：
-
-| 字 | 含义 | 对应业务 |
-| :--- | :--- | :--- |
-| **汇** | 汇聚 / 归集 | 信息采集 |
-| **批** | 批示 / 流转 | 流程审批 |
-| **呈** | 呈报 / 呈文 | 数据上报 |
-| **览** | 阅览 / 总览 | 数据分析 |
-
-> **Kenvoy —— 知悉一切，流转万物。**
-
-## 为什么做 Kenvoy
-
-现有低代码平台大多基于**拖拽式**操作，存在两个根本问题：
-
-1. **AI 无法操作**——拖拽是 GUI 交互，AI 无法通过自然语言生成拖拽操作序列；
-2. **语义丢失**——拖拽生成的是坐标和配置，丢失了业务语义，AI 无法理解与维护。
-
-Kenvoy 的解法是**语义化 DSL**：AI 只输出极简的 DSL 描述，核心引擎负责理解语义、匹配预制组件、输出可部署的前后台。为 AI 时代提供一套确定性的「语义接口」。
-
-## 组件体系
-
-| 组件 | 英文名 | 简称 | 定位 | 开源 |
-| :--- | :--- | :--- | :--- | :--- |
-| **命令行工具** | Kenvoy | `kv` | 开发者入口：`init` / `dev` / `build` / `deploy`，本地实时解析渲染预览 | **开源** |
-| **解析器核心 + HTML 渲染** | Kenvoy-Engine | `kengine` | DSL 解析 + IR 中间表示 + SSR 渲染（feature `html`） | **开源** |
-| **云工作空间** | KenvoySpace | `kspace` | 企业级云平台：控制台、Dashboard、团队协作 | 闭源 |
-| **生产调度器** | Kenvoy-Runtime | `krt` | 生产环境调度中枢：路由分发、CI/CD、版本控制、日志管理、多服务协同 | 闭源 |
-
-**开源部分**：`kenvoy` CLI + `kengine` 解析/渲染库位于同一个 Rust Workspace，发布到 [crates.io](https://crates.io)。
-开发者可以本地使用 `kenvoy` 命令，也可以将 `kengine` 作为库集成到自己的 Rust 项目中。
-
-**闭源部分**：KenvoySpace + Kenvoy-Runtime 为云平台侧商业组件，提供企业级生产环境能力。
-
-## DSL 设计
-
-Kenvoy DSL 采用 **XML** 语法（`.kenvoy.xml`），目录结构参照 Next.js 风格，**文件系统即路由**：
-
-- **layout**：布局定义，可覆盖继承——匹配优先级「同级 > 父级 > 父父级 > … > 根 layout」；`apps/` 根下必须有 `layout.kenvoy.xml`
-- **page**：页面，路径即 `apps/` 下的目录路径，自动关联最近的 layout
-- **flow**：流程（审批流 / 工作流），只出现在 page 同级，由 page 显式引入
-- **publish**：发布权限，只出现在 page 同级，由 page 显式引入
-
-### 自定义组件
-
-- **页面私有**：`page.kenvoy.xml` 内与 `<Content>` 平级定义 `<Component name="...">`，仅本页可用
-- **全局 / 应用私有**：`module/` 目录下的 `*.kenvoy.xml`（根元素 `<Component name="...">`），全项目或应用内复用
-- **使用**：直接写 `<组件名 attr="值">…</组件名>`；实例属性通过 `{{名}}` 绑定到定义体内（Text / Section 标题 / StatCard / Field 默认值等），实例子元素注入定义体内的 `<Slot/>`
-
-### 目标项目结构
-
-```text
-apps/                   # 所有应用（根下有仪表盘，应用再分页面）
-├── dashboard/          # 应用工作台
-├── <应用>/
-│   ├── layout.kenvoy.xml
-│   ├── module/         # 应用私有自定义组件
-│   └── <页面>/
-│       ├── page.kenvoy.xml
-│       ├── flow.kenvoy.xml
-│       ├── publish.kenvoy.xml
-│       └── layout.kenvoy.xml   # 可选，覆盖父级
-module/                 # 全局通用自定义组件
-auth/                   # 用户 / 角色 / 通讯录 / 部门（系统原生）
-i18n/                   # 翻译对应表（zh / eng）
-public/                 # 静态资源（不可运行时写入，上传走 S3/SQL）
-dist/                   # 构建产物
-docs/                   # 项目文档
-packages/               # 外部依赖库
-kenvoy.toml             # 项目配置
-.kenvoy/                # 本地元数据 / 缓存
-.env                    # 环境变量
+```powershell
+npm ci --ignore-scripts --prefix crates/kenvoy/frontend
+npm run check --prefix crates/kenvoy/frontend
+npm test --prefix crates/kenvoy/frontend
+npm run build --prefix crates/kenvoy/frontend
+cargo build -p kenvoy --locked
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo fmt --all -- --check
+node tools/verify-architecture.mjs
+node tools/verify-docs.mjs
 ```
 
-详细约定见 [docs/03-project-structure.md](./docs/03-project-structure.md)。
+KEngine 可单独 check/test，不要求数据库、HTTP 或浏览器。阶段 00 的 HTTP/SQLite/JS/watcher 探针位于测试目录，使用临时资源。
 
-## 代码仓库现状
+## 创建与运行应用
 
-Rust 1.98 / edition 2024 / resolver 3，单 Workspace 多 crate：
+在 Windows 上可以直接使用构建出的 CLI：
 
-```text
-kenvoy/
-├── crates/
-│   ├── kengine/        # 解析 + IR + 校验/状态机 + HTML 渲染（feature html）
-│   └── kenvoy/         # CLI / dev / build + db 持久化（feature db）+ s3 存储（feature s3）+ mail SMTP（feature mail）
-├── examples/leave-app   # 请假审批示例（含 apps/、module/、I8n/、packages/、kenvoy.toml）
-└── docs/                # 设计文档（IR 契约、示例计划、项目结构、存储架构、变更记录）
+```powershell
+$kenvoy = (Resolve-Path .\target\debug\kenvoy.exe).Path
+& $kenvoy create customer-app
+Set-Location customer-app
+& $kenvoy admin init --username admin
+& $kenvoy dev
 ```
 
-## 快速开始
+`admin init` 隐藏输入密码，不提供默认密码。访问 `/customers` 登记客户，登录 `/admin/customers` 查询、搜索、分页、排序、编辑和删除。匿名仅有声明允许的表单提交权限，不能读取列表。数据位于 `data/app.sqlite`，开发与生产共用此路径。
 
-```bash
-cargo check --workspace
-cargo test --workspace
+停止开发服务后执行 `kenvoy run` 即可启动生产应用，无需先 build。源码或依赖锁变化会触发构建；无源码时可部署 CLI、kenvoy.toml、dist 和独立数据目录。静态服务只暴露 client 资产。`kenvoy build` 不修改业务数据库。
 
-# 初始化项目，然后启动开发服务器实时预览
-cargo run -p kenvoy -- init my-app
-cargo run -p kenvoy -- dev
+基础 DSL 运行不需要 Node/npm。自定义组件首次使用 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`，明确允许安装锁定的构建依赖；后续复用缓存，不每次重新安装。可运行示例见 [examples](examples/README.md)，扩展和安全限制见[JavaScript Runtime](docs/javascript-runtime.md)。
 
-# 用户 / 角色 / 通讯录 / 部门管理（连接 PostgreSQL 时生效）
-cargo run -p kenvoy -- user add --username alice --password '***' --display-name 张三
-cargo run -p kenvoy -- contact add --name 李四 --user alice
+迁移先用 `kenvoy migrate status` 查看 diff；安全变更由启动/开发发布应用，破坏性变更须使用计划校验值明确确认。删除声明不会自动删除已有数据。`kenvoy check` 提供语法、模块和 DSL 检查，不能替代完整 TypeScript 类型检查器。
+
+## 验证入口
+
+`crates/kenvoy/frontend/scripts/` 提供 forms、fields、admin、extensions、watcher、production E2E，均使用真实 CLI/API/SQLite 与 Chromium；夹具创建独立临时项目。`shutdown-observer.mjs` 配合独立终端 Ctrl+C，单独验证正常资源关闭与重启持久化。普通 Windows 子进程强制终止夹具不能替代这项退出验证。
+
+## 浏览器技术探针
+
+tools/probes/frontend 是独立兼容性探针，使用锁定 npm 依赖，不是正式用户项目或 Kenvoy Runtime。复现方式和限制见 [探针说明](tools/probes/frontend/README.md)，全程只监听 loopback。
+
+显式跨工具测试需要先构建该目录并准备 Playwright，再运行：
+
+```powershell
+cargo test -p kenvoy --test p03_http_sqlite axum_serves_built_react_and_sqlite_to_real_chromium --locked -- --ignored --nocapture
 ```
 
-文档索引见 [docs/README.md](./docs/README.md)。
-
-## License
-
-开源部分（`kengine` + `kenvoy`）采用 **MIT** 许可证。
-
-KenvoySpace 与 Kenvoy-Runtime 为闭源商业产品。
-
-## Workspace
-
-```text
-crates/
-├── kengine/         # 解析核心 + HTML 渲染（feature `html`），可面向 WASM
-└── kenvoy/         # CLI / dev 服务器 / 静态构建，含 db + s3 接线
-```
-
-## Features
-
-| crate | feature | 作用 | 依赖 |
-| :--- | :--- | :--- | :--- |
-| `kengine` | `html`（默认开） | SSR HTML 渲染 + 内嵌 Tabler 资产 | — |
-| `kenvoy` | `db`（默认开） | PostgreSQL 18+ 持久化（sqlx + argon2 + sha2） | sqlx / argon2 / chrono / sha2 |
-| `kenvoy` | `s3`（默认开） | S3 对象存储抽象 | rust-s3 / uuid |
-| `kenvoy` | `mail`（默认开） | SMTP 邮件发送（lettre）；发件失败仅 eprintln，不中断业务流程 | lettre |
-
-裁剪示例：
-```bash
-# 纯解析器（未来面向 WASM 边缘渲染）
-cargo build -p kengine --no-default-features
-
-# 仅 CLI 接线（不含 db/s3）
-cargo build -p kenvoy --no-default-features
-
-# 默认 build（完整运行时）
-cargo build --workspace
-```
-
-## 快速开始
-
-```bash
-cargo check --workspace
-cargo test --workspace
-cargo run -p kenvoy -- --help
-
-# 项目演示（需要 PostgreSQL 18+ 与 MinIO 容器，见 examples/leave-app/kenvoy.toml）
-cargo run -p kenvoy -- dev --dir examples/leave-app
-cargo run -p kenvoy -- build --dir examples/leave-app
-```
+普通 cargo test 会明确忽略该测试，避免要求仅使用 KEngine 的开发者安装前端工具。显式执行结果见 [Axum/React/Chromium 报告](docs/verification/0002-axum-react-browser.md)。

@@ -6,6 +6,20 @@
 /.kenvoy/
 /**/.kenvoy/
 
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+/**/data/backups/
+/artifacts/
+
+/**/node_modules/
+/tools/probes/frontend/test-results/
+/tools/probes/frontend/playwright-report/
+/tools/probes/frontend/.probe/
+
 .idea/
 .vscode/
 *.swp

@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { chromium, expect } from '@playwright/test';
+import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+const fixture=await projectFixture();let browser;
+try {
+  await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'watcher-test-password-725\n');
+  const server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage();
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(server.origin+'/customers');
+  await page.getByLabel('客户姓名',{exact:false}).fill('监听前已保存');await page.getByLabel('联系电话',{exact:false}).fill('13800000000');
+  const saved=page.waitForResponse(response=>response.url().endsWith('/api/customers')&&response.request().method()==='POST');
+  await page.getByRole('button',{name:'提交信息',exact:true}).click();const id=(await(await saved).json()).data.id;
+  await page.getByRole('button',{name:'再登记一条',exact:true}).click();await page.getByLabel('客户姓名',{exact:false}).fill('尚未提交的输入');
+  const status=async()=>await(await page.request.get(server.origin+'/_kenvoy/development')).json();
+  const initial=await status();assert.equal(initial.state,'ready');
+  const entry=join(fixture.project,'src/app.tsx');const original=await readFile(entry,'utf8');
+  const initialManifest=await readFile(join(fixture.project,'dist/manifest.json'),'utf8');
+  await writeFile(entry,'export default <app');
+  await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
+  await expect(page.getByText('开发更新未通过',{exact:true})).toBeVisible();
+  assert.match(server.logs(), /code=KE\d+/);assert.match(server.logs(), /app\.tsx/);assert.match(server.logs(), /line=/);assert.match(server.logs(), /suggestion=/);
+  await expect(page.getByLabel('客户姓名',{exact:false})).toHaveValue('尚未提交的输入');
+  assert.equal((await status()).generation,initial.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),initialManifest);
+  const valid=original.replace('客户登记','更新后登记').replace('<text name="phone" label="联系电话" />','<text name="phone" label="联系电话" /><text name="nickname" label="昵称" />');
+  await writeFile(entry,valid);
+  await expect.poll(async()=>(await status()).generation,{timeout:15000}).toBeGreaterThan(initial.generation);
+  await expect(page.getByRole('heading',{name:'更新后登记',exact:true})).toBeVisible();
+  await expect(page.getByLabel('昵称',{exact:false})).toBeVisible();await expect(page.getByText('开发更新未通过',{exact:true})).toHaveCount(0);
+  const active=await status();const activeManifest=await readFile(join(fixture.project,'dist/manifest.json'),'utf8');
+  await writeFile(entry,valid.replace('<text name="phone" label="联系电话" />',''));
+  await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
+  assert.equal((await status()).generation,active.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),activeManifest);
+  await expect(page.getByLabel('联系电话',{exact:false})).toBeVisible();
+  await writeFile(entry,valid);await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('ready');
+  const configPath=join(fixture.project,'kenvoy.toml');const config=await readFile(configPath,'utf8');
+  const beforeConfig=(await status()).generation;
+  await page.getByLabel('客户姓名',{exact:false}).fill('配置恢复保留输入');
+  for(const invalid of ['[server',config.replace('port = 0','port = 8080')]) {
+    await writeFile(configPath,invalid);await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
+    await expect(page.getByText('开发更新未通过',{exact:true})).toBeVisible();
+    await writeFile(configPath,config);await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('ready');
+    assert.equal((await status()).generation,beforeConfig);
+    await expect(page.getByText('开发更新未通过',{exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('客户姓名',{exact:false})).toHaveValue('配置恢复保留输入');
+  }
+  await page.goto(server.origin+'/admin/login');await page.getByLabel('用户名',{exact:false}).fill('admin');await page.getByLabel('密码',{exact:false}).fill('watcher-test-password-725');await page.getByRole('button',{name:'登录',exact:true}).click();
+  await expect(page.getByRole('cell',{name:'监听前已保存',exact:true})).toBeVisible();
+  const record=await(await page.request.get(server.origin+`/api/customers/${id}`)).json();assert.equal(record.data.phone,'13800000000');assert.equal(record.data.nickname,null);
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({status:'通过',native_notify:true,syntax_error_keeps_input_and_model:true,terminal_source_diagnostics:true,configuration_restore_clears_error:true,safe_schema_addition:true,destructive_change_blocked:true,active_manifest_preserved:true,recovery_and_data_preserved:true},null,2));
+  await server.stop();
+} finally {if(browser)await browser.close();await fixture.close();}
