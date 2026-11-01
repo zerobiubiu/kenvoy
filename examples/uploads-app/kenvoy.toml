@@ -1,0 +1,14 @@
+[project]
+name = "uploads-app"
+version = "0.1.0"
+
+[application]
+entry = "src/app.tsx"
+
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[database]
+provider = "sqlite"
+path = "data/app.sqlite"

@@ -4,7 +4,7 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 ## 当前进度
 
-当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。另支持 SQLite 持久化的多文件字段、附件下载及可显示上传图片/图片 URL 的 Image 组件。用法见[组件与选项契约](docs/contracts/component-bindings.md)、[文件与图片契约](docs/contracts/file-uploads.md)和[完整示例](examples/options-app/README.md)。
+当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。另支持 SQLite 持久化的多文件字段、附件下载及可显示上传图片/图片 URL 的 Image 组件。用法见[组件与选项契约](docs/contracts/component-bindings.md)、[文件与图片契约](docs/contracts/file-uploads.md)、[联动选项示例](examples/options-app/README.md)和[上传与图片示例](examples/uploads-app/README.md)。
 
 首版基线已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。当时 201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；历史命令与边界见[首版验收](docs/verification/0012-final-acceptance.md)，后续变更见[变更索引](docs/changes/README.md)。
 

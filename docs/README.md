@@ -32,7 +32,7 @@
 
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
 
-最近新增：[多文件上传与图片契约](contracts/file-uploads.md)及[0014 实施与专项验收](changes/0014-file-uploads-and-images.md)；E04 和随本轮补齐的 V01 状态见[待办追踪](development/implementation-backlog.md)。
+最近新增：[上传与图片可运行示例](../examples/uploads-app/README.md)及[0015 示例运行验证](changes/0015-uploads-example.md)；附件基础契约见[多文件上传与图片](contracts/file-uploads.md)，实现与模式切换证据保留在[0014](changes/0014-file-uploads-and-images.md)。
 
 ## 文档规范
 

@@ -1,0 +1,6 @@
+.uploads-gallery { display: grid; gap: 32px; }
+.uploads-record { display: grid; gap: 16px; min-width: 0; }
+.uploads-record h2, .uploads-record p { margin: 0; overflow-wrap: anywhere; }
+.uploads-photos { display: flex; flex-wrap: wrap; gap: 24px; }
+.uploads-photo { display: grid; align-content: start; gap: 8px; flex: 0 1 320px; min-width: 0; max-width: 100%; margin: 0; }
+.uploads-photo figcaption { overflow-wrap: anywhere; }
