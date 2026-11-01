@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium, expect } from '@playwright/test';
-import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 
 const fixture = await projectFixture();
 let browser;
@@ -141,4 +141,4 @@ try {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ status: '通过', browser: browser.version(), customer_to_admin: true, search_filter_sort_pagination: true, details_create_edit_delete: true, untouched_null_preserved: true, restart_persistence: true, mobile_without_page_overflow: true, native_dialog_keyboard_focus: true, screenshots: output }, null, 2));
   await server.stop();
-} finally { if (browser) await browser.close(); await fixture.close(); }
+} finally { try { if (browser) await browser.close(); } finally { await fixture.close(); } }

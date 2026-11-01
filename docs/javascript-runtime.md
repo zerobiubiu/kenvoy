@@ -4,7 +4,7 @@
 
 ## 编译和执行边界
 
-KEngine 提供通用源码、模块图和词法引用。Kenvoy 独立完成 TS 类型消除、应用模块分类、白名单构建、JS 执行和浏览器注册；没有向 KEngine 增加 React、HTTP 或 QuickJS 依赖。Workspace 仍只有两个自有 Crate。
+KEngine 提供通用源码、模块图和词法引用。Kenvoy 独立完成 TS 类型消除、应用模块分类、白名单构建、JS 执行和浏览器注册；没有向 KEngine 增加 React、HTTP 或 QuickJS 依赖。两个产品 Crate 与内部测试/工程成员的边界见 [Crate 职责](crate-boundaries.md)。
 
 服务端使用 SWC resolver → TypeScript strip → fixer → codegen，将可信项目的本地静态 ESM 转为 JavaScript。模块 ID 为 `m_1` 等逻辑标识，依赖映射精确到导入者与原始说明符。`PreparedBundle` v1 包含 modules/code/imports 和 functions/module/export；函数键是 Application IR 的 handler 注册 ID。代码与映射可序列化，加载时重新校验版本、大小、语法、导入闭包和导出登记。
 

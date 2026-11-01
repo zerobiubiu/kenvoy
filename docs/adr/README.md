@@ -4,7 +4,7 @@
 
 ## 从哪里开始
 
-- 了解整体边界：先读[架构](../architecture.md)与[Crate 边界](../crate-boundaries.md)，再读 ADR 0001—0004。
+- 了解整体边界：先读[架构](../architecture.md)与[Crate 边界](../crate-boundaries.md)，再读 ADR 0001—0004；工程成员新增及 tools 退役见 [ADR 0011](0011-rust-test-workspace-and-xtask.md)。
 - 了解开发与部署选择：先读[运行时设计](../runtime-design.md)，再读 [ADR 0009：产物与开发宿主](0009-artifacts-and-development-host.md)。组件与数据扩展见 [ADR 0010](0010-native-components-and-data-bindings.md)。
 - 核对实际通过范围：读[阶段 09 生命周期验收](../verification/0011-cli-lifecycle.md)与[阶段 10 最终验收](../verification/0012-final-acceptance.md)。
 
@@ -14,7 +14,7 @@
 
 | 编号 | 文档 | 当前选择状态 | 对应现状文档 |
 |---|---|---|---|
-| 0001 | [双 Crate 架构](0001-two-crate-architecture.md) | 现行 | [Crate 边界](../crate-boundaries.md) |
+| 0001 | [双 Crate 架构](0001-two-crate-architecture.md) | 两个产品层保留，Workspace 成员数量限制由 0011 替代 | [Crate 边界](../crate-boundaries.md) |
 | 0002 | [通用 SWC 解析层](0002-kengine-generic-parser.md) | 现行 | [KEngine 设计](../kengine-design.md) |
 | 0003 | [版本化 Generic IR](0003-generic-ir-design.md) | 现行 | [Generic IR](../generic-ir.md)、[KEngine API](../kengine-api.md) |
 | 0004 | [应用解释器](0004-kenvoy-application-interpreter.md) | 现行 | [Application IR](../application-ir.md)、[解释器分工](../interpreter-design.md) |
@@ -24,6 +24,7 @@
 | 0008 | [JavaScript 执行](0008-javascript-execution.md) | 现行 | [JavaScript Runtime](../javascript-runtime.md) |
 | 0009 | [产物与开发宿主](0009-artifacts-and-development-host.md) | 现行 | [运行时设计](../runtime-design.md)、[CLI](../cli-design.md) |
 | 0010 | [原生组件与统一数据绑定](0010-native-components-and-data-bindings.md) | 现行；替代 0006 的默认 MUI 选择 | [组件与选项契约](../component-bindings.md) |
+| 0011 | [Rust 测试成员与 xtask](0011-rust-test-workspace-and-xtask.md) | 现行；替代 0001 的成员数量限制 | [工程与测试流程](../engineering-workflow.md)、[Crate 边界](../crate-boundaries.md) |
 
 ## 关联代码与配置
 
@@ -33,4 +34,4 @@
 
 定稿正文不改写、不重排编号。后续路线调整或事实勘误新增记录，并在本索引标明前置、废弃或替代关系。实现进展更新对应现状文档与[验证索引](../verification/README.md)，不回填为历史决策当时已经通过。
 
-ADR 0010 替代 ADR 0006 的默认 MUI 选择，保留 React CSR；ADR 0009 补充开发/生产宿主方案。历史官方链接的核对时间见记录；`latest` 和主分支页面不构成依赖锁定。
+ADR 0011 允许两个不发布的测试/工程成员并退役 tools，保留产品层隔离。ADR 0010 替代 ADR 0006 的默认 MUI 选择，保留 React CSR；ADR 0009 补充开发/生产宿主方案。历史官方链接的核对时间见记录；`latest` 和主分支页面不构成依赖锁定。

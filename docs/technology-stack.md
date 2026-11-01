@@ -1,6 +1,6 @@
 # 技术栈与可行性调查
 
-状态：现行；阶段 00—10 基础框架验收已通过，阶段 10 使用同一最终构建完成综合验证；更新日期：2026-11-01。
+状态：现行；阶段 00—10 基础框架验收已通过，阶段 10 使用同一最终构建完成综合验证；更新日期：2026-11-02。
 
 ## 证据等级与本机条件
 
@@ -14,7 +14,7 @@
 
 ## 已锁定的直接依赖
 
-版本与 feature 来自当前根 manifest、两包 manifest、Cargo.lock 及 crates/kenvoy/frontend/package-lock.json。Rust 使用精确版本和 crates.io 校验值；npm 直接版本、锁文件和 registry 来源已逐项核对。tools/probes/frontend 保留早期探针，不是当前 Runtime 的依赖事实来源。
+版本与 feature 来自当前根 manifest、各成员 manifest、Cargo.lock 及 crates/kenvoy/frontend/package-lock.json。Rust 使用精确版本和 crates.io 校验值；npm 直接版本、锁文件和 registry 来源已逐项核对。独立 tools 前端探针已退役；工程检查由 Rust xtask 承担，正式浏览器流程由 kenvoy-tests 管理。
 
 | Cargo 直接依赖 | 精确版本 | 当前用途与显式 feature |
 |---|---|---|
@@ -40,8 +40,9 @@
 | reqwest | 0.13.5 | default-features=false；受控回环开发代理 |
 | tokio-tungstenite | 0.29.0 | default-features=false；connect、handshake |
 | futures-util | 0.3.34 | 默认 + sink；开发代理流处理 |
+| windows-sys | 0.61.2 | 仅测试成员 cfg(windows)：Foundation、Security、JobObjects、Threading；回收自有进程树 |
 
-Workspace 仍仅有 kengine Library 与 kenvoy Binary。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2 同时用于资产嵌入构建脚本。不能沿用早期“只有测试依赖”的描述。
+产品为 kengine Library 与 kenvoy Binary，Workspace 另有不发布的 kenvoy-tests 与 xtask。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2 同时用于资产嵌入构建脚本。测试成员的 Windows Job 依赖不进入产品正常依赖闭包。
 
 | npm 直接依赖 | 精确版本 | 正式前端用途 |
 |---|---|---|

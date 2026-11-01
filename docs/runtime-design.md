@@ -76,7 +76,7 @@ Kenvoy 管理 TS 去类型、ESM 模块准备、action 注册及 rquickjs 执行
 
 服务端函数以 ID 通过权限校验调用；异常不泄漏源码或宿主路径。未来 Host API 的 ServerContext 仅暴露受限资源操作，复用 Resource 授权与验证，不暴露 rusqlite Connection 或 Rust 指针。文件/网络/数据库 Host API 不在首版纯计算闭环中开放。
 
-对不可信第三方代码，必须使用独立进程或更强隔离后才允许执行；同进程 QuickJS 限额不等于 OS 沙箱。独立进程可由同一 kenvoy executable 的内部 worker 模式承担，不新增第三个 Crate；该能力未实现前拒绝不可信执行。
+对不可信第三方代码，必须使用独立进程或更强隔离后才允许执行；同进程 QuickJS 限额不等于 OS 沙箱。独立进程可由同一 kenvoy executable 的内部 worker 模式承担，不增加独立产品 Crate；该能力未实现前拒绝不可信执行。
 
 ## dev 更新与失败恢复
 

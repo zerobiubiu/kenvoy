@@ -1,6 +1,0 @@
-.probe-card { border-radius: 12px; }
-.css-probe { color: rgb(23, 45, 67); }
-body { font-family: system-ui, sans-serif; color: #1e293b; }
-main { max-width: 600px; margin: auto; padding: 24px; }
-form, label, .probe-card { display: grid; gap: 16px; }
-input, button { font: inherit; padding: 10px; }

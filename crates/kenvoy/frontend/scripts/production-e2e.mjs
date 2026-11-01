@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, rename, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
-import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture = await projectFixture();
 let browser;
 try {
@@ -35,4 +35,4 @@ try {
   assert.equal(JSON.parse(await readFile(join(fixture.project,'dist/manifest.json'),'utf8')).build_id,rebuilt.build_id);
   console.log(JSON.stringify({status:'通过',run_auto_build:true,source_change_rebuild:true,shared_database:true,artifact_only_without_node:true,artifact_only_account_management:true,production_dev_endpoint_absent:true,artifact_start_ms:Date.now()-started},null,2));
   await server.stop();
-} finally {if(browser)await browser.close();await fixture.close();}
+} finally {try {if(browser)await browser.close();} finally {await fixture.close();}}

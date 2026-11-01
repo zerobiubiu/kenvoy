@@ -4,7 +4,7 @@
 
 | 决策 | 采用原因 | 已知代价与验证边界 |
 |---|---|---|
-| 两个 Rust Crate | 通用语言引擎与应用宿主单向隔离 | Kenvoy 内模块较多，不能以拆包规避边界 |
+| 两个产品 Crate + 内部测试/xtask 成员 | 通用语言引擎与应用宿主单向隔离，标准 Cargo 测试承载跨 Crate 场景 | 产品不依赖工程成员；独立 tests 保留，工程入口见 [ADR 0011](adr/0011-rust-test-workspace-and-xtask.md) |
 | SWC → Generic IR | 复用真实语言解析，公共契约不绑定 SWC AST | 保真转换和作用域/导出语义需要专门回归 |
 | Application IR 统一解释 | 页面、权限、API 与 Schema 共用模型 | 候选发布必须保证代际一致 |
 | 专属 SQLite worker | Connection 生命周期与线程所有权明确 | 读写初版串行，有界队列过载拒绝 |

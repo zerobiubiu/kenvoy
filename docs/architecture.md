@@ -1,6 +1,6 @@
 # KEngine + Kenvoy 架构与现状
 
-状态：现行；核对日期：2026-11-01。本篇提供架构总览，模块细节从[文档索引](README.md)进入，完成范围见[阶段状态](development-roadmap.md)。
+状态：现行；核对日期：2026-11-02。本篇提供架构总览，模块细节从[文档索引](README.md)进入，完成范围见[阶段状态](development-roadmap.md)。
 
 ## 当前实现范围
 
@@ -29,7 +29,7 @@ flowchart TD
   HTTP --> FE
 ```
 
-图中只有 KEngine 属于 `kengine`；其余解释、构建、数据库、UI、权限与服务均属于 `kenvoy`。前端资产可以在 Binary Crate 内或仓库非 Rust 目录维护，不能为此新建第三个 Rust Crate。
+图中只有 KEngine 属于 `kengine`；其余解释、构建、数据库、UI、权限与服务均属于 `kenvoy`。产品保持这两个 Crate；Workspace 另有不发布的 `kenvoy-tests` 与 `xtask`，分别负责跨 Crate 标准测试和工程编排，不进入产品依赖闭包。各产品 Crate 独立 tests 保留。
 
 | 层次 | 当前实现 | 详细契约 |
 |---|---|---|
@@ -60,4 +60,4 @@ Generic IR 表示“存在 JSX 标签、属性、表达式和引用”，保留�
 
 此前 `0a84400` 的 XML、业务化 KEngine、SSR/PostgreSQL 及额外 Crate 路线已在该基线退出，没有作为当前实现恢复。原先可借鉴的版本化模型、路径保护和资源释放原则分别落实到现有模块；历史能力不计入当前验收。
 
-当前明确列出两个 Workspace 成员，Kenvoy 通过公共 API 单向依赖 KEngine，Rust/npm 依赖均有锁文件。初始空骨架的描述只用于追溯，不表示现有工程仍处于该状态。
+当前 Workspace 明确列出两个产品成员及两个内部工程成员，Kenvoy 通过公共 API 单向依赖 KEngine，Rust/npm 依赖均有锁文件。工程成员的新增依据见 [ADR 0011](adr/0011-rust-test-workspace-and-xtask.md)。初始空骨架的描述只用于追溯，不表示现有工程仍处于该状态。

@@ -8,7 +8,6 @@ use std::{
     fs, io,
     net::SocketAddr,
     path::{Path, PathBuf},
-    process::{Child, Command, ExitStatus},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -33,96 +32,10 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::oneshot,
 };
-use tower_http::{
-    limit::RequestBodyLimitLayer,
-    services::{ServeDir, ServeFile},
-};
+use tower_http::{limit::RequestBodyLimitLayer, services::ServeDir};
 
 type ProbeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 type DbReply = oneshot::Sender<Result<Value, String>>;
-
-fn wait_child_until(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
-    loop {
-        if child.try_wait()?.is_some() {
-            return child.wait().map(Some);
-        }
-        if Instant::now() >= deadline {
-            return Ok(None);
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-}
-
-fn kill_and_reap_child(child: &mut Child) -> io::Result<()> {
-    if matches!(child.try_wait(), Ok(Some(_))) {
-        child.wait()?;
-        return Ok(());
-    }
-    if let Err(error) = child.kill()
-        && child.try_wait()?.is_none()
-    {
-        return Err(error);
-    }
-    wait_child_until(child, Instant::now() + Duration::from_secs(2))?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, "子进程终止后未及时退出"))?;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn terminate_owned_windows_tree(pid: u32) -> io::Result<()> {
-    // 只把当前 guard 持有的自有 Node PID 交给系统工具，不经 shell 拼接命令。
-    let mut helper = Command::new("taskkill.exe")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
-    match wait_child_until(&mut helper, Instant::now() + Duration::from_secs(3)) {
-        Ok(Some(status)) if status.success() => Ok(()),
-        Ok(Some(status)) => Err(io::Error::other(format!("自有进程树终止失败：{status}"))),
-        Ok(None) => {
-            kill_and_reap_child(&mut helper)?;
-            Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "taskkill 辅助进程超过3秒",
-            ))
-        }
-        Err(error) => {
-            let _ = kill_and_reap_child(&mut helper);
-            Err(error)
-        }
-    }
-}
-
-struct BrowserChildGuard(Child);
-
-impl BrowserChildGuard {
-    fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        self.0.try_wait()
-    }
-
-    fn stop(&mut self) -> io::Result<()> {
-        if matches!(self.0.try_wait(), Ok(Some(_))) {
-            self.0.wait()?;
-            return Ok(());
-        }
-        #[cfg(windows)]
-        let tree_result = terminate_owned_windows_tree(self.0.id());
-        #[cfg(not(windows))]
-        let tree_result = Ok(());
-        // 即使 taskkill 失败，也尝试终止并回收自有 Node；树清理失败仍向上传递。
-        let reap_result = kill_and_reap_child(&mut self.0);
-        tree_result.and(reap_result)
-    }
-}
-
-impl Drop for BrowserChildGuard {
-    fn drop(&mut self) {
-        if let Err(error) = self.stop() {
-            eprintln!("浏览器探针自有进程回收失败：{error}");
-        }
-    }
-}
 
 struct AbortServerOnDrop(tokio::task::AbortHandle);
 
@@ -563,17 +476,6 @@ impl ProbeServer {
         Self::serve(router, state.database).await
     }
 
-    async fn start_with_react(client: &Path, state: ProbeState) -> ProbeResult<Self> {
-        let router = Router::new()
-            .route_service("/customers", ServeFile::new(client.join("index.html")))
-            .route("/api/customers", post(create_customer).get(admin_count))
-            .nest_service("/assets", ServeDir::new(client.join("assets")))
-            .fallback(|| async { api_error(StatusCode::NOT_FOUND, "探针路由不存在") })
-            .with_state(state.clone())
-            .layer(RequestBodyLimitLayer::new(512));
-        Self::serve(router, state.database).await
-    }
-
     async fn serve(router: Router, database: Arc<DbWorker>) -> ProbeResult<Self> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let address = listener.local_addr()?;
@@ -659,125 +561,6 @@ async fn shutdown_timeout_aborts_and_reaps_the_owned_server_task() -> ProbeResul
         "被中止任务持有的资源必须释放"
     );
     println!("P03 注入不合作服务任务：deadline触发abort并确认任务资源已释放");
-    Ok(())
-}
-
-#[cfg(windows)]
-async fn verify_owned_node_tree_cleanup(directory: &Path) -> ProbeResult {
-    let pid_file = directory.join("owned-node-tree.json");
-    let script = "const {spawn}=require('node:child_process');const fs=require('node:fs');const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(process.argv[1],JSON.stringify({parent:process.pid,child:child.pid}));setInterval(()=>{},1000);";
-    let mut guard = BrowserChildGuard(
-        Command::new("node")
-            .arg("-e")
-            .arg(script)
-            .arg(&pid_file)
-            .spawn()?,
-    );
-    let pids = tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if let Ok(bytes) = fs::read(&pid_file)
-                && let Ok(pids) = serde_json::from_slice::<Value>(&bytes)
-            {
-                return Ok::<_, io::Error>(pids);
-            }
-            if let Some(status) = guard.try_wait()? {
-                return Err(io::Error::other(format!(
-                    "自有进程树探针提前退出：{status}"
-                )));
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await??;
-    assert_eq!(pids["parent"].as_u64(), Some(u64::from(guard.0.id())));
-    let descendant = pids["child"]
-        .as_u64()
-        .ok_or_else(|| io::Error::other("缺少自有子进程PID"))?;
-    fn fail_with_owned_guard(guard: BrowserChildGuard) -> ProbeResult {
-        let _owned = guard;
-        Err::<(), _>(io::Error::other("P03 故障注入：子进程启动后通过?提前返回"))?;
-        Ok(())
-    }
-    let injected = fail_with_owned_guard(guard).expect_err("故障注入必须提前返回");
-    assert!(injected.to_string().contains("故障注入"));
-    let check_script = "try {process.kill(Number(process.argv[1]),0);process.exitCode=1;} catch(error) {if(error.code!=='ESRCH') throw error;}";
-    let mut check = BrowserChildGuard(
-        Command::new("node")
-            .arg("-e")
-            .arg(check_script)
-            .arg(descendant.to_string())
-            .spawn()?,
-    );
-    let status = wait_child_until(&mut check.0, Instant::now() + Duration::from_secs(5))?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, "自有子进程退出检查超时"))?;
-    assert!(status.success(), "taskkill /T 后自有后代进程不得残留");
-    println!(
-        "P03 Windows自有Node父子树：故障?提前返回触发RAII，按自有父PID调用taskkill /T /F，后代存活检查确认已退出"
-    );
-    Ok(())
-}
-
-/// 跨工具验证显式执行，普通 Cargo 测试无需 Node、npm 或浏览器依赖。
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "先构建 tools/probes/frontend 并准备 Playwright，再显式执行跨工具测试"]
-async fn axum_serves_built_react_and_sqlite_to_real_chromium() -> ProbeResult {
-    let frontend = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/probes/frontend");
-    let client = frontend.join("dist");
-    if !client.join("index.html").is_file() {
-        return Err(io::Error::other("缺少前端探针构建产物，请先运行 npm run build").into());
-    }
-    let scratch = ScratchDirectory::new()?;
-    let scratch_path = scratch.path().to_owned();
-    #[cfg(windows)]
-    verify_owned_node_tree_cleanup(scratch.path()).await?;
-    let database_path = scratch.path().join("app.sqlite");
-    let database = Arc::new(DbWorker::start(database_path.clone())?);
-    let server = ProbeServer::start_with_react(
-        &client,
-        ProbeState {
-            database: Arc::clone(&database),
-            admin_token: "Bearer p04-test-only".into(),
-        },
-    )
-    .await?;
-    let address = server.address;
-    let mut child = BrowserChildGuard(
-        Command::new("node")
-            .arg(frontend.join("scripts/axum-browser.mjs"))
-            .arg(format!("http://{address}/"))
-            .current_dir(&frontend)
-            .spawn()?,
-    );
-    let completed = tokio::time::timeout(Duration::from_secs(60), async {
-        loop {
-            if let Some(status) = child.try_wait()? {
-                return Ok::<_, io::Error>(status);
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await;
-    let status = match completed {
-        Ok(status) => status?,
-        Err(_) => {
-            child.stop()?;
-            return Err(
-                io::Error::other("真实浏览器跨工具探针超过60秒，已终止并回收自有进程树").into(),
-            );
-        }
-    };
-    server.finish().await?;
-    assert!(status.success(), "真实浏览器脚本必须通过：{status}");
-    assert!(TcpStream::connect(address).await.is_err());
-    drop(database);
-    let reopened = open_database(&database_path, Duration::from_secs(5))?;
-    assert_eq!(count_customers(&reopened)?, 1);
-    drop(reopened);
-    drop(scratch);
-    assert!(!scratch_path.exists());
-    println!(
-        "P04跨工具：Axum真实托管React/MUI资产，Chromium同源SQLite API写入及重开1条通过；并非正式表单Runtime"
-    );
     Ok(())
 }
 

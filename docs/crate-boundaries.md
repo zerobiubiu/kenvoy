@@ -1,6 +1,6 @@
-# 双 Crate 职责与依赖边界
+# 产品 Crate 与工程成员的职责边界
 
-状态：现行。Workspace 恰有两个成员，Kenvoy 通过本地路径依赖消费 KEngine 公共 API；本篇维护职责约束，实际检查证据见[最终验收](verification/0012-final-acceptance.md)。
+状态：现行。产品由 KEngine Library 和 Kenvoy Binary 构成；Workspace 另有不发布的测试成员和 xtask。Kenvoy 通过本地路径依赖消费 KEngine 公共 API。此次工程组织调整见 [ADR 0011](adr/0011-rust-test-workspace-and-xtask.md)，历史产品验收见[最终验收](verification/0012-final-acceptance.md)。
 
 ## 固定边界
 
@@ -22,11 +22,18 @@ KEngine 可以解析任意名为 page 的 JSX 标签，也可以通用解析 pac
 
 ## Cargo 约束
 
-Workspace 只保留 `crates/kengine` 和 `crates/kenvoy`。KEngine 仅 lib，无 main.rs、bin target 或业务 feature；Kenvoy 仅面向用户的 Binary，不为模块化再建 library target 或 Rust 包。单向依赖为 `kenvoy → kengine`。
+Workspace 明确列出四个成员：
 
-根 workspace members 已改为明确两项，Kenvoy manifest 已加入 `kengine = { path = "../kengine" }`。KEngine 的正式依赖仅为通用 SWC/serde/thiserror；HTTP、SQLite、JS 宿主和前端探针依赖只在 Kenvoy 或非 Rust 探针目录。测试 Target 不属于额外面向用户 Binary。
+| 成员 | 目标与用途 | 发布/依赖约束 |
+|---|---|---|
+| `crates/kengine` | 通用 Library | 无 Binary、无业务依赖 |
+| `crates/kenvoy` | 唯一产品 Binary | 通过公共 API 依赖 KEngine |
+| `crates/kenvoy-tests` | 测试支撑 Library 与标准集成测试 | `publish = false`，仅测试使用产品公共接口和真实 CLI |
+| `xtask` | 内部工程 Binary | `publish = false`，只做检查、构建和测试编排 |
 
-Rust 的第三方依赖包不属于本工作区成员，“只有两个 Crate”限制针对项目自有 Workspace Crate，不意味着禁止 Cargo 依赖成熟第三方库。探针放进现有两个包的测试或非 Cargo 独立资料中，不新建第三个探针包。
+产品不得反向依赖测试成员或 xtask。KEngine 的正式依赖仅为通用 SWC/serde/thiserror，Kenvoy 保持 `kengine = { path = "../kengine" }`；不为测试暴露 Kenvoy 内部 Library。跨 Crate 场景通过公共 KEngine API 和已构建 Kenvoy CLI 联合验证。
+
+默认成员仍为两个产品包，`cargo test --workspace` 包括工程成员。每个产品 Crate 的独立 tests 继续保留，跨 Crate 测试不替代其单元与模块测试。第三方 Cargo 包不计入自有成员清单。
 
 ## 公共 API 与模型隔离
 
@@ -36,8 +43,8 @@ Kenvoy 内部 `application`、`dsl`、`database`、`http`、`frontend`、`javasc
 
 ## 验证与防回归
 
-阶段 01 起检查 Cargo metadata：成员数为 2、目标类型符合约束、Kenvoy 存在路径依赖、KEngine 不依赖 Kenvoy。依赖图同时检查 KEngine 没有 Axum、rusqlite、React 相关业务依赖。
+`cargo xtask architecture` 检查真实 Cargo metadata：四个成员及各自目标类型、产品默认成员、测试/工程成员禁止发布、Kenvoy 路径依赖、产品不依赖工程成员，以及 KEngine 普通依赖闭包不含 Axum、rusqlite 等业务宿主依赖。
 
 代码评审检查语义边界，不能只通过关键词扫描判定：KEngine 的通用 JSX 测试允许出现任意标签名。业务 schema、路由、安全策略和运行时行为必须在 Kenvoy 测试中验证。KEngine 单独 cargo check/test 应可运行，不需数据库、HTTP、浏览器或 Kenvoy 配置。
 
-相关决策：[ADR 0001](adr/0001-two-crate-architecture.md)、[ADR 0002](adr/0002-kengine-generic-parser.md)。
+相关决策：[ADR 0001](adr/0001-two-crate-architecture.md)、[ADR 0002](adr/0002-kengine-generic-parser.md)、[ADR 0011](adr/0011-rust-test-workspace-and-xtask.md)。0011 替代 0001 的 Workspace 成员数量限制，保留两个产品层的职责与依赖方向。

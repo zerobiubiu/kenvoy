@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
-import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 
 const fixture = await projectFixture();
 let browser;
@@ -48,7 +48,7 @@ try {
   });
   await page.goto(server.origin + '/customers');
   try {await expect(page.getByRole('heading', { name: '自定义客户卡片' })).toBeVisible({timeout:15000});}
-  catch(error){console.error(JSON.stringify({errors,consoleErrors,failed,server:server.logs()},null,2));throw error;}
+  catch(error){console.error(JSON.stringify({errors,consoleErrors,failed,server:await server.logs()},null,2));throw error;}
   await expect(page.locator('.customer-card-test')).toHaveCSS('padding-left', '15px');
   await page.getByRole('button', { name: '增加数量', exact: true }).click();
   await expect(page.getByText('数量：2', { exact: true })).toBeVisible();
@@ -94,6 +94,6 @@ try {
 } catch(error) {
   const state=diagnosticPage?await diagnosticPage.request.get(diagnosticServer.origin+'/_kenvoy/development').then(response=>response.json()).catch(()=>null):null;
   const aria=diagnosticPage?await diagnosticPage.locator('body').ariaSnapshot().catch(()=>null):null;
-  console.error(JSON.stringify({...diagnostics,state,aria,server:diagnosticServer?.logs()},null,2));
+  console.error(JSON.stringify({...diagnostics,state,aria,server:await diagnosticServer?.logs()},null,2));
   throw error;
-} finally { if (browser) await browser.close(); await fixture.close(); }
+} finally { try { if (browser) await browser.close(); } finally { await fixture.close(); } }

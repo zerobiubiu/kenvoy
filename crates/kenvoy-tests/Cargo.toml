@@ -1,0 +1,21 @@
+[package]
+name = "kenvoy-tests"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "KEngine 与 Kenvoy 真实进程的跨 Crate 集成验收"
+
+[dependencies]
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[dev-dependencies]
+serde.workspace = true
+kengine = { path = "../kengine" }
+reqwest.workspace = true
+tokio.workspace = true
+rusqlite.workspace = true

@@ -12,6 +12,6 @@ Database worker 专属线程持有 SQLite 连接，通过有界队列执行命�
 
 HttpRuntime 持有应用代际及资源目录，读请求使用一致快照。发布操作持写锁并由受跟踪任务完成；数据库成功后同步替换 HTTP 模型。调用方取消不使已经接受的迁移停留在“数据库新、HTTP 旧”。Development 协调 notify、增量 AnalysisSession、构建候选与 Vite 镜像，版本化产物支持没有源码和 Node 的生产运行。
 
-技术适配均留在 Kenvoy 内部 module，不新增 Crate。当前没有多数据库、多前端框架或多 HTTP 引擎实现，避免用空抽象伪装可替换能力。
+产品技术适配均留在 Kenvoy 内部 module，不为适配器新增产品 Crate。Workspace 的测试和 xtask 成员只承担工程职责，见[工程与测试流程](engineering-workflow.md)。当前没有多数据库、多前端框架或多 HTTP 引擎实现，避免用空抽象伪装可替换能力。
 
 相关契约：[Application IR](application-ir.md)、[解释器](interpreter-design.md)、[运行时](runtime-design.md)、[安全](security-design.md)、[实施路线](development-roadmap.md)。

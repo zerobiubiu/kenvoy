@@ -4,7 +4,7 @@
 
 ## 从哪里开始
 
-- 了解最近交付：先读[0012：原生组件与联动选项](0012-native-components-and-options.md)，再读[0011：最终验收与边界修复](0011-final-acceptance.md)。
+- 了解最近交付：先读[0013：Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md)，再读[0012：原生组件与联动选项](0012-native-components-and-options.md)。
 - 核对执行证据：进入[验证记录索引](../verification/README.md)；当前有效行为从[整体架构](../architecture.md)及对应主题文档查询。
 - 追溯实现过程：按下表编号顺序阅读，不把早期阶段的进度或告警当作当前状态。
 
@@ -24,13 +24,14 @@
 | 0010 | [CLI 完整生命周期](0010-cli-lifecycle.md) | 已执行；阶段 09 | 开发监督、产物、HMR 与生产宿主 |
 | 0011 | [最终验收与边界修复](0011-final-acceptance.md) | 已执行；阶段 10 | 配置恢复、诊断、配额、统一回归与文档 |
 | 0012 | [原生组件与联动选项](0012-native-components-and-options.md) | 已执行；首版后扩展 | select、系统重载、统一数据绑定、原生 CSS 与用户 React 库 |
+| 0013 | [Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md) | 已执行；工程重组 | kenvoy-tests、xtask、浏览器协议、tools 退役 |
 
 ## 关联代码与配置
 
-变更集中于 [KEngine](../../crates/kengine/)、[Kenvoy](../../crates/kenvoy/)、[examples](../../examples/) 与 [tools](../../tools/)。文件清单和接口差异保留在各次记录中；当前路线见[实施路线](../development-roadmap.md)，最新验证范围见[最终验收](../verification/0012-final-acceptance.md)。
+变更集中于 [KEngine](../../crates/kengine/)、[Kenvoy](../../crates/kenvoy/)、[测试成员](../../crates/kenvoy-tests/)、[xtask](../../xtask/) 与 [examples](../../examples/)。原 tools 已退役，旧路径仅作为历史正文中的实施事实保留。文件清单和接口差异保留在各次记录中；当前路线见[实施路线](../development-roadmap.md)，产品验收历史见[最终验收](../verification/0012-final-acceptance.md)。
 
 ## 维护、废弃与替代关系
 
 “已执行”只表示该次变更已实施，不保证其中方案、进度或告警仍是当前状态。定稿正文不改写、不删除、不重排编号；后续变化或勘误另建记录，并维护本索引的关联关系。
 
-当前没有正式废弃、替代或勘误条目。0006 中当时尚未消费的发布接口已由 0010 接入；0007 的后台与后续修补验收继续记录在 0008 及最终验证中。这些后续进展保留原记录，不回写历史正文。
+0013 将 tools 中的工程检查、HTTP 场景及浏览器进程夹具迁入 Rust，独立前端探针由正式应用浏览器流程接替；0001 等记录中的旧命令保留为历史事实。0006 中当时尚未消费的发布接口已由 0010 接入；0007 的后台与后续修补验收继续记录在 0008 及最终验证中。这些后续进展保留原记录，不回写历史正文。

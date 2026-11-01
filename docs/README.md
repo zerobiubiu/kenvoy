@@ -1,6 +1,6 @@
 # Kenvoy 文档导航
 
-状态：现行；核对日期：2026-11-01。
+状态：现行；核对日期：2026-11-02。
 
 这里是详细项目文档的统一入口。主题文档说明当前契约，ADR 说明决策原因，验证与变更记录保留各阶段事实。项目执行规则见 [AGENTS.md](../AGENTS.md)。
 
@@ -23,7 +23,7 @@
 | 文档 | 阅读范围 |
 |---|---|
 | [架构总览](architecture.md) | 两层模型、组件关系、生命周期与历史基线 |
-| [Crate 职责边界](crate-boundaries.md) | 两个成员、单向依赖和不可跨越的责任 |
+| [Crate 职责边界](crate-boundaries.md) | 两个产品成员、测试/工程成员及单向依赖 |
 | [技术栈](technology-stack.md) | 当前依赖、来源、实测兼容性和平台边界 |
 | [技术决策汇总](technical-decisions.md) | 当前选择及代价；历史原因由 ADR 展开 |
 | [阶段状态与后续工作](development-roadmap.md) | 阶段 00—10 状态、首版范围及后续方向 |
@@ -68,6 +68,7 @@
 | [迁移执行协议](migration-design.md) | 预览、确认、备份、执行与失败处理 |
 | [安全设计](security-design.md) | 认证、授权、会话、请求和开发代理边界 |
 | [测试策略](testing-strategy.md) | 验证入口、测试分层和证据要求 |
+| [工程与测试流程](engineering-workflow.md) | Rust xtask、跨 Crate 测试、浏览器适配及工具目录退役 |
 
 前端产品与视觉约定另见仓库根目录的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md)。
 
@@ -87,6 +88,6 @@
 - 定稿 ADR、验证与变更记录不改写、不重排编号；后续变化或勘误另建记录，适用性和替代关系在分类索引维护。
 - 新增文档同步更新本索引及对应分类入口；分类有实际内容时才建立目录与 README，不创建空分类。
 - 纯文档整理不递归产生变更记录。现状文档使用“现行/参考/已过期/已废弃”，执行记录使用“待执行/已执行/已过期/已废弃”；“已执行”不代表方案永久有效。
-- 文档校验入口为 `node tools/verify-docs.mjs`，检查 UTF-8、本地链接、空白及从本索引的可达性。项目规则以 [AGENTS.md](../AGENTS.md) 为准。
+- 文档校验入口为 `cargo xtask docs`，检查 UTF-8、本地链接、空白及从本索引的可达性；`cargo xtask check` 同时校验架构边界。项目规则以 [AGENTS.md](../AGENTS.md) 为准。
 
-当前没有废弃或替代的文档文件；旧 XML/SSR/PostgreSQL 路线未作为当前设计恢复。
+历史报告保留已退役 tools 路径及当时双成员约束的事实，现行替代关系见 [ADR 0011](adr/0011-rust-test-workspace-and-xtask.md)。旧 XML/SSR/PostgreSQL 路线未作为当前设计恢复。

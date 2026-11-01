@@ -11,8 +11,8 @@
 
 ## 不可变架构边界
 
-- Workspace 只能包含两个自有 Rust Crate：`crates/kengine` 为 Library，`crates/kenvoy` 为唯一用户 Binary。内部使用 Rust Module，不增加第三个自有 Crate，不为 KEngine 添加 Binary Target。
-- 依赖方向只能是 `kenvoy → kengine`，通过 KEngine 公共 API 交互。外部成熟 Cargo 依赖不属于自有 Workspace 成员数量限制。
+- 产品由两个 Rust Crate 构成：`crates/kengine` 为 Library，`crates/kenvoy` 为唯一用户 Binary。按用户最新要求，Workspace 另有 `crates/kenvoy-tests` 专门承担跨 Crate 集成测试，以及根目录 `xtask` 承担工程编排；二者均不发布，不承载产品业务。
+- 产品依赖方向只能是 `kenvoy → kengine`，通过 KEngine 公共 API 交互。产品不得依赖测试成员或 xtask，不为 KEngine 添加 Binary Target。每个产品 Crate 保留各自独立的 tests。
 - KEngine 只负责 JS/TS/JSX/TSX 解析、通用 Generic IR、模块图、作用域、符号、引用、源码位置和诊断；不得引入 Web 业务模型、数据库、CRUD、HTTP、认证、React 或页面语义。
 - Kenvoy 定义 DSL、Application IR、权限、数据库迁移、统一运行时、CLI、构建和服务生命周期。Generic IR 与 Application IR 分开定义、分别版本化，不公开 SWC 内部类型作为长期公共契约。
 - 使用 SWC 解析真实语言，不重写完整 Parser 或 TypeScript 类型检查器。无法静态求值的表达式必须保留可追踪引用；Schema 无法静态确定时明确报错，不能忽略字段。
@@ -33,7 +33,7 @@
 
 - 保留未提交改动，不擅自覆盖、删除、stash 或清理任务范围外内容。未经明确要求，不提交、推送、切分支、合并、变基或打标签。
 - 禁止为工作区整洁而重置用户内容。改写共享历史等高风险操作须先备份并取得具体确认。
-- 当前版本来源为两个包各自的 `Cargo.toml`；edition/MSRV 等共用属性来自根 manifest。现有版本均为 0.1.0，尚无已建立的发布流程。
+- 产品版本来源为两个产品包各自的 `Cargo.toml`；edition/MSRV 等共用属性来自根 manifest。产品现有版本均为 0.1.0，测试成员和 xtask 使用内部版本且禁止发布；尚无已建立的产品发布流程。
 - 不按每次源码修改机械递增版本；纯文档、注释和本文件变更不单独触发版本更新。真正涉及发布前先查明并确认发布流程、SemVer 规则、同步位置及 CHANGELOG/tag 处理，不擅自建立规则或发布。
 - 不提交密钥、个人配置、依赖目录或构建产物；新增持久化数据和前端依赖目录前检查相应 ignore 保护。
 
@@ -48,9 +48,11 @@ cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets
 cargo fmt --all -- --check
+cargo xtask check
 ```
 
 - 锁文件和依赖已准备时优先使用 `--locked`，可离线时使用 `--offline`；不要通过关闭错误检查让构建通过。KEngine 相关变更还需独立执行 `cargo check -p kengine` 和 `cargo test -p kengine`。
+- 工程检查和构建编排使用 Rust xtask；跨 Crate 集成场景通过标准 Cargo 测试发现与运行。真实 CLI/HTTP/SQLite 断言及测试进程生命周期由 Rust 负责；Playwright 脚本仅保留浏览器驱动和 DOM 断言，前端单元测试继续使用其原生测试工具。删除的 tools 目录不得作为现行命令或依赖路径。
 - 只报告实际观察到的命令、输出和退出码；0 tests 不等于功能通过。资料调研、代码推断、临时探针和生产行为分开表述；失败说明原因、替代验证和残余风险。
 - 每阶段结束报告完成情况、文件变更、关键实现与边界、验证结果、遗留问题和下一阶段计划。Playwright E2E 只在真实实现及获批工具到位后执行，不能以模拟结果代替。
 

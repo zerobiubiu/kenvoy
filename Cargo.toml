@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/kengine", "crates/kenvoy"]
+members = ["crates/kengine", "crates/kenvoy", "crates/kenvoy-tests", "xtask"]
+default-members = ["crates/kengine", "crates/kenvoy"]
 
 [workspace.package]
 edition = "2024"

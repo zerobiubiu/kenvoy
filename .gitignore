@@ -16,9 +16,6 @@
 /artifacts/
 
 /**/node_modules/
-/tools/probes/frontend/test-results/
-/tools/probes/frontend/playwright-report/
-/tools/probes/frontend/.probe/
 
 .idea/
 .vscode/

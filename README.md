@@ -8,7 +8,7 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 首版基线已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。当时 201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；历史命令与边界见[首版验收](docs/verification/0012-final-acceptance.md)，后续变更见[变更索引](docs/changes/README.md)。
 
-Workspace 只有两个自有包：crates/kengine（Library）和 crates/kenvoy（Binary），依赖方向为 Kenvoy → KEngine。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
+产品仍由 crates/kengine（Library）和 crates/kenvoy（Binary）构成，依赖方向为 Kenvoy → KEngine。Workspace 另有专门的 [kenvoy-tests](crates/kenvoy-tests/) 测试成员和根目录 [xtask](xtask/) 工程编排成员，均不发布，产品不依赖它们。各产品 Crate 保留自己的独立 tests。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
 
 ## 从源码构建与验证
 
@@ -24,11 +24,10 @@ cargo check --workspace --locked
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo fmt --all -- --check
-node tools/verify-architecture.mjs
-node tools/verify-docs.mjs
+cargo xtask check
 ```
 
-KEngine 可单独 check/test，不要求数据库、HTTP 或浏览器。阶段 00 的 HTTP/SQLite/JS/watcher 探针位于测试目录，使用临时资源。
+KEngine 可单独 check/test，不要求数据库、HTTP 或浏览器。阶段 00 的 Rust HTTP/SQLite/JS/watcher 测试仍保留在各 Crate 的 tests 中，使用临时资源。架构与文档检查、构建和跨 Crate 测试统一入口见[工程与测试流程](docs/engineering-workflow.md)。
 
 ## 创建与运行应用
 
@@ -52,16 +51,15 @@ Set-Location customer-app
 
 ## 验证入口
 
-`crates/kenvoy/frontend/scripts/` 提供 forms、fields、admin、extensions、watcher、production E2E，均使用真实 CLI/API/SQLite 与 Chromium；夹具创建独立临时项目。`shutdown-observer.mjs` 配合独立终端 Ctrl+C，单独验证正常资源关闭与重启持久化。普通 Windows 子进程强制终止夹具不能替代这项退出验证。
+`cargo xtask test` 先构建正式 CLI，再运行 Workspace 的标准 Rust 测试，包括 kenvoy-tests 中的跨模块分析、真实 HTTP、认证与持久化测试。Rust 夹具创建独立临时项目并管理 CLI 子进程；真实浏览器通过 `cargo xtask browser` 显式运行，覆盖 forms、fields、admin、extensions、options、watcher、production，Playwright 只负责浏览器操作和 DOM 断言。
 
-## 浏览器技术探针
-
-tools/probes/frontend 是独立兼容性探针，使用锁定 npm 依赖，不是正式用户项目或 Kenvoy Runtime。复现方式和限制见 [探针说明](tools/probes/frontend/README.md)，全程只监听 loopback。
-
-显式跨工具测试需要先构建该目录并准备 Playwright，再运行：
+`shutdown-observer.mjs` 配合独立终端 Ctrl+C，单独验证正常资源关闭与重启持久化。普通 Windows 子进程强制终止夹具不能替代这项退出验证。浏览器与前端依赖需事先准备；扩展/选项流程仅在各自临时项目内显式安装其声明并锁定的用户依赖。
 
 ```powershell
-cargo test -p kenvoy --test p03_http_sqlite axum_serves_built_react_and_sqlite_to_real_chromium --locked -- --ignored --nocapture
+cargo xtask check
+cargo xtask build
+cargo xtask test
+cargo xtask browser
 ```
 
-普通 cargo test 会明确忽略该测试，避免要求仅使用 KEngine 的开发者安装前端工具。显式执行结果见 [Axum/React/Chromium 报告](docs/verification/0002-axum-react-browser.md)。
+原 tools 目录及独立前端探针已退出当前工程，历史验证报告保留原始命令和当时的边界；现行执行方式以[工程与测试流程](docs/engineering-workflow.md)为准。

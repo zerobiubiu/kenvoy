@@ -4,7 +4,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, expect } from '@playwright/test';
-import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 
 const fixture = await projectFixture();
 const example = fileURLToPath(new URL('../../../../examples/options-app/', import.meta.url));
@@ -155,4 +155,4 @@ try {
   assert.equal(persisted.data.name, '联动已编辑'); assert.equal(persisted.data.city, 'nj');
   console.log(JSON.stringify({ status: '通过', static_cascade: true, remote_projection: true, pagination_search_selected: true, radix_override: true, sdk_resource: true, stable_number_binding: true, invalid_draft_preserved: true, server_revalidation: true, merged_patch_validation: true, native_same_contract: true, restart_persistence: true }, null, 2));
   await server.stop();
-} finally { if (browser) await browser.close(); await fixture.close(); }
+} finally { try { if (browser) await browser.close(); } finally { await fixture.close(); } }

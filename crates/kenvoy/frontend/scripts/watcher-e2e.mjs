@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
-import { projectFixture } from '../../../../tools/tests/project-harness.mjs';
+import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture=await projectFixture();let browser;
 try {
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'watcher-test-password-725\n');
@@ -20,7 +20,7 @@ try {
   await writeFile(entry,'export default <app');
   await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
   await expect(page.getByText('开发更新未通过',{exact:true})).toBeVisible();
-  assert.match(server.logs(), /code=KE\d+/);assert.match(server.logs(), /app\.tsx/);assert.match(server.logs(), /line=/);assert.match(server.logs(), /suggestion=/);
+  assert.match(await server.logs(), /code=KE\d+/);assert.match(await server.logs(), /app\.tsx/);assert.match(await server.logs(), /line=/);assert.match(await server.logs(), /suggestion=/);
   await expect(page.getByLabel('客户姓名',{exact:false})).toHaveValue('尚未提交的输入');
   assert.equal((await status()).generation,initial.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),initialManifest);
   const valid=original.replace('客户登记','更新后登记').replace('<text name="phone" label="联系电话" />','<text name="phone" label="联系电话" /><text name="nickname" label="昵称" />');
@@ -51,4 +51,4 @@ try {
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({status:'通过',native_notify:true,syntax_error_keeps_input_and_model:true,terminal_source_diagnostics:true,configuration_restore_clears_error:true,safe_schema_addition:true,destructive_change_blocked:true,active_manifest_preserved:true,recovery_and_data_preserved:true},null,2));
   await server.stop();
-} finally {if(browser)await browser.close();await fixture.close();}
+} finally {try {if(browser)await browser.close();} finally {await fixture.close();}}

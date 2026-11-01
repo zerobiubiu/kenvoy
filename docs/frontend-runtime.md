@@ -8,6 +8,8 @@
 
 当前默认组件已改用原生 React 控件与 CSS；系统组件重载和自定义数据组件使用统一字段绑定。新增 select 联动、跨资源选项与 SDK 详见[组件与选项契约](component-bindings.md)。下文阶段 06—10 的 MUI 测试结论仅为迁移前历史证据；新实现的验证以本次变更记录为准。
 
+当前浏览器验收由 `kenvoy-tests` 的 Rust 测试入口运行，Rust 拥有项目夹具和 CLI 子进程；Playwright 脚本保留页面行为断言。原 tools 进程夹具已退役，执行方式见[工程与测试流程](engineering-workflow.md)。
+
 React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的受控投影渲染通用组件；普通表单和后台使用同一资源字段、验证和 API。函数/自定义组件只通过注册 ID 连接，不能 JSON 序列化函数或把完整应用入口打包给浏览器。
 
 框架源码位于 crates/kenvoy/frontend，Vite/Rolldown 先生成 dist，再由 crates/kenvoy/build.rs 将公开 index/assets 嵌入 Rust Binary。基础 DSL 使用内置资产，应用启动不要求 Node、不安装 npm 依赖；开发框架源码时先在 frontend 执行 npm ci --ignore-scripts、npm run check、npm run build，再编译 Rust。当前依赖锁定于该目录 package-lock.json，缺少 dist 会明确阻止发行构建。
