@@ -1,6 +1,6 @@
 # Rust 测试成员、xtask 与 tools 退役
 
-状态：已执行。日期：2026-11-02。前置：[0012](0012-native-components-and-options.md)；决策：[ADR 0011](../adr/0011-rust-test-workspace-and-xtask.md)。
+状态：已执行。日期：2026-11-02。前置：[0012](0012-native-components-and-options.md)；决策：[ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)。
 
 ## 背景与方案
 

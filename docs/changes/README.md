@@ -1,14 +1,16 @@
 # 变更记录索引
 
-状态：现行。保存每次实施的背景、方案、文件范围、接口变化与验证事实。返回[文档总索引](../README.md)。
+状态：参考（现状文档）。保存每次实施的背景、方案、文件范围、接口变化与验证事实。返回[文档总索引](../README.md)。
 
 ## 从哪里开始
 
 - 了解最近交付：先读[0013：Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md)，再读[0012：原生组件与联动选项](0012-native-components-and-options.md)。
-- 核对执行证据：进入[验证记录索引](../verification/README.md)；当前有效行为从[整体架构](../architecture.md)及对应主题文档查询。
+- 核对执行证据：进入[验证记录索引](../verification/README.md)，其中同时索引独立验收报告和变更记录内的专项验证；当前有效行为从[整体架构](../architecture/architecture.md)及对应主题文档查询。
 - 追溯实现过程：按下表编号顺序阅读，不把早期阶段的进度或告警当作当前状态。
 
 ## 记录清单
+
+下表保留每次实施的原编号与范围。“已执行”描述当次事实，不能代替当前接口契约；关联的后续记录见本页末尾。0012、0013 的专项验证随各自变更正文保存，不另复制为验证报告。
 
 | 编号 | 记录 | 记录状态与范围 | 关联实现 |
 |---|---|---|---|
@@ -28,7 +30,7 @@
 
 ## 关联代码与配置
 
-变更集中于 [KEngine](../../crates/kengine/)、[Kenvoy](../../crates/kenvoy/)、[测试成员](../../crates/kenvoy-tests/)、[xtask](../../xtask/) 与 [examples](../../examples/)。原 tools 已退役，旧路径仅作为历史正文中的实施事实保留。文件清单和接口差异保留在各次记录中；当前路线见[实施路线](../development-roadmap.md)，产品验收历史见[最终验收](../verification/0012-final-acceptance.md)。
+变更集中于 [KEngine](../../crates/kengine/)、[Kenvoy](../../crates/kenvoy/)、[测试成员](../../crates/kenvoy-tests/)、[xtask](../../xtask/) 与 [examples](../../examples/)。原 tools 已退役，旧路径仅作为历史正文中的实施事实保留。文件清单和接口差异保留在各次记录中；当前路线见[实施路线](../development/development-roadmap.md)，产品验收历史见[最终验收](../verification/0012-final-acceptance.md)。
 
 ## 维护、废弃与替代关系
 

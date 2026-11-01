@@ -5,7 +5,7 @@
 ## 开工检查与文档入口
 
 - 修改前检查适用规则、`git status --short`、当前分支、最近提交、`.gitignore`、Cargo Workspace 及相关现有实现。
-- 从 [docs/README.md](docs/README.md) 进入设计与验证文档；阶段任务和验收见 [development-roadmap.md](docs/development-roadmap.md)，职责边界见 [crate-boundaries.md](docs/crate-boundaries.md)。
+- 从 [docs/README.md](docs/README.md) 进入设计与验证文档；阶段任务和验收见 [development-roadmap.md](docs/development/development-roadmap.md)，职责边界见 [crate-boundaries.md](docs/architecture/crate-boundaries.md)。
 - 优先复用当前有效实现。Git 历史中的 XML、SSR、PostgreSQL 路线已退出当前基线，不得未经审查恢复或视为现有能力。
 - 只创建实际需要的模块、测试和文档，不批量建立空目录、空实现或无依据的脚手架。
 
@@ -58,7 +58,7 @@ cargo xtask check
 
 ## 文档同步与执行记录
 
-- 详细文档统一从 `docs/README.md` 索引；沿用当前主题文档与 `adr/` 结构，新增分类在首次有实际内容时建立 README 并同步总索引。阶段 00 明确指定的根目录文件不为套模板而迁移。
+- 详细文档统一从 `docs/README.md` 索引，并按类型置于子目录；根目录只保留文档中心 README。每个分类首次有实际内容时建立 README，包含清单、状态、阅读顺序、关联实现及废弃/替代关系；类型由目录体现，不在元数据重复。
 - 现状文档区分已实现、设计、候选和待验证。源码任务完成前同步新增变更记录，包含背景、方案、文件清单、环境、命令、实际输出、退出码、结论、限制和后续建议；接口、配置、默认行为改变时同步更新现状文档。
 - 定稿变更记录、验证记录和 ADR 保留历史事实；后续变化或勘误另建记录并维护索引替代关系。纯文档和本文件维护不递归创建变更记录。
 - 项目相关回复末尾按用户全局格式附执行记录：能力、Skill，以及存在失败、阻碍或残余风险时的例外；标识必须来自实际可见规则或工具。

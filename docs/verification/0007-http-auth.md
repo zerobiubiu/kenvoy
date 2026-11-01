@@ -61,4 +61,4 @@ Argon2 0.6 的 `hash_password_with_salt` 使用字节 salt，验证使用该版 
 
 尚未完成真实浏览器表单/Admin、安全渲染、Fast Refresh、生产 build/run 和 JS Runtime 的最终项目闭环。没有 HTTPS listener/证书部署实测：当前 HTTPS origin 表示由部署代理终止 TLS，Axum listener 本身为 HTTP。限流为单进程固定窗口，不信任 Forwarded；多实例、代理来源策略、配置化额度、行级权限、MFA 和账号找回待后续设计。
 
-本轮没有修改用户业务数据库、发布服务、提交或推送 Git。现状契约见 [安全设计](../security-design.md)、[Runtime](../runtime-design.md)、[CLI](../cli-design.md)，实施文件清单见 [阶段 05 变更](../changes/0006-http-auth.md)。
+本轮没有修改用户业务数据库、发布服务、提交或推送 Git。现状契约见 [安全设计](../architecture/security-design.md)、[Runtime](../architecture/runtime-design.md)、[CLI](../operations/cli-design.md)，实施文件清单见 [阶段 05 变更](../changes/0006-http-auth.md)。

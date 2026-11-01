@@ -1,6 +1,6 @@
 # 原生默认组件、系统重载与联动选项
 
-状态：已执行。日期：2026-11-01。前置：[0011 首版验收](0011-final-acceptance.md)；决策：[ADR 0010](../adr/0010-native-components-and-data-bindings.md)。
+状态：已执行。日期：2026-11-01。前置：[0011 首版验收](0011-final-acceptance.md)；决策：[ADR 0010](../decisions/0010-native-components-and-data-bindings.md)。
 
 ## 背景与方案
 

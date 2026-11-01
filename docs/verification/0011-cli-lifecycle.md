@@ -6,7 +6,7 @@
 
 七个 CLI 命令均调用正式实现。build 封存 Application IR、受限服务端模块、客户端资产及依赖清单，不访问业务数据库。run 在有源码时检查新鲜度并自动构建；无源码时校验版本化产物并运行。dev 使用 notify、AnalysisSession、候选迁移/发布、同源 Vite HTTP/WebSocket 代理和浏览器开发状态协议。
 
-所有数据库验证均在唯一临时项目内进行，未迁移用户业务数据库。双 Crate 边界保持不变，KEngine 不接入 Axum、SQLite、React 或应用类型。变更范围见[阶段 09 记录](../changes/0010-cli-lifecycle.md)，决策见 [ADR 0009](../adr/0009-artifacts-and-development-host.md)。
+所有数据库验证均在唯一临时项目内进行，未迁移用户业务数据库。双 Crate 边界保持不变，KEngine 不接入 Axum、SQLite、React 或应用类型。变更范围见[阶段 09 记录](../changes/0010-cli-lifecycle.md)，决策见 [ADR 0009](../decisions/0009-artifacts-and-development-host.md)。
 
 ## 已执行的定向与浏览器验证
 

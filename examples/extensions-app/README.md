@@ -19,4 +19,4 @@ kenvoy dev --install-deps
 
 `CustomerFields.diu.tsx` 参与 Schema 推导，普通 `CustomerCard.tsx` 不参与。`discount.server.ts` 和仅被它依赖的 `math.ts` 不进入浏览器产物；`app.tsx` 的内联回调通过受控词法切片注册，不把整个声明入口打包到浏览器。不要在客户端组件或其 Props 中填写服务端密钥。
 
-部署和接口边界见[前端 Runtime](../../docs/frontend-runtime.md)、[JavaScript Runtime](../../docs/javascript-runtime.md)和[配置规范](../../docs/project-configuration.md)。
+部署和接口边界见[前端 Runtime](../../docs/architecture/frontend-runtime.md)、[JavaScript Runtime](../../docs/architecture/javascript-runtime.md)和[配置规范](../../docs/contracts/project-configuration.md)。

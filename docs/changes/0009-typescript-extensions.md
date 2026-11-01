@@ -32,4 +32,4 @@ SWC 锁定 common 27.0.0、AST/visit 30.0.0、parser 47.0.0、codegen 33.0.0、t
 
 后补普通 TS 泛型切片与导出名冲突回归后，执行 `cargo test -p kenvoy --bin kenvoy javascript:: --offline --locked`，18 项通过，退出 0；没有将新增一项冒充前述 196 项全量结果的一部分。Action 集成目标单项、原 DSL 11 项和静态求值 13 项均实际通过。`cargo clippy -p kenvoy --bin kenvoy --offline --locked` 退出 0，保留阶段 09 未消费的 5 组接口警告；本任务文件 rustfmt 退出 0。命令、失败修正、OOM/CPU 独立 watchdog 与边界见 [完整验证记录](../verification/0010-typescript-extensions.md)。
 
-后续验证：dev 文件变化与错误恢复、React 状态保留、配置重载、生产产物复用/重建和 run，无需预 build 的真实重启持久化；不可信代码隔离及受控资源 Host API 留在后续功能范围。当前限制以 [JavaScript Runtime](../javascript-runtime.md) 为准。
+后续验证：dev 文件变化与错误恢复、React 状态保留、配置重载、生产产物复用/重建和 run，无需预 build 的真实重启持久化；不可信代码隔离及受控资源 Host API 留在后续功能范围。当前限制以 [JavaScript Runtime](../architecture/javascript-runtime.md) 为准。

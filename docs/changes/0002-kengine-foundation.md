@@ -14,7 +14,7 @@
 - 补强 p02_javascript.rs/p03_http_sqlite.rs 的独立看门狗、超时回收和自有进程守卫，修正 p05_watcher.rs 事件期限；新增前端 axum-browser.mjs 供显式跨工具验证。
 - 新增根 README、KEngine API 与 Generic IR 文档，更新架构/边界/技术栈/风险/路线、验证与变更索引。
 
-重要接口为 Engine::new、parse_source、parse_file、analyze_project、resolve_module，结果自身提供诊断和图访问。Generic IR v1 保留源码、UTF-16 字面量、半开字节范围、Unicode 标量位置、JSX 出现和动态表达式引用；未知格式解码拒绝。完整 API 见 [说明](../kengine-api.md)，数据协议见 [Generic IR](../generic-ir.md)。
+重要接口为 Engine::new、parse_source、parse_file、analyze_project、resolve_module，结果自身提供诊断和图访问。Generic IR v1 保留源码、UTF-16 字面量、半开字节范围、Unicode 标量位置、JSX 出现和动态表达式引用；未知格式解码拒绝。完整 API 见 [说明](../contracts/kengine-api.md)，数据协议见 [Generic IR](../contracts/generic-ir.md)。
 
 没有删除文件、改写历史、创建提交或发布。新增初始公共 API 尚未对外发布，不为内部阶段实现机械递增版本。正式 Kenvoy main 仍为空，不伪装成已有 check/dev/run 命令。
 

@@ -205,7 +205,7 @@ components:
 
 ### Development Feedback
 
-仅开发模式显示编译失败与连接中断的原生 Notice，位置在现有主内容区域上方，复用状态色与正文排印。错误和警告使用 alert，成功或信息反馈使用 status。编译失败保留当前有效页面和填写内容，修复并成功发布后清除；普通生产页面不轮询该状态。协议和真实热更新的验证边界见 [前端 Runtime](docs/frontend-runtime.md)。
+仅开发模式显示编译失败与连接中断的原生 Notice，位置在现有主内容区域上方，复用状态色与正文排印。错误和警告使用 alert，成功或信息反馈使用 status。编译失败保留当前有效页面和填写内容，修复并成功发布后清除；普通生产页面不轮询该状态。协议和真实热更新的验证边界见 [前端 Runtime](docs/architecture/frontend-runtime.md)。
 
 此前 detector 与 `.impeccable/design.json` 来自迁移前界面，保留为历史工具数据；当前事实以组件和 CSS 为准。本次不将旧扫描或样例当作新组件的验证结果。
 

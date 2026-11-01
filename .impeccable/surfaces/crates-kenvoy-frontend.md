@@ -39,4 +39,4 @@ FINISH：unreviewed and undocumented is unfinished; this build ends with the fin
 
 迁移前的登记、管理、自定义扩展和开发生命周期已有真实浏览器验收；原桌面与 390px 移动端截图作为视觉参考。新组件需复核可见标签、焦点、原生选择器、对话框关闭/恢复焦点和窄屏表格管理入口，不能沿用旧截图宣称新实现通过。选项联动的加载、错误、空结果及失效值提示与字段共用数据契约；重载组件不得绕过提交校验。
 
-现行细节见 [前端 Runtime](../../docs/frontend-runtime.md) 与 [DESIGN.md](../../DESIGN.md)，实际命令、计数、截图范围和限制统一见 [验证索引](../../docs/verification/README.md)。迁移前 detector 数据不作为本轮通过证据。
+现行细节见 [前端 Runtime](../../docs/architecture/frontend-runtime.md) 与 [DESIGN.md](../../DESIGN.md)，实际命令、计数、截图范围和限制统一见 [验证索引](../../docs/verification/README.md)。迁移前 detector 数据不作为本轮通过证据。

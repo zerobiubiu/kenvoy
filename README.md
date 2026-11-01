@@ -4,7 +4,7 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 ## 当前进度
 
-当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。用法见[组件与选项契约](docs/component-bindings.md)和[完整示例](examples/options-app/README.md)。
+当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。用法见[组件与选项契约](docs/contracts/component-bindings.md)和[完整示例](examples/options-app/README.md)。
 
 首版基线已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。当时 201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；历史命令与边界见[首版验收](docs/verification/0012-final-acceptance.md)，后续变更见[变更索引](docs/changes/README.md)。
 
@@ -27,7 +27,7 @@ cargo fmt --all -- --check
 cargo xtask check
 ```
 
-KEngine 可单独 check/test，不要求数据库、HTTP 或浏览器。阶段 00 的 Rust HTTP/SQLite/JS/watcher 测试仍保留在各 Crate 的 tests 中，使用临时资源。架构与文档检查、构建和跨 Crate 测试统一入口见[工程与测试流程](docs/engineering-workflow.md)。
+KEngine 可单独 check/test，不要求数据库、HTTP 或浏览器。阶段 00 的 Rust HTTP/SQLite/JS/watcher 测试仍保留在各 Crate 的 tests 中，使用临时资源。架构与文档检查、构建和跨 Crate 测试统一入口见[工程与测试流程](docs/development/engineering-workflow.md)。
 
 ## 创建与运行应用
 
@@ -45,7 +45,7 @@ Set-Location customer-app
 
 停止开发服务后执行 `kenvoy run` 即可启动生产应用，无需先 build。源码或依赖锁变化会触发构建；无源码时可部署 CLI、kenvoy.toml、dist 和独立数据目录。静态服务只暴露 client 资产。`kenvoy build` 不修改业务数据库。
 
-基础 DSL 运行不需要 Node/npm。自定义组件首次使用 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`，明确允许安装锁定的构建依赖；后续复用缓存，不每次重新安装。可运行示例见 [examples](examples/README.md)，扩展和安全限制见[JavaScript Runtime](docs/javascript-runtime.md)。
+基础 DSL 运行不需要 Node/npm。自定义组件首次使用 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`，明确允许安装锁定的构建依赖；后续复用缓存，不每次重新安装。可运行示例见 [examples](examples/README.md)，扩展和安全限制见[JavaScript Runtime](docs/architecture/javascript-runtime.md)。
 
 迁移先用 `kenvoy migrate status` 查看 diff；安全变更由启动/开发发布应用，破坏性变更须使用计划校验值明确确认。删除声明不会自动删除已有数据。`kenvoy check` 提供语法、模块和 DSL 检查，不能替代完整 TypeScript 类型检查器。
 
@@ -62,4 +62,4 @@ cargo xtask test
 cargo xtask browser
 ```
 
-原 tools 目录及独立前端探针已退出当前工程，历史验证报告保留原始命令和当时的边界；现行执行方式以[工程与测试流程](docs/engineering-workflow.md)为准。
+原 tools 目录及独立前端探针已退出当前工程，历史验证报告保留原始命令和当时的边界；现行执行方式以[工程与测试流程](docs/development/engineering-workflow.md)为准。

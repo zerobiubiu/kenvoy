@@ -50,4 +50,4 @@ Runtime 初次 5 项中 1 项因测试直接写 `typeof require` 被已实现的
 
 只执行可信项目的本地静态 ESM 纯计算；无 npm/Node 兼容层、数据库/文件/网络 Host API，不可信模式明确拒绝。切片不支持复杂可变捕获、class、解构或未知初始化副作用，需拆成独立 UI 模块。Action 不自动重试，不支持流式结果。Windows 浏览器夹具停止服务采用强制终止，不作为 Ctrl+C 优雅退出证据；真实 HTTP 优雅关闭已有先前 Rust 测试，本阶段未借此声称 dev HMR、完整 run 或阶段 10 全部通过。
 
-相关实现和契约见 [JavaScript Runtime](../javascript-runtime.md)、[Application IR](../application-ir.md)、[安全](../security-design.md)，实施范围见 [阶段 08 变更](../changes/0009-typescript-extensions.md)。后续需独立验收自动构建复用、受控热更新、错误恢复、生产启动与持久化。
+相关实现和契约见 [JavaScript Runtime](../architecture/javascript-runtime.md)、[Application IR](../contracts/application-ir.md)、[安全](../architecture/security-design.md)，实施范围见 [阶段 08 变更](../changes/0009-typescript-extensions.md)。后续需独立验收自动构建复用、受控热更新、错误恢复、生产启动与持久化。
