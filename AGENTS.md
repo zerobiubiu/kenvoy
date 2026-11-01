@@ -18,6 +18,14 @@
 - 普通 UI 不参与 Schema 推导；Schema、Client、Server、Shared 模块分开处理。无法求值的表达式保留可追踪引用，Schema 无法静态确定时明确诊断，不忽略字段；服务端实现和敏感配置不得进入客户端产物。
 - Kenvoy 默认使用 Rust 2024、Axum/Tokio/Tower、SQLite/rusqlite、rquickjs、React/TypeScript/原生 CSS/CSR，不内置 MUI/Emotion。四成员和默认原生 UI 是已确认设计，不因旧提示词安排回退；用户可选兼容 React 库，重载与数据组件仍复用原生模型、校验、权限及 API。
 
+## 代码组织与拆分
+
+- Kenvoy 源码按 `domain/application/infrastructure/interfaces/bootstrap` 归位；KEngine 按语言域分层，前端按实际 app/domain/application/infrastructure/presentation 职责组织，具体依赖方向见[DDD 目录规范](docs/architecture/ddd-structure.md)。
+- 领域只含模型和纯规则；应用通过实际端口工作，不反引基础设施、接口或装配根。驱动、文件系统及框架类型留在边缘，不用空接口、全局 shared 模块或内部旧路径 shim 伪造分层。
+- 自有代码文件硬上限 500 行、目标 400 行内，测试同样受限；达到规模边界先按职责拆分再扩展。数据、依赖及生成产物不计代码上限，禁止靠压行、include 字符串或忽略名单绕过门禁。
+- 公共根 API/SDK 门面保留原契约；内部调用直接迁移到规范模块。生产 import 精确到实际项，可见性按真实调用最小开放，不用通配符或一律 pub(crate) 兜底。
+- 结构调整同步调用方、测试 helper、前端嵌入/镜像清单与文档链接；通过 `cargo xtask architecture` 的目录、规模和依赖门禁，不为重构更改规则、错误时机、序列化顺序或事务边界。
+
 ## 依赖、安全与数据
 
 - 本项目已授权自主选择并安装本工程实施与验证必需的依赖和工具，无须逐项审批；记录版本、feature、来源、位置、用途及锁文件。授权不覆盖无关安装、费用、对外发布或破坏用户数据，也不覆盖当前只读任务禁止的操作。

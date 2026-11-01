@@ -37,12 +37,12 @@
 | 契约关注点 | 当前实现或使用入口 |
 |---|---|
 | KEngine API | [公共导出](../../crates/kengine/src/lib.rs)、[API 消费测试](../../crates/kengine/tests/engine_api.rs)、[Kenvoy 边界消费测试](../../crates/kenvoy/tests/engine_boundary.rs) |
-| Generic IR | [IR 类型与序列化](../../crates/kengine/src/ir.rs) |
-| DSL | [分析器](../../crates/kenvoy/src/dsl/analyzer.rs)、[静态求值器](../../crates/kenvoy/src/dsl/static_eval.rs)、[客户应用声明示例](../../examples/customer-app/src/app.tsx) |
-| Application IR 与浏览器投影 | [宿主模型](../../crates/kenvoy/src/application.rs)、[HTTP 投影](../../crates/kenvoy/src/http/projection.rs)、[客户端类型](../../crates/kenvoy/frontend/src/types.ts) |
-| 配置 | [项目加载与校验](../../crates/kenvoy/src/project.rs)、[客户应用配置](../../examples/customer-app/kenvoy.toml) |
-| 组件绑定、SDK 与选项 | [绑定类型](../../crates/kenvoy/frontend/src/bindings.ts)、[SDK 入口](../../crates/kenvoy/frontend/src/sdk.ts)、[客户端 API](../../crates/kenvoy/frontend/src/api.ts)、[服务端选项规则](../../crates/kenvoy/src/options.rs)、[组件扩展示例](../../examples/extensions-app/README.md) |
-| 附件与图片 | [附件存储](../../crates/kenvoy/src/database/uploads.rs)、[上传与访问 HTTP](../../crates/kenvoy/src/http/uploads.rs)、[上传字段](../../crates/kenvoy/frontend/src/FileField.tsx)、[图片组件](../../crates/kenvoy/frontend/src/images.tsx) |
+| Generic IR | [IR 类型与序列化](../../crates/kengine/src/domain/ir/mod.rs) |
+| DSL | [分析器](../../crates/kenvoy/src/application/compilation/analyzer/mod.rs)、[静态求值器](../../crates/kenvoy/src/application/compilation/static_eval/mod.rs)、[客户应用声明示例](../../examples/customer-app/src/app.tsx) |
+| Application IR 与浏览器投影 | [宿主模型](../../crates/kenvoy/src/domain/model/mod.rs)、[HTTP 投影](../../crates/kenvoy/src/interfaces/http/projection.rs)、[客户端类型](../../crates/kenvoy/frontend/src/domain/types.ts) |
+| 配置 | [项目加载与校验](../../crates/kenvoy/src/infrastructure/project/mod.rs)、[客户应用配置](../../examples/customer-app/kenvoy.toml) |
+| 组件绑定、SDK 与选项 | [绑定类型](../../crates/kenvoy/frontend/src/presentation/runtime/bindings.ts)、[SDK 入口](../../crates/kenvoy/frontend/src/sdk.ts)、[客户端 API](../../crates/kenvoy/frontend/src/infrastructure/api.ts)、[服务端选项规则](../../crates/kenvoy/src/domain/options.rs)、[组件扩展示例](../../examples/extensions-app/README.md) |
+| 附件与图片 | [附件存储](../../crates/kenvoy/src/infrastructure/persistence/sqlite/uploads/mod.rs)、[上传与访问 HTTP](../../crates/kenvoy/src/interfaces/http/uploads.rs)、[上传字段](../../crates/kenvoy/frontend/src/presentation/forms/FileField.tsx)、[图片组件](../../crates/kenvoy/frontend/src/presentation/images.tsx) |
 
 上述链接用于定位实现和回归；实际执行范围从[验证索引](../verification/README.md)进入，不由链接存在推定已通过。
 

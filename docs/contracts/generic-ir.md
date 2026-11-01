@@ -1,6 +1,6 @@
 # Generic IR v1
 
-状态：参考（现状文档），含阶段 02 表达式、语义和模块链接；结构与序列化协议见 [ir.rs](../../crates/kengine/src/ir.rs)。
+状态：参考（现状文档），含阶段 02 表达式、语义和模块链接；结构与序列化协议见 [ir.rs](../../crates/kengine/src/domain/ir/mod.rs)。
 
 ## 格式与源码
 

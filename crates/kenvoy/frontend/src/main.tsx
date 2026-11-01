@@ -1,8 +1,8 @@
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import App from './App';
-import theme from './theme';
-import './styles.css';
+import App from './app/App';
+import theme from './presentation/theme';
+import './presentation/styles.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('页面缺少应用容器');

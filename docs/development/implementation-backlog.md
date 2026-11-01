@@ -26,35 +26,35 @@
 - **当前边界**：`AnalysisSession` 真实缓存未变化模块的解析结果及模块内语义，但每轮仍读取所有可达源码，重新定位依赖、建立模块图、分析循环并执行跨模块链接；`affected` 尚未用于约束整条分析管线。
 - **后续工作**：明确受影响集合与缓存失效协议，减少不必要的重读、整图重算和 IR 复制；保留新增、删除、重命名、导入目标及解析选项变化时的正确性。避免为了缓存命中而遗漏文件系统变化。
 - **验收标准**：连续编辑序列的结果与全量分析一致；未变模块不重解析；受影响分析范围可解释；错误候选不替换最后有效结果；报告实际解析、链接、耗时和内存变化。
-- **相关入口**：[增量会话](../../crates/kengine/src/incremental.rs)、[分析管线](../../crates/kengine/src/engine.rs)、[增量回归](../../crates/kengine/tests/incremental.rs)、[KEngine API](../contracts/kengine-api.md)。
+- **相关入口**：[增量会话](../../crates/kengine/src/application/incremental.rs)、[分析管线](../../crates/kengine/src/interfaces/engine.rs)、[增量回归](../../crates/kengine/tests/incremental.rs)、[KEngine API](../contracts/kengine-api.md)。
 
 ### I02：独立模块并行处理与大项目性能
 
 - **当前边界**：正式分析按文件同步遍历；没有并行解析或大项目吞吐、延迟、内存占用的验收数据。会话内缓存不等于跨进程持久化缓存。
 - **后续工作**：先建立小、中、大多模块项目的可复现基线，再评估独立模块并行、缓存数据共享和内存预算；持久化缓存只有在收益及失效协议明确后再决定是否引入。
 - **验收标准**：并行与串行结果、诊断顺序及源码位置保持确定；错误、取消和资源回收正确；记录机器、项目规模、冷热运行、并发度、耗时与峰值内存，不以解析次数代替性能数据。
-- **相关入口**：[分析管线](../../crates/kengine/src/engine.rs)、[增量会话](../../crates/kengine/src/incremental.rs)、[模块与符号测试](../../crates/kengine/tests/)、[技术栈](../reference/technology-stack.md)。
+- **相关入口**：[分析管线](../../crates/kengine/src/interfaces/engine.rs)、[增量会话](../../crates/kengine/src/application/incremental.rs)、[模块与符号测试](../../crates/kengine/tests/)、[技术栈](../reference/technology-stack.md)。
 
 ### I03：跨错误类别的统一诊断与关联位置
 
 - **当前边界**：Language、DSL、JavaScript 编译诊断已有错误码、主位置与建议；普通配置、I/O、数据库、迁移、产物和构建错误未统一具备诊断字段。部分 DSL `related` 位置及展开链已保存在内部，但没有完整输出。
 - **后续工作**：统一适用的错误类别、代码、原因、建议和来源链，补齐终端及结构化日志中的关联位置；无源码位置的错误不得虚构行列。
 - **验收标准**：覆盖源码与非源码错误的代表性失败；重复声明及 Schema 展开错误保留真实关联位置；文本与 JSON 输出语义一致；错误链可定位，同时不输出密码、Cookie、Token 或业务数据。
-- **相关入口**：[错误与诊断输出](../../crates/kenvoy/src/error.rs)、[CLI 失败分支](../../crates/kenvoy/src/main.rs)、[DSL 诊断](../../crates/kenvoy/src/dsl/mod.rs)、[CLI 测试](../../crates/kenvoy/tests/cli.rs)。
+- **相关入口**：[错误与诊断输出](../../crates/kenvoy/src/bootstrap/error.rs)、[CLI 失败分支](../../crates/kenvoy/src/main.rs)、[DSL 诊断](../../crates/kenvoy/src/application/compilation/mod.rs)、[CLI 测试](../../crates/kenvoy/tests/cli.rs)。
 
 ### I04：服务端异常上下文与可定位执行日志
 
 - **当前边界**：QuickJS 多数运行异常被泛化为 `Execution`；Action 错误日志不保留原异常上下文。现有执行统计主要是 DEBUG 级别的 handler、耗时和成功标志，请求标识没有贯穿相关运行任务。部分 watcher 错误也没有保留原始原因。
 - **后续工作**：区分对客户端脱敏与在服务端保留安全诊断上下文，补充可定位的错误类别、登记函数或模块信息、适用的异常来源及请求关联；为 watcher 故障保留原因。日志字段与级别需要明确设计，不直接记录函数参数、返回业务值或敏感内容。
 - **验收标准**：可信函数抛错、模块加载失败、数据库失败和 watcher 错误可在服务端定位；客户端响应仍不泄漏内部堆栈、SQL、路径或密钥；失败后下一次正常调用及资源释放不受影响。
-- **相关入口**：[JavaScript Runtime](../../crates/kenvoy/src/javascript/runtime.rs)、[Action 处理器](../../crates/kenvoy/src/http/handlers.rs)、[HTTP 错误映射](../../crates/kenvoy/src/http/mod.rs)、[开发生命周期](../../crates/kenvoy/src/lifecycle.rs)、[运行时契约](../architecture/javascript-runtime.md)。
+- **相关入口**：[JavaScript Runtime](../../crates/kenvoy/src/infrastructure/javascript/runtime/mod.rs)、[Action 处理器](../../crates/kenvoy/src/interfaces/http/handlers.rs)、[HTTP 错误映射](../../crates/kenvoy/src/interfaces/http/mod.rs)、[开发生命周期](../../crates/kenvoy/src/bootstrap/lifecycle.rs)、[运行时契约](../architecture/javascript-runtime.md)。
 
 ### I05：字段改名检测与显式映射迁移
 
 - **当前边界**：仅在同表恰好新增一列、删除一列且除名称外结构一致时报告改名候选；候选仍要求映射并阻断执行。多字段改名、改名同时改变约束等情况不具备完整识别与执行协议；表名变化不能被描述为保留数据的改名迁移。
 - **后续工作**：设计显式映射、预览与冲突处理，使改名意图不依赖猜测；字段改名与类型/约束变化组合时明确展示完整计划。表级改名若纳入范围，应另行明确契约，不能把删旧建新包装为改名。
 - **验收标准**：单字段、多字段、歧义映射、冲突和组合变化均有明确结果；成功后数据、索引及约束保留；失败不改变原库；继续要求 checksum 确认、数据预检、备份与事务保护。
-- **相关入口**：[迁移 Diff 与执行](../../crates/kenvoy/src/database/migration.rs)、[迁移 CLI](../../crates/kenvoy/tests/migrations_cli.rs)、[迁移执行协议](../operations/migration-design.md)。
+- **相关入口**：[迁移 Diff 与执行](../../crates/kenvoy/src/infrastructure/persistence/sqlite/migration/mod.rs)、[迁移 CLI](../../crates/kenvoy/tests/migrations_cli.rs)、[迁移执行协议](../operations/migration-design.md)。
 
 ## V：验证补齐
 
@@ -77,14 +77,14 @@
 - **当前证据**：已有 TypeScript 泛型解析、转换和切片回归，但当前扩展浏览器场景没有专门使用泛型 React 组件。
 - **待补验证**：增加跨文件泛型组件及 Props、Hooks、事件和 CSS 的真实构建/浏览器流程，不把编译去类型测试当作 DOM 行为证明。
 - **验收标准**：组件实际呈现，Props 与交互返回正确，重复 React 实例未出现，服务端私有模块不进入客户端；不因此承诺框架已提供完整用户项目 TS 类型检查。
-- **相关入口**：[扩展浏览器流程](../../crates/kenvoy/frontend/scripts/extensions-e2e.mjs)、[源码切片回归](../../crates/kenvoy/src/javascript/source_slice.rs)、[客户端构建回归](../../crates/kenvoy/frontend/tests/client-builder.test.mjs)。
+- **相关入口**：[扩展浏览器流程](../../crates/kenvoy/frontend/scripts/extensions-e2e.mjs)、[源码切片回归](../../crates/kenvoy/src/application/compilation/client_slice/mod.rs)、[客户端构建回归](../../crates/kenvoy/frontend/tests/client-builder.test.mjs)。
 
 ### V04：错误、空状态与查询结果的浏览器断言
 
 - **当前证据**：加载、错误、空态、未知写入结果和组件错误边界有实现或部分客户端测试；真实浏览器没有完整状态矩阵。后台排序的浏览器断言主要检查 `aria-sort`，未直接核对行值顺序。
 - **待补验证**：覆盖列表/启动失败、断连、超时、写入结果未知、空列表、无匹配、组件渲染异常，以及分页/排序后的实际内容；验证重试与用户操作不会造成静默重复写入。
 - **验收标准**：真实界面状态、可恢复操作及请求/数据结果相互对应；排序断言检查实际返回和显示顺序；客户端替身测试与真实 HTTP/浏览器证据分别记录。
-- **相关入口**：[通用 Form/Table Runtime](../../crates/kenvoy/frontend/src/Runtime.tsx)、[客户端 API](../../crates/kenvoy/frontend/src/api.ts)、[后台浏览器流程](../../crates/kenvoy/frontend/scripts/admin-e2e.mjs)、[API 单元测试](../../crates/kenvoy/frontend/tests/api.test.mjs)。
+- **相关入口**：[通用 Form/Table Runtime](../../crates/kenvoy/frontend/src/presentation/runtime/RuntimePage.tsx)、[客户端 API](../../crates/kenvoy/frontend/src/infrastructure/api.ts)、[后台浏览器流程](../../crates/kenvoy/frontend/scripts/admin-e2e.mjs)、[API 单元测试](../../crates/kenvoy/frontend/tests/api.test.mjs)。
 
 ### V05：目标平台、浏览器与最低版本运行矩阵
 
@@ -98,7 +98,7 @@
 - **当前证据**：正常发布、失败候选保留、数据库回滚及部分取消/关闭路径有测试；提交后磁盘/代理失败、磁盘满、断电、网络盘、构建或发布中途退出、事件风暴及长时负载未全面验收。HTTP/JS 关闭没有统一进程级最终期限，不能仅凭静态代码断言所有异常退出始终有界，也不能据此认定已经发生挂死。
 - **待补验证**：在隔离环境设计故障注入与压力流程，覆盖提交前后、watcher 失效、任务取消和资源关闭；若暴露问题，再明确修复与恢复协议。
 - **验收标准**：提交前失败可保持旧状态；数据库已提交后不伪称回滚，必须能定位当前代际并给出恢复或重启路径；数据完整性、退出期限、自有资源回收及重启行为有实际证据，不能使用生产数据进行破坏性验证。
-- **相关入口**：[开发生命周期](../../crates/kenvoy/src/lifecycle.rs)、[HTTP 发布](../../crates/kenvoy/src/http/mod.rs)、[数据库线程](../../crates/kenvoy/src/database/worker.rs)、[JavaScript 关闭](../../crates/kenvoy/src/javascript/runtime.rs)、[风险登记](technical-risks.md)。
+- **相关入口**：[开发生命周期](../../crates/kenvoy/src/bootstrap/lifecycle.rs)、[HTTP 发布](../../crates/kenvoy/src/interfaces/http/mod.rs)、[数据库线程](../../crates/kenvoy/src/infrastructure/persistence/sqlite/worker/mod.rs)、[JavaScript 关闭](../../crates/kenvoy/src/infrastructure/javascript/runtime/mod.rs)、[风险登记](technical-risks.md)。
 
 ## E：可选扩展与条件性验证
 
@@ -107,21 +107,21 @@
 - **当前边界**：SQLite 外键开关和内部认证外键存在，但业务字段/Schema 没有关系目标、引用列及级联策略；`optionsSource` 是受控选项查询与写入校验，不是物理外键或自动级联。
 - **启用条件与范围**：明确业务关联需求后，再设计 DSL、IR、引用/删除策略、Schema Diff、CRUD 权限及迁移；关系字段允许后续实现，不把当前未提供关系能力误写成基础持久化失效。
 - **验收标准**：真实外键约束、关联权限、来源删除/修改、存量数据迁移、回滚与重启一致性均验证；仅启用 PRAGMA 或手写测试外键不能算 DSL 关系能力完成。
-- **相关入口**：[字段模型](../../crates/kenvoy/src/application.rs)、[迁移模型](../../crates/kenvoy/src/database/migration.rs)、[选项规则](../contracts/component-bindings.md)。
+- **相关入口**：[字段模型](../../crates/kenvoy/src/domain/model/mod.rs)、[迁移模型](../../crates/kenvoy/src/infrastructure/persistence/sqlite/migration/mod.rs)、[选项规则](../contracts/component-bindings.md)。
 
 ### E02：受控资源、文件与网络 Host API
 
 - **当前边界**：QuickJS 只执行可信项目的纯计算，未提供 `ctx.resources` 或文件/网络/数据库 Host API。
 - **启用条件与范围**：按实际场景分别设计最小能力、权限、参数、错误转换、事务和生命周期边界，不一次性开放完整宿主或 Node/Bun API。
 - **验收标准**：通过受控 API 执行真实允许操作，越权与非法输入被拒绝，取消/超时后资源正确回收；不暴露 SQLite 连接、任意 Rust 指针、进程或敏感环境。
-- **相关入口**：[JavaScript 契约](../architecture/javascript-runtime.md)、[运行时实现](../../crates/kenvoy/src/javascript/runtime.rs)、[HTTP Action](../../crates/kenvoy/src/http/handlers.rs)。
+- **相关入口**：[JavaScript 契约](../architecture/javascript-runtime.md)、[运行时实现](../../crates/kenvoy/src/infrastructure/javascript/runtime/mod.rs)、[HTTP Action](../../crates/kenvoy/src/interfaces/http/handlers.rs)。
 
 ### E03：不可信 JavaScript 执行隔离
 
 - **当前边界**：`runtime.trust=untrusted` 明确拒绝；当前时间、内存与模块限制不是操作系统沙箱。
 - **启用条件与范围**：只有出现不可信执行需求时，才设计独立进程或操作系统隔离、能力协议、限额、取消与强制回收；此前继续拒绝执行。
 - **验收标准**：恶意死循环、微任务、OOM、非法宿主访问和进程故障不能突破权限或拖垮宿主；终止后无自有资源残留，后续正常请求可运行。
-- **相关入口**：[可信边界](../architecture/javascript-runtime.md)、[服务端编译](../../crates/kenvoy/src/javascript/compiler.rs)、[运行时测试](../../crates/kenvoy/src/javascript/runtime/tests.rs)。
+- **相关入口**：[可信边界](../architecture/javascript-runtime.md)、[服务端编译](../../crates/kenvoy/src/infrastructure/javascript/compiler/mod.rs)、[运行时测试](../../crates/kenvoy/src/infrastructure/javascript/runtime/tests.rs)。
 
 ### E04：文件上传字段
 
@@ -129,7 +129,7 @@
 - **当前能力**：新增 file 字段、严格附件数组、同一 SQLite BLOB、会话暂存与配额/过期、事务绑定/替换/删除、受控上传及文件读取；新增 DSL image、SDK Image/AttachmentList 和表格/详情预览。契约见[多文件上传与图片展示](../contracts/file-uploads.md)。
 - **执行验证**：路径穿越、跨会话/字段/记录、伪造元数据、数量/大小/MIME、失败回滚、取消与删除清理有回归；真实 CLI/HTTP、dev→run 附件读回和桌面/390px 浏览器已执行。没有修改或迁移用户数据库。
 - **保留边界**：单文件上限 10 MiB，内联图片仅 PNG/JPEG/GIF/WebP；签名核对不是完整图片解码或病毒扫描。对象存储、分块续传和任意图片格式不在本轮承诺内。
-- **相关入口**：[字段模型](../../crates/kenvoy/src/application.rs)、[附件数据库](../../crates/kenvoy/src/database/uploads.rs)、[上传 HTTP](../../crates/kenvoy/src/http/uploads.rs)、[图片组件](../../crates/kenvoy/frontend/src/images.tsx)。
+- **相关入口**：[字段模型](../../crates/kenvoy/src/domain/model/mod.rs)、[附件数据库](../../crates/kenvoy/src/infrastructure/persistence/sqlite/uploads/mod.rs)、[上传 HTTP](../../crates/kenvoy/src/interfaces/http/uploads.rs)、[图片组件](../../crates/kenvoy/frontend/src/presentation/images.tsx)。
 
 ### E05：用户可选组件库兼容性
 
@@ -143,7 +143,7 @@
 - **当前边界**：尚无正式发行、签名与发布流程，历史构建版本不自动回收；迁移失败恢复有事务/备份基础，但没有通用自动恢复命令。
 - **启用条件与范围**：发布前确认版本与发布规则，核对依赖来源、许可证和供应链；按运维需求设计产物保留及恢复操作，不将清理脚本直接用于业务目录。
 - **验收标准**：发布包可追踪并在目标环境验证；只清理本项目拥有且非活动的产物，不误删当前/仍被使用版本、数据库或用户资源；恢复计划先预览、确认与备份，并验证数据完整性。
-- **相关入口**：[版本化产物](../../crates/kenvoy/src/artifact.rs)、[工程流程](engineering-workflow.md)、[迁移协议](../operations/migration-design.md)、[技术风险](technical-risks.md)。
+- **相关入口**：[版本化产物](../../crates/kenvoy/src/infrastructure/artifacts/mod.rs)、[工程流程](engineering-workflow.md)、[迁移协议](../operations/migration-design.md)、[技术风险](technical-risks.md)。
 
 ## 不自动扩大为实施承诺
 

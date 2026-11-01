@@ -6,7 +6,7 @@
 
 本文区分已落正式实现、真实测试与仍待验收的能力。阶段 00 探针保留为选型依据，不能替代正式功能验证；命令、退出码、失败与限制见[验证索引](../verification/README.md)，历史报告不随本现状文档改写。
 
-实际验证环境为 Windows/PowerShell、Rust/Cargo 1.99.1、Node 24.22.0、npm 12.2.0、Chromium 156.0.8078.4 与 VS 18 Community 原生构建链。Workspace 使用 Rust 2024，声明 MSRV 1.98；除阶段 01 的 KEngine 独立历史验证外，本轮 `cargo +1.98.0 check --workspace --all-targets --offline --locked` 已退出 0，最终修订也已复核，覆盖完整宿主和测试目标的编译。该检查不等于在最低版本上完成所有运行测试。macOS/Linux、其他浏览器和实体移动设备尚未完成相同验收。
+首版报告记录的环境为 Windows/PowerShell、Rust/Cargo 1.99.1、Node 24.22.0、npm 12.2.0、Chromium 156.0.8078.4 与 VS 18 Community 原生构建链。Workspace 使用 Rust 2024，声明 MSRV 1.98；首版最终验收中的 `cargo +1.98.0 check --workspace --all-targets --offline --locked` 已退出 0，覆盖当时完整宿主和测试目标，不等于最低版本上的全部运行测试。后续 DDD 重构在 Rust 1.99.1 复验，范围及当前浏览器版本见 [0016](../changes/0016-ddd-structure-and-module-split.md)，未将历史 MSRV 检查计为新修订实测。macOS/Linux、其他浏览器和实体移动设备尚未完成相同验收。
 
 阶段 02 已验收正式语义和增量会话；03 验收 DSL/Application IR；04 验收 SQLite、迁移和 CRUD；05 验收 HTTP/认证；06/07 验收 React 登记与后台；08 验收用户组件、受限服务端 JavaScript 及跨端边界。阶段 08 统一记录为 196 项常规 Rust、86 项客户端及真实扩展浏览器验收；后补 JavaScript 和开发状态的 89 项客户端测试分别记录，不合并冒充一次统一门禁。
 
@@ -41,8 +41,9 @@
 | tokio-tungstenite | 0.29.0 | default-features=false；connect、handshake |
 | futures-util | 0.3.34 | 默认 + sink；开发代理流处理 |
 | windows-sys | 0.61.2 | 仅测试成员 cfg(windows)：Foundation、Security、JobObjects、Threading；回收自有进程树 |
+| syn | 2.0.119 | 仅 xtask：full、visit；源码层依赖与 Rust AST 检查 |
 
-产品为 kengine Library 与 kenvoy Binary，Workspace 另有不发布的 kenvoy-tests 与 xtask。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2 同时用于资产嵌入构建脚本。测试成员的 Windows Job 依赖不进入产品正常依赖闭包。
+产品为 kengine Library 与 kenvoy Binary，Workspace 另有不发布的 kenvoy-tests 与 xtask。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2 同时用于资产嵌入构建脚本。测试成员的 Windows Job 依赖，以及 xtask 的 syn 和 KEngine 工程检查依赖，不进入产品正常依赖闭包。
 
 | npm 直接依赖 | 精确版本 | 正式前端用途 |
 |---|---|---|
@@ -67,13 +68,13 @@ Kenvoy 已有正式静态求值、.diu.tsx 展开、Application IR、字段约�
 
 ### React、原生 CSS 与用户组件
 
-通用 React Runtime 消费经权限过滤的应用描述，提供七类字段、前台登记、登录与后台搜索/排序/分页/详情/增改删，提交经同源 API 写入真实 SQLite。默认使用语义 HTML 与 CSS；自定义组件按类型登记，Hooks 交给 React。构建器统一 React 基础包解析以避免重复实例，用户 UI 库按项目依赖解析。阶段 08 的原 MUI 验证保留为[历史证据](../verification/0010-typescript-extensions.md)。[createElement](https://react.dev/reference/react/createElement)、[createRoot](https://react.dev/reference/react-dom/client/createRoot)、[重复 React 风险](https://react.dev/warnings/invalid-hook-call-warning)
+通用 React Runtime 消费经权限过滤的应用描述，提供七类标量及[多文件字段/图片](../contracts/file-uploads.md)、前台登记、登录与后台搜索/排序/分页/详情/增改删，提交经同源 API 写入真实 SQLite。默认使用语义 HTML 与 CSS；自定义组件按类型登记，Hooks 交给 React。构建器统一 React 基础包解析以避免重复实例，用户 UI 库按项目依赖解析。阶段 08 的原 MUI 验证保留为[历史证据](../verification/0010-typescript-extensions.md)。[createElement](https://react.dev/reference/react/createElement)、[createRoot](https://react.dev/reference/react-dom/client/createRoot)、[重复 React 风险](https://react.dev/warnings/invalid-hook-call-warning)
 
 原生控件与 React Router Declarative Mode 统一消费客户端描述。前端使用 Fetch、HttpOnly Session 与内存 CSRF/代际，不以 LocalStorage 作为认证依据。系统重载通过同一字段绑定操作模型，见[组件与选项契约](../contracts/component-bindings.md)。[React select](https://react.dev/reference/react-dom/components/select)、[Router 模式](https://reactrouter.com/start/modes)
 
 ### Vite/Rolldown 与开发更新
 
-正式客户端构建采用 Vite + Rolldown + React 插件；TS/JSX 转换不承担完整类型检查，不假设 Rolldown 单独提供 Vite 开发服务器。生产 HTTP 始终由 Axum 提供。基础 DSL 资产预先嵌入 CLI，`frontend::export` 写入独占空 staging，统一产物默认保存到 `dist/versions/<build_id>/client`，`dist/manifest.json` 选择有效版本。[Rolldown 简介](https://rolldown.rs/guide/introduction)、[Getting Started](https://rolldown.rs/guide/getting-started)、[Vite 指南](https://vite.dev/guide/)
+正式客户端构建采用 Vite + Rolldown + React 插件；TS/JSX 转换不承担完整类型检查，不假设 Rolldown 单独提供 Vite 开发服务器。生产 HTTP 始终由 Axum 提供。基础 DSL 资产预先嵌入 CLI，`infrastructure::frontend::export` 写入独占空 staging，统一产物默认保存到 `dist/versions/<build_id>/client`，`dist/manifest.json` 选择有效版本。[Rolldown 简介](https://rolldown.rs/guide/introduction)、[Getting Started](https://rolldown.rs/guide/getting-started)、[Vite 指南](https://vite.dev/guide/)
 
 阶段 09 已接入受控源码镜像、Vite 开发子进程、Axum 资源/WebSocket 代理和开发状态轮询；先校验候选，再向镜像和有效模型发布。真实宿主浏览器已验证首次资源加载、普通组件修改和 CSS 更新保留 Hooks 状态、错误 TSX 保留有效页面及修复恢复。基础应用与自定义组件应用均完成真实 Ctrl+C、端口释放和重启 SQLite 记录保留；自定义页面当前文档的活动 WebSocket 从 1 归零，未见该项目残留 Node。证据及 PTY 外层退出码解释见[阶段 09](../verification/0011-cli-lifecycle.md)，不是早期 P04 独立 Vite 探针的替代推断。React 插件对不兼容或混合导出会使更新向父模块传播，部分变化可能重挂或整页刷新；不承诺任意编辑都保留状态。[React 插件](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md)、[Vite 后端集成](https://vite.dev/guide/backend-integration)
 
@@ -95,4 +96,4 @@ Axum 已正式提供注册表驱动 CRUD、Action、认证、授权与静态资�
 
 用户已明确授权工程必要依赖自主准备，不扩大为无关安装、费用、对外发布或破坏用户数据。框架编译依赖、内置资产、用户 npm 和 E2E 工具分别管理。基础 DSL 启动不需要 Node/npm；自定义工具链按锁文件/环境复用，首次准备采用 npm ci --ignore-scripts，用户项目安装须显式 --install-deps，不改写其 package.json，不每次启动重装。服务端 JS 第一版不加载 npm 包。[npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci/)、[package-lock.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)
 
-已完成正式事实以 02—10 报告中的实际结果为准；同一最终二进制的整套浏览器综合验收、最终修订的 MSRV 与格式复核均已通过。完整宿主的 Rust 1.98 全目标编译不替代最低版本的完整运行矩阵；跨平台发行、许可证/发布供应链与不可信代码隔离仍未完成。构建中途退出、磁盘故障及长时负载不在本轮通过范围，见[风险清单](../development/technical-risks.md)和[路线](../development/development-roadmap.md)。
+首版正式事实以 02—10 报告中的实际结果为准；其中同一最终二进制的浏览器综合验收及 MSRV/格式复核属于当时修订。后续重构以 [0016](../changes/0016-ddd-structure-and-module-split.md) 为准，不沿用首版测试计数。Rust 1.98 全目标历史编译不替代最低版本的完整运行矩阵；跨平台发行、许可证/发布供应链与不可信代码隔离仍未完成。构建中途退出、磁盘故障及长时负载不在本轮通过范围，见[风险清单](../development/technical-risks.md)和[路线](../development/development-roadmap.md)。

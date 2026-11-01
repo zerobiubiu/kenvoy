@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { normalizeInput, validateField, validateRecord } from '../src/validation.ts';
+import { normalizeInput, validateField, validateRecord } from '../src/domain/validation.ts';
 
 const vectors = JSON.parse(await readFile(new URL('../../tests/fixtures/validation.json', import.meta.url), 'utf8'));
 const field = (kind = 'text', rules = {}) => ({ name: 'value', label: '值', kind, required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], ...rules });

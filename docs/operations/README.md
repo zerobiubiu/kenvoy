@@ -25,8 +25,8 @@
 ## 关联契约、代码与配置
 
 - 操作输入与模型契约：[项目配置](../contracts/project-configuration.md)、[DSL 语法](../contracts/dsl-specification.md)、[Application IR](../contracts/application-ir.md)。组件重载、联动条件与远程选项是否影响 Schema，结合[组件与选项契约](../contracts/component-bindings.md)及迁移正文判断。
-- CLI 与项目加载：[main.rs](../../crates/kenvoy/src/main.rs)、[project.rs](../../crates/kenvoy/src/project.rs)；产物与生命周期：[artifact.rs](../../crates/kenvoy/src/artifact.rs)、[lifecycle.rs](../../crates/kenvoy/src/lifecycle.rs)。
-- 数据库执行与迁移：[database](../../crates/kenvoy/src/database/)、[migration.rs](../../crates/kenvoy/src/database/migration.rs)；认证与 HTTP：[auth.rs](../../crates/kenvoy/src/auth.rs)、[http](../../crates/kenvoy/src/http/)。
+- CLI 与项目加载：[main.rs](../../crates/kenvoy/src/main.rs)、[project.rs](../../crates/kenvoy/src/infrastructure/project/mod.rs)；产物与生命周期：[artifact.rs](../../crates/kenvoy/src/infrastructure/artifacts/mod.rs)、[lifecycle.rs](../../crates/kenvoy/src/bootstrap/lifecycle.rs)。
+- 数据库执行与迁移：[database](../../crates/kenvoy/src/infrastructure/persistence/sqlite/)、[migration.rs](../../crates/kenvoy/src/infrastructure/persistence/sqlite/migration/mod.rs)；认证与 HTTP：[auth.rs](../../crates/kenvoy/src/application/identity/mod.rs)、[http](../../crates/kenvoy/src/interfaces/http/)。
 - 可阅读的项目配置示例：[customer-app/kenvoy.toml](../../examples/customer-app/kenvoy.toml)；示例用途与入口见[示例说明](../../examples/README.md)。示例数据目录不是测试清理或恢复覆盖的目标。
 - 当前操作回归与工程入口：[Kenvoy tests](../../crates/kenvoy/tests/)、[kenvoy-tests](../../crates/kenvoy-tests/)、[xtask](../../xtask/)。命令与测试所有权以[工程流程](../development/engineering-workflow.md)为准。
 

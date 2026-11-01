@@ -39,12 +39,12 @@ Workspace 明确列出四个成员：
 
 KEngine 的公共结果只含自有稳定类型：ProgramIR、ModuleIR、ElementIR、ExpressionIR、Symbol、Reference、ModuleGraph、Diagnostic。内部可保留 SWC AST 并用于转换，不能将它作为长期公共契约或序列化协议。
 
-Kenvoy 内部 `application`、`dsl`、`database`、`http`、`frontend`、`javascript` 按真实功能逐步建立。设计中的模块名称不要求阶段 00 创建空目录。具体适配器使用内部模块隔离，首版不为未来扩展实现多套后端。
+Kenvoy 内部按 `domain/application/infrastructure/interfaces/bootstrap` 组织；KEngine 采用对应语言域分层并保留公开根门面。领域只含模型和值规则，应用经真实静态端口使用基础设施，具体适配器由外层装配；前端采用 `app/domain/application/infrastructure/presentation`。详见[DDD 目录规范](ddd-structure.md)，不保留迁移前内部根路径的兼容层，不为未来扩展建立空适配器。
 
 ## 验证与防回归
 
-`cargo xtask architecture` 检查真实 Cargo metadata：四个成员及各自目标类型、产品默认成员、测试/工程成员禁止发布、Kenvoy 路径依赖、产品不依赖工程成员，以及 KEngine 普通依赖闭包不含 Axum、rusqlite 等业务宿主依赖。
+`cargo xtask architecture` 检查真实 Cargo metadata：四个成员及各自目标类型、产品默认成员、测试/工程成员禁止发布、Kenvoy 路径依赖、产品不依赖工程成员，以及 KEngine 普通依赖闭包不含 Axum、rusqlite 等业务宿主依赖。同一入口还通过 AST 检查内部目录与层依赖、生产通配导入、HTTP 仓储泄露及前端 Context/SDK 注册表回引，并对自有代码（含测试）执行每文件 500 物理行硬上限。
 
 代码评审检查语义边界，不能只通过关键词扫描判定：KEngine 的通用 JSX 测试允许出现任意标签名。业务 schema、路由、安全策略和运行时行为必须在 Kenvoy 测试中验证。KEngine 单独 cargo check/test 应可运行，不需数据库、HTTP、浏览器或 Kenvoy 配置。
 
-相关决策：[ADR 0001](../decisions/0001-two-crate-architecture.md)、[ADR 0002](../decisions/0002-kengine-generic-parser.md)、[ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)。0011 替代 0001 的 Workspace 成员数量限制，保留两个产品层的职责与依赖方向。
+相关决策：[ADR 0001](../decisions/0001-two-crate-architecture.md)、[ADR 0002](../decisions/0002-kengine-generic-parser.md)、[ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)、[ADR 0012](../decisions/0012-ddd-layers-and-module-boundaries.md)。0011 替代 0001 的 Workspace 成员数量限制，保留两个产品层的职责与依赖方向；0012 约束其内部实现组织。

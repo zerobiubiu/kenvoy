@@ -8,6 +8,8 @@ KEngine 理解 JavaScript、TypeScript、JSX、TSX 的通用语言结构；Kenvo
 
 已实现通用 KEngine、业务 DSL、Application IR、真实 SQLite、迁移、HTTP、认证、React/原生 CSS 前台及后台、自定义组件与受限 JavaScript Runtime。七个 CLI 命令、版本化产物、原生文件监听和 Vite 开发适配已接入；各项验收状态以最新验证记录为准。
 
+产品内部按 DDD 单向分层：领域保存纯模型与规则，应用组织用例和真实静态端口，基础设施实现 SQLite/SWC/QuickJS/文件系统，接口处理 CLI/HTTP/展示，bootstrap 完成宿主装配。四个 Workspace 成员和产品公共门面保持不变；目录、依赖与文件规模由工程门禁约束，见[DDD 目录规范](ddd-structure.md)及[0016 实施验证](../changes/0016-ddd-structure-and-module-split.md)。
+
 ## 组件与职责
 
 ```mermaid

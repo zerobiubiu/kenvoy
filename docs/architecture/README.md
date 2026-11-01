@@ -12,12 +12,13 @@
 
 ## 文档清单
 
-以下共 13 篇主题文档，均为可持续维护的参考现状文档。“参考”不等于全部能力已验收；已实现、设计中及待验证范围以各篇正文和原始证据为准。
+以下共 14 篇主题文档，均为可持续维护的参考现状文档。“参考”不等于全部能力已验收；已实现、设计中及待验证范围以各篇正文和原始证据为准。
 
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
 | [总体架构与现状](architecture.md) | 参考 | 产品分层、组件职责、两层 IR、生命周期一致性及历史基线。 |
 | [Crate 与工程成员边界](crate-boundaries.md) | 参考 | KEngine Library、Kenvoy Binary、测试成员与 xtask 的依赖和职责约束。 |
+| [DDD 分层与模块规模](ddd-structure.md) | 参考 | 领域边界、前后端目录、静态端口、依赖方向与 500 行硬上限。 |
 | [当前技术决策与依据](technical-decisions.md) | 参考 | 已采用技术的原因、代价及验证边界；历史决策正文仍在 ADR 中。 |
 | [KEngine 实现设计](kengine-design.md) | 参考 | 通用解析、语言语义、模块链接和增量会话；不承载业务解释。 |
 | [编译管线与通用解析设计](compiler-design.md) | 参考 | 源码到 Generic IR、DSL 和运行产物的管线、结果所有权、诊断与缓存边界。 |
@@ -32,7 +33,7 @@
 
 ## 推荐阅读顺序
 
-1. 先读[总体架构](architecture.md)、[职责边界](crate-boundaries.md)和[技术决策](technical-decisions.md)，明确产品与工程组织及单向依赖。
+1. 先读[总体架构](architecture.md)、[职责边界](crate-boundaries.md)、[DDD 目录规范](ddd-structure.md)和[技术决策](technical-decisions.md)，明确产品与工程组织及单向依赖。
 2. 沿语言层阅读 [KEngine](kengine-design.md)和[编译管线](compiler-design.md)，再转到 [KEngine API](../contracts/kengine-api.md)与 [Generic IR](../contracts/generic-ir.md)核对调用和格式。
 3. 沿业务层阅读 [Kenvoy](kenvoy-design.md)、[DSL 设计](dsl-design.md)和[解释器分工](interpreter-design.md)，再查 [DSL 规范](../contracts/dsl-specification.md)与 [Application IR](../contracts/application-ir.md)。
 4. 阅读[运行时](runtime-design.md)，按关注点进入[数据库](database-design.md)、[安全](security-design.md)、[前端](frontend-runtime.md)及 [JavaScript](javascript-runtime.md)专题；配置和扩展分别查[项目配置](../contracts/project-configuration.md)、[组件绑定与 SDK](../contracts/component-bindings.md)。
@@ -43,16 +44,17 @@
 | 设计关注点 | 当前实现或配置入口 |
 |---|---|
 | Workspace 与产品入口 | [根 Cargo.toml](../../Cargo.toml)、[KEngine 公共入口](../../crates/kengine/src/lib.rs)、[Kenvoy CLI 入口](../../crates/kenvoy/src/main.rs)、[跨 Crate 测试成员](../../crates/kenvoy-tests/)、[xtask](../../xtask/) |
-| 通用解析与 IR | [解析器](../../crates/kengine/src/parser.rs)、[Generic IR 类型](../../crates/kengine/src/ir.rs)、[增量分析](../../crates/kengine/src/incremental.rs) |
-| 静态业务分析 | [DSL 分析器](../../crates/kenvoy/src/dsl/analyzer.rs)、[静态求值器](../../crates/kenvoy/src/dsl/static_eval.rs)、[Application IR 类型](../../crates/kenvoy/src/application.rs) |
-| 项目与生命周期 | [项目配置](../../crates/kenvoy/src/project.rs)、[生命周期协调](../../crates/kenvoy/src/lifecycle.rs)、[版本化产物](../../crates/kenvoy/src/artifact.rs) |
-| 存储、HTTP 与认证 | [数据库模块](../../crates/kenvoy/src/database/)、[HTTP 模块](../../crates/kenvoy/src/http/)、[认证模块](../../crates/kenvoy/src/auth.rs) |
-| 浏览器运行时与工具链 | [React Runtime](../../crates/kenvoy/frontend/src/Runtime.tsx)、[前端包配置](../../crates/kenvoy/frontend/package.json)、[前端锁文件](../../crates/kenvoy/frontend/package-lock.json)、[客户端构建适配](../../crates/kenvoy/src/client_build.rs) |
-| JavaScript 执行 | [JavaScript 模块](../../crates/kenvoy/src/javascript/) |
+| 通用解析与 IR | [解析器](../../crates/kengine/src/infrastructure/parser/mod.rs)、[Generic IR 类型](../../crates/kengine/src/domain/ir/mod.rs)、[增量分析](../../crates/kengine/src/application/incremental.rs) |
+| 静态业务分析 | [DSL 分析器](../../crates/kenvoy/src/application/compilation/analyzer/mod.rs)、[静态求值器](../../crates/kenvoy/src/application/compilation/static_eval/mod.rs)、[Application IR 类型](../../crates/kenvoy/src/domain/model/mod.rs) |
+| 项目与生命周期 | [项目配置](../../crates/kenvoy/src/infrastructure/project/mod.rs)、[生命周期协调](../../crates/kenvoy/src/bootstrap/lifecycle.rs)、[版本化产物](../../crates/kenvoy/src/infrastructure/artifacts/mod.rs) |
+| 存储、HTTP 与认证 | [数据库模块](../../crates/kenvoy/src/infrastructure/persistence/sqlite/)、[HTTP 模块](../../crates/kenvoy/src/interfaces/http/)、[认证模块](../../crates/kenvoy/src/application/identity/mod.rs) |
+| 浏览器运行时与工具链 | [React Runtime](../../crates/kenvoy/frontend/src/presentation/runtime/RuntimePage.tsx)、[前端包配置](../../crates/kenvoy/frontend/package.json)、[前端锁文件](../../crates/kenvoy/frontend/package-lock.json)、[客户端构建适配](../../crates/kenvoy/src/infrastructure/client_build/mod.rs) |
+| JavaScript 执行 | [JavaScript 模块](../../crates/kenvoy/src/infrastructure/javascript/) |
 
 ## 维护与废弃、替代关系
 
 - 本目录主题继续维护；本次按类型归档不表示任何主题已废弃。结构或职责变化时同步相关设计、契约和本清单，重大路线变化另建 ADR，并在[决策索引](../decisions/README.md)登记替代范围。
 - [ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)替代 [ADR 0001](../decisions/0001-two-crate-architecture.md)的 Workspace 成员数量限制，不替代两个产品层的职责与依赖方向；不可把历史“两成员”描述当作当前工程清单。
+- [ADR 0012](../decisions/0012-ddd-layers-and-module-boundaries.md)将现有产品内部改为 DDD 分层并建立可执行目录/依赖/规模约束，不改变四成员、产品 API 或默认原生 UI；实施证据见 [0016](../changes/0016-ddd-structure-and-module-split.md)。
 - XML、业务化 KEngine、SSR/PostgreSQL 属于已退出的历史路线，追溯入口见[总体架构的历史基线](architecture.md#历史基线参考)。默认前端已采用原生 React 控件与 CSS；[前端设计](frontend-runtime.md)中迁移前 MUI 验证只保留历史含义，新增组件绑定以[当前契约](../contracts/component-bindings.md)及其原始证据为准。
 - 历史 ADR、变更和验证正文不可变，不因目录整理合并、删除或重编号；后续变化另建记录并维护索引关联。现行接口不是后续计划，计划也不是已完成验收；本入口不新增测试结论。

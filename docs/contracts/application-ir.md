@@ -1,6 +1,6 @@
 # Application IR 与客户端描述协议
 
-状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述契约；实际类型位于 `crates/kenvoy/src/application.rs`。同代发布、文件监听与 build/run 已接入，覆盖范围见[生命周期验收](../verification/0011-cli-lifecycle.md)。
+状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述契约；实际类型位于 `crates/kenvoy/src/domain/model/mod.rs`。同代发布、文件监听与 build/run 已接入，覆盖范围见[生命周期验收](../verification/0011-cli-lifecycle.md)。
 
 ## 单一业务模型
 

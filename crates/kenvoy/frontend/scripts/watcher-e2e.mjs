@@ -33,7 +33,10 @@ try {
   await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
   assert.equal((await status()).generation,active.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),activeManifest);
   await expect(page.getByLabel('联系电话',{exact:false})).toBeVisible();
+  await expect(page.getByText('开发更新未通过',{exact:true})).toBeVisible();
   await writeFile(entry,valid);await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('ready');
+  // 服务端 ready 早于客户端描述同步；先等上一轮代际反馈完成，再开始配置故障场景。
+  await expect(page.getByText('开发更新未通过',{exact:true})).toHaveCount(0);
   const configPath=join(fixture.project,'kenvoy.toml');const config=await readFile(configPath,'utf8');
   const beforeConfig=(await status()).generation;
   await page.getByLabel('客户姓名',{exact:false}).fill('配置恢复保留输入');

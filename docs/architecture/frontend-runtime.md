@@ -12,17 +12,19 @@
 
 当前浏览器验收由 `kenvoy-tests` 的 Rust 测试入口运行，Rust 拥有项目夹具和 CLI 子进程；Playwright 脚本保留页面行为断言。原 tools 进程夹具已退役，执行方式见[工程与测试流程](../development/engineering-workflow.md)。
 
+源码按 `app/domain/application/infrastructure/presentation` 分层，`main.tsx` 和 `sdk.ts` 保留真实固定入口。纯字段/选项规则不引用 React，上传控制器依赖客户端端口而非具体 Fetch，字段控件、资源表单、记录展示和页面树分别维护。Rust 内嵌源码清单与开发镜像同步迁移，公开 SDK 模块名不变；目录门禁与本次行为回归见[DDD 规范](ddd-structure.md)及[0016](../changes/0016-ddd-structure-and-module-split.md)。
+
 React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的受控投影渲染通用组件；普通表单和后台使用同一资源字段、验证和 API。函数/自定义组件只通过注册 ID 连接，不能 JSON 序列化函数或把完整应用入口打包给浏览器。
 
 框架源码位于 crates/kenvoy/frontend，Vite/Rolldown 先生成 dist，再由 crates/kenvoy/build.rs 将公开 index/assets 嵌入 Rust Binary。基础 DSL 使用内置资产，应用启动不要求 Node、不安装 npm 依赖；开发框架源码时先在 frontend 执行 npm ci --ignore-scripts、npm run check、npm run build，再编译 Rust。当前依赖锁定于该目录 package-lock.json，缺少 dist 会明确阻止发行构建。
 
-`src/frontend.rs::export` 将内置资产写入调用方独占创建的空 staging，检查文件内容、链接和目录边界，不覆盖已有文件。统一构建层将已验证产物保存到默认 `dist/versions/<build_id>/client`；`dist/manifest.json` 标识当前激活版本。加载时重新检查清单、文件大小和 SHA-256，篡改时保留现场并报错。当前流程不再使用 `.kenvoy/runtime`。业务 SQLite 仍位于独立持久化目录，构建不会清理数据库或已有版本；不按页面生成 React 业务源码。
+`infrastructure::frontend::export` 将内置资产写入调用方独占创建的空 staging，检查文件内容、链接和目录边界，不覆盖已有文件。统一构建层将已验证产物保存到默认 `dist/versions/<build_id>/client`；`dist/manifest.json` 标识当前激活版本。加载时重新检查清单、文件大小和 SHA-256，篡改时保留现场并报错。当前流程不再使用 `.kenvoy/runtime`。业务 SQLite 仍位于独立持久化目录，构建不会清理数据库或已有版本；不按页面生成 React 业务源码。
 
 阶段 08 已实现自定义 UI 的独立打包；阶段 09 通过受控 Vite 适配实现开发资源与 Fast Refresh，并已验证普通组件和 CSS 修改后 Hooks 状态保留。用户不需要编写 Vite 配置。构建只负责模块注册和资产，不按页面生成 React 业务源码。HTTP 静态服务只开放该版本的 `client/`，同级 `modules/server.json` 不属于公开目录。
 
 ### 自定义客户端构建与扩展
 
-`client_build::build` 接收已经通过语义校验的 ProgramIR/ApplicationIR，只写调用方独占创建的空 staging。没有客户端模块引用时直接 `frontend::export` 内置资产，不检查或调用 Node/npm；清单仍记录内嵌框架依赖版本和 npm 锁文件摘要。存在自定义引用时，Rust 调用受控 `client-builder.mjs`，完成真实 Vite/Rolldown 打包；产物文件摘要和已解析的框架/用户 npm 版本交给统一清单。
+`infrastructure::client_build::build` 接收已经通过语义校验的 ProgramIR/ApplicationIR，只写调用方独占创建的空 staging。没有客户端模块引用时直接 `infrastructure::frontend::export` 内置资产，不检查或调用 Node/npm；清单仍记录内嵌框架依赖版本和 npm 锁文件摘要。存在自定义引用时，Rust 调用受控 `client-builder.mjs`，完成真实 Vite/Rolldown 打包；产物文件摘要和已解析的框架/用户 npm 版本交给统一清单。
 
 框架的 package.json、package-lock.json、Runtime 源码和构建脚本嵌入 CLI。锁定工具链位于项目 `.kenvoy/client-toolchain`，按锁文件、操作系统、架构、Node 主版本分开；源码缓存另按内容指纹分开。首次准备工具链使用 `npm ci --ignore-scripts --include=dev`，此后验证标记、固定源码和工具可加载性后复用，不在每次启动重新安装。用户项目的 package.json 不被生成或修改；只有显式 `--install-deps` 才准备用户锁文件并安装其已声明依赖。第一版自动安装仅接受 npm registry 版本，不接受 Git、文件或 workspace 依赖说明符。
 
@@ -36,11 +38,11 @@ React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的
 
 ### 开发状态与恢复
 
-仅具有客户端模块引用的开发应用启动 Vite 子进程；基础 DSL 继续使用内嵌资产。`client_development.rs` 在语义分析和受控构建通过后创建客户端镜像，Vite 不直接监听项目源码。候选准备不修改活动镜像；宿主发布数据库与应用模型后才提交镜像和更新通知。普通组件修改交给 Fast Refresh，结构变化允许重新挂载；提交开发镜像失败时停用代理、回退已验证的静态产物并显示需重载状态，不声称回滚已经提交的数据库迁移。
+仅具有客户端模块引用的开发应用启动 Vite 子进程；基础 DSL 继续使用内嵌资产。`infrastructure/client_build/development` 在语义分析和受控构建通过后创建客户端镜像，Vite 不直接监听项目源码。候选准备不修改活动镜像；宿主发布数据库与应用模型后才提交镜像和更新通知。普通组件修改交给 Fast Refresh，结构变化允许重新挂载；提交开发镜像失败时停用代理、回退已验证的静态产物并显示需重载状态，不声称回滚已经提交的数据库迁移。
 
 开发镜像位于 `.kenvoy/client-dev`，只包含允许的客户端源码和资源，不复制完整声明入口、Schema Component 或服务端私有模块。源代码和资源在镜像收集前后校验输入指纹；镜像最多 8192 个文件，单文件最多 32 MiB，总量最多 256 MiB，配额在复制或读取前检查，读取同时限制字节数。开发模式的用户文件必须位于镜像中，`@id`、`@fs` 和 `?raw` 不能绕过边界读取原项目资产；框架源码、锁定依赖和优化缓存分别校验。
 
-Vite 仅监听随机 loopback 端口，HTTP 与 WebSocket 均要求父进程的随机密钥；浏览器通过 Axum 同源代理 `/_kenvoy/vite/` 访问，密钥不发给浏览器。React 开发 preamble 由受控 HTML 处理器外置，同源脚本策略不需要 `unsafe-inline`。优化依赖首次生成时允许 Vite 等待其完成，避免将尚未落盘的合法依赖误判为 404。SDK 与 Runtime 共用独立的 `context.ts`，避免 SDK、组件注册表和 Runtime 的循环导入导致 Fast Refresh 丢失 Context。
+Vite 仅监听随机 loopback 端口，HTTP 与 WebSocket 均要求父进程的随机密钥；浏览器通过 Axum 同源代理 `/_kenvoy/vite/` 访问，密钥不发给浏览器。React 开发 preamble 由受控 HTML 处理器外置，同源脚本策略不需要 `unsafe-inline`。优化依赖首次生成时允许 Vite 等待其完成，避免将尚未落盘的合法依赖误判为 404。SDK 与 Runtime 共用独立的 `presentation/runtime/context.ts`；Context/SDK 不回引组件注册表页面树，避免循环导入导致 Fast Refresh 丢失 Context。
 
 仅开发宿主在应用描述中增加 `development: true`，浏览器才请求 `GET /_kenvoy/development`；缺省或 `false` 均不轮询。生产宿主的该端点返回 404。状态协议为 `{revision,generation,state,error?,reload}`：`state` 为 `ready`、`building` 或 `error`，`revision` 随状态变化递增，`generation` 仅随有效应用发布变化；`error` 是宿主提供的脱敏摘要。
 

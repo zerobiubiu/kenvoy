@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dependentFields, dependencyValues, dependenciesReady, immutable, normalizeBindingValue, staticOptions } from '../src/options.ts';
-import { normalizeInput, validateField } from '../src/validation.ts';
+import { dependentFields, dependencyValues, dependenciesReady, immutable, normalizeBindingValue, staticOptions } from '../src/domain/options.ts';
+import { normalizeInput, validateField } from '../src/domain/validation.ts';
 
 const field = (name, rules = {}) => ({ name, label: name, kind: 'select', required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], ...rules });
 

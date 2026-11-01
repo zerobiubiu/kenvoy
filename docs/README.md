@@ -8,7 +8,7 @@
 
 | 目的 | 推荐阅读顺序 |
 |---|---|
-| 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [架构分类](architecture/README.md) |
+| 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [DDD 目录规范](architecture/ddd-structure.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
@@ -32,7 +32,7 @@
 
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
 
-最近新增：[上传与图片可运行示例](../examples/uploads-app/README.md)及[0015 示例运行验证](changes/0015-uploads-example.md)；附件基础契约见[多文件上传与图片](contracts/file-uploads.md)，实现与模式切换证据保留在[0014](changes/0014-file-uploads-and-images.md)。
+最近新增：[DDD 目录规范](architecture/ddd-structure.md)、[ADR 0012](decisions/0012-ddd-layers-and-module-boundaries.md)及[0016 分层与兼容验证](changes/0016-ddd-structure-and-module-split.md)。上传用法见[可运行示例](../examples/uploads-app/README.md)与[0015](changes/0015-uploads-example.md)，附件基础契约和实现证据保留在[多文件上传与图片](contracts/file-uploads.md)及[0014](changes/0014-file-uploads-and-images.md)。
 
 ## 文档规范
 

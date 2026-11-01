@@ -10,6 +10,8 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 产品仍由 crates/kengine（Library）和 crates/kenvoy（Binary）构成，依赖方向为 Kenvoy → KEngine。Workspace 另有专门的 [kenvoy-tests](crates/kenvoy-tests/) 测试成员和根目录 [xtask](xtask/) 工程编排成员，均不发布，产品不依赖它们。各产品 Crate 保留自己的独立 tests。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
 
+内部代码已按 DDD 分层：领域模型与规则、应用用例与静态端口、基础设施、接口及宿主装配；前端同样分离纯规则、API 和展示。自有代码（含测试）每文件硬上限 500 行，目标 400 行内，由 `cargo xtask architecture/check` 检查。目录与依赖规则见[DDD 规范](docs/architecture/ddd-structure.md)，本次行为兼容验证见 [0016](docs/changes/0016-ddd-structure-and-module-split.md)。
+
 ## 从源码构建与验证
 
 需要 Rust 1.98 或以上、原生 C 构建环境及 Node 24.22.0 或以上/npm。Kenvoy 构建脚本嵌入真实前端产物，首次 Cargo 构建前先准备前端；不会在 Cargo 构建脚本里自动下载依赖。仓库保留 Rust/npm 锁文件：

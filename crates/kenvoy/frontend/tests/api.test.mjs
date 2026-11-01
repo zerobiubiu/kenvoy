@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiClient, ApiError, developmentChange, fileUrl } from '../src/api.ts';
+import { ApiClient, developmentChange, fileUrl } from '../src/infrastructure/api.ts';
+import { ApiError } from '../src/application/errors.ts';
 
 const session = (generation = 1, user = null, csrf = 'a'.repeat(64)) => ({ user, csrf_token: csrf, expires_at: Math.floor(Date.now() / 1000) + 900, generation });
 const record = { id: 1, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: '张三' };

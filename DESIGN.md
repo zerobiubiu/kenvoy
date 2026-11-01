@@ -128,7 +128,7 @@ components:
 - 蓝色主操作，状态色与明确文字共同表达结果。
 - 桌面保留表格密度，窄屏保留可见的记录管理入口。
 
-状态：现行。事实来源为 [theme.ts](crates/kenvoy/frontend/src/theme.ts)、[styles.css](crates/kenvoy/frontend/src/styles.css)、[ui.tsx](crates/kenvoy/frontend/src/ui.tsx)、[Runtime.tsx](crates/kenvoy/frontend/src/Runtime.tsx)、[Admin.tsx](crates/kenvoy/frontend/src/Admin.tsx) 和 [App.tsx](crates/kenvoy/frontend/src/App.tsx)。默认组件使用 React、TypeScript 和原生 CSS，不依赖第三方 UI 库；theme.ts 只定义 CSS 变量，无 ThemeProvider。设计方向沿用 [PRODUCT.md](PRODUCT.md) 与[当前界面方向](.impeccable/surfaces/crates-kenvoy-frontend.md)，不引入新的跨项目规则。
+状态：现行。事实来源为 [theme.ts](crates/kenvoy/frontend/src/presentation/theme.ts)、[styles.css](crates/kenvoy/frontend/src/presentation/styles.css)、[ui.tsx](crates/kenvoy/frontend/src/presentation/ui.tsx)、[RuntimePage.tsx](crates/kenvoy/frontend/src/presentation/runtime/RuntimePage.tsx)、[ResourceForm.tsx](crates/kenvoy/frontend/src/presentation/forms/ResourceForm.tsx)、[FieldControl.tsx](crates/kenvoy/frontend/src/presentation/forms/FieldControl.tsx)、[ResourceTable.tsx](crates/kenvoy/frontend/src/presentation/records/ResourceTable.tsx)、[Admin.tsx](crates/kenvoy/frontend/src/presentation/Admin.tsx) 和 [App.tsx](crates/kenvoy/frontend/src/app/App.tsx)。默认组件使用 React、TypeScript 和原生 CSS，不依赖第三方 UI 库；theme.ts 只定义 CSS 变量，无 ThemeProvider。设计方向沿用 [PRODUCT.md](PRODUCT.md) 与[当前界面方向](.impeccable/surfaces/crates-kenvoy-frontend.md)，不引入新的跨项目规则。
 
 阶段 06/07 的登记与后台截图保留为迁移前的视觉参考，不能替代原生组件迁移后的验收。此次迁移保留页面层级、颜色、间距、操作反馈及窄屏管理入口；新实现的功能与视觉证据以 [docs/verification/README.md](docs/verification/README.md) 为准。
 

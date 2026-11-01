@@ -1,6 +1,6 @@
 # Rust 工程入口与跨 Crate 测试
 
-状态：参考（现状文档）。工程组织依据见 [ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)，测试范围见[测试策略](testing-strategy.md)。
+状态：参考（现状文档）。工程成员依据见 [ADR 0011](../decisions/0011-rust-test-workspace-and-xtask.md)，内部代码组织依据见 [ADR 0012](../decisions/0012-ddd-layers-and-module-boundaries.md)，测试范围见[测试策略](testing-strategy.md)。
 
 ## Workspace 与入口
 
@@ -20,8 +20,8 @@ xtask/                     # 不发布的 Rust 工程编排
 
 | 命令 | 执行范围 |
 |---|---|
-| `cargo xtask check` | Cargo 架构边界与文档校验 |
-| `cargo xtask architecture` | 真实元数据、成员/目标、正常依赖闭包、发布限制 |
+| `cargo xtask check` | Cargo/源码分层、目录与文件规模，以及文档校验 |
+| `cargo xtask architecture` | 真实元数据、成员/目标、依赖闭包、发布限制、源码 AST 边界与 500 行硬上限 |
 | `cargo xtask docs` | 文档 UTF-8、异常字符、空白、本地链接和索引可达性 |
 | `cargo xtask build` | 构建默认前端，再构建 Kenvoy CLI |
 | `cargo xtask test` | 先构建 CLI，再运行 Workspace 标准 Rust 测试 |
@@ -30,6 +30,14 @@ xtask/                     # 不发布的 Rust 工程编排
 xtask 不自动安装工具或框架依赖。首次从源码构建仍需按[根 README](../../README.md)准备 npm 依赖；浏览器需要已有 Playwright/Chromium。内部 Cargo 命令使用 `--offline --locked`。CLI 路径从 Cargo 的 compiler-artifact 消息取得，并通过 `KENVOY_BINARY` 传给测试，支持不同 target 目录和构建 profile。
 
 没有新增代码生成或发布命令：当前只实现已有实际需要的检查、构建与测试编排。
+
+## 代码层次与拆分
+
+产品和前端按[DDD 目录规范](../architecture/ddd-structure.md)组织；xtask 使用 `checks/commands`，测试支撑使用 `process/fixture/protocol`，不为工程编排创建业务领域层。
+
+新增/迁移模块必须同步调用方、测试过滤路径、Rust 内嵌前端清单及开发镜像。自有 Rust/TS/TSX/MJS/CSS（含测试）每文件硬上限 500 物理行，目标 400 行内；按职责拆分，不以旧路径 shim 或巨型 shared 文件绕过约束。
+
+结构门禁使用 syn 2.0.119 的 `full/visit` 解析 Rust，前端 import/re-export/动态导入复用 KEngine 公共语法 API；字符串和注释不是依赖证据。syn 与 xtask 对 KEngine 的依赖只用于工程检查，不进入产品正常依赖闭包。本次迁移、规则负例及真实行为验证见 [0016](../changes/0016-ddd-structure-and-module-split.md)。
 
 ## 测试所有权与边界
 

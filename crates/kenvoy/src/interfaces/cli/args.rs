@@ -1,0 +1,113 @@
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(
+    name = "kenvoy",
+    version,
+    about = "使用 TypeScript/JSX 声明应用的 Rust 原生框架"
+)]
+pub(crate) struct Cli {
+    /// 项目位置；默认从当前目录向上查找 kenvoy.toml。
+    #[arg(long, global = true, default_value = ".")]
+    pub(crate) project: PathBuf,
+    /// 输出结构化日志；不会记录密码、Cookie 或表单内容。
+    #[arg(long, global = true)]
+    pub(crate) json_logs: bool,
+    #[command(subcommand)]
+    pub(crate) command: Command,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum Command {
+    /// 创建包含客户登记示例的项目。
+    Create { path: PathBuf },
+    /// 检查源码、模块、声明、权限与路由，不连接数据库。
+    Check {
+        /// 验证 JSON 记录所对应的资源。
+        #[arg(long, requires = "input")]
+        resource: Option<String>,
+        /// 额外离线验证一条 JSON 记录，不写入数据库。
+        #[arg(long, requires = "resource")]
+        input: Option<PathBuf>,
+        /// 按部分更新规则验证，缺失字段不会补默认值。
+        #[arg(long, requires = "input")]
+        patch: bool,
+    },
+    /// 查看应用模型或指定资源的注册规则。
+    Inspect {
+        resource: Option<String>,
+        /// 输出通用源码 IR（包含源代码，仅供本地开发检查）。
+        #[arg(long)]
+        generic: bool,
+    },
+    /// 预览、应用数据库迁移或读取迁移历史。
+    Migrate {
+        #[command(subcommand)]
+        action: Option<MigrationCommand>,
+    },
+    /// 初始化管理员或由本机项目所有者创建账号。
+    Admin {
+        #[command(subcommand)]
+        action: AdminCommand,
+    },
+    /// 构建版本化应用描述、客户端资产和服务端模块，不连接数据库。
+    Build {
+        /// 明确允许安装用户 package.json 已声明的依赖，不增加或改变依赖声明。
+        #[arg(long)]
+        install_deps: bool,
+    },
+    /// 加载生产产物并启动；有源码且需要更新时自动构建。
+    Run {
+        /// 自动构建时明确允许安装用户已声明的 npm 依赖。
+        #[arg(long)]
+        install_deps: bool,
+    },
+    /// 启动开发服务。
+    Dev {
+        /// 明确允许安装用户已声明的 npm 依赖。
+        #[arg(long)]
+        install_deps: bool,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Copy)]
+pub(crate) enum AccountRole {
+    User,
+    Admin,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum AdminCommand {
+    /// 首次创建管理员；已有管理员时拒绝覆盖。
+    Init {
+        #[arg(long)]
+        username: String,
+        /// 从标准输入读取一行密码，适用于受控自动化；默认隐藏交互输入。
+        #[arg(long)]
+        password_stdin: bool,
+    },
+    /// 创建普通用户或管理员；要求已完成首次初始化。
+    AddUser {
+        #[arg(long)]
+        username: String,
+        #[arg(long, value_enum, default_value = "user")]
+        role: AccountRole,
+        #[arg(long)]
+        password_stdin: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum MigrationCommand {
+    /// 只读预览差异；数据库不存在时不创建文件。
+    Status,
+    /// 应用安全迁移；破坏性计划需要精确校验值和一致性备份。
+    Apply {
+        #[arg(long)]
+        confirm: Option<String>,
+    },
+    /// 只读显示已执行迁移及校验记录。
+    History,
+}

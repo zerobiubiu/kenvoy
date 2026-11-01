@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError } from '../src/api.ts';
-import { FormUploads } from '../src/uploads.ts';
-import { canReadFile, isSafeImageSource, isUploadedFiles } from '../src/files.ts';
+import { ApiError } from '../src/application/errors.ts';
+import { FormUploads } from '../src/application/uploads.ts';
+import { canReadFile, isSafeImageSource, isUploadedFiles } from '../src/domain/files.ts';
 
 const attachment = (number, name = `文件${number}.png`) => ({ id: number.toString(16).padStart(64, '0'), name, content_type: 'image/png', size: 4 });
 const field = { name: 'attachments', label: '附件', kind: 'file', required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], upload: { accept: ['image/*'], max_size: 1024, max_files: 5 } };

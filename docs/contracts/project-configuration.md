@@ -1,6 +1,6 @@
 # 项目配置与路径规则
 
-状态：参考（现状文档）。本文维护配置默认值、路径和重载规则，类型见 `crates/kenvoy/src/project.rs`；基础示例见 [customer-app 配置](../../examples/customer-app/kenvoy.toml)，配置错误恢复与生命周期结果见[最终验收](../verification/0012-final-acceptance.md)。
+状态：参考（现状文档）。本文维护配置默认值、路径和重载规则，类型见 `crates/kenvoy/src/infrastructure/project/mod.rs`；基础示例见 [customer-app 配置](../../examples/customer-app/kenvoy.toml)，配置错误恢复与生命周期结果见[最终验收](../verification/0012-final-acceptance.md)。
 
 CLI 从 --project 指定位置或当前目录向上寻找 kenvoy.toml。路径以项目根解析；未知表/键、错误类型和不支持的技术选项立即失败，不退回默认值。未填写的配置使用以下默认值。
 

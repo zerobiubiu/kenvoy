@@ -4,7 +4,7 @@
 
 ## 从哪里开始
 
-- 了解整体边界：先读[架构](../architecture/architecture.md)与[Crate 边界](../architecture/crate-boundaries.md)，再读 ADR 0001—0004；工程成员新增及 tools 退役见 [ADR 0011](0011-rust-test-workspace-and-xtask.md)。
+- 了解整体边界：先读[架构](../architecture/architecture.md)、[Crate 边界](../architecture/crate-boundaries.md)及[DDD 目录规范](../architecture/ddd-structure.md)，再读 ADR 0001—0004；工程成员与 tools 退役见 [0011](0011-rust-test-workspace-and-xtask.md)，内部领域分层与规模门禁见 [0012](0012-ddd-layers-and-module-boundaries.md)。
 - 了解开发与部署选择：先读[运行时设计](../architecture/runtime-design.md)，再读 [ADR 0009：产物与开发宿主](0009-artifacts-and-development-host.md)。组件与数据扩展见 [ADR 0010](0010-native-components-and-data-bindings.md)。
 - 核对实际通过范围：首版基础验收读[阶段 09 生命周期](../verification/0011-cli-lifecycle.md)与[阶段 10 最终验收](../verification/0012-final-acceptance.md)；首版后组件与工程重组的专项证据见[验证索引](../verification/README.md#首版后的专项验证)，不将旧验收扩大为后续能力的验收。
 
@@ -25,6 +25,7 @@
 | 0009 | [产物与开发宿主](0009-artifacts-and-development-host.md) | 现行 | [运行时设计](../architecture/runtime-design.md)、[CLI](../operations/cli-design.md) |
 | 0010 | [原生组件与统一数据绑定](0010-native-components-and-data-bindings.md) | 现行；替代 0006 的默认 MUI 选择 | [组件与选项契约](../contracts/component-bindings.md) |
 | 0011 | [Rust 测试成员与 xtask](0011-rust-test-workspace-and-xtask.md) | 现行；替代 0001 的成员数量限制 | [工程与测试流程](../development/engineering-workflow.md)、[Crate 边界](../architecture/crate-boundaries.md) |
+| 0012 | [DDD 分层与可执行模块边界](0012-ddd-layers-and-module-boundaries.md) | 现行；规范内部目录、静态端口和文件规模，不改变产品边界 | [DDD 目录规范](../architecture/ddd-structure.md)、[0016 实施验证](../changes/0016-ddd-structure-and-module-split.md) |
 
 ## 关联代码与配置
 
@@ -34,4 +35,4 @@
 
 定稿正文不改写、不重排编号。后续路线调整或事实勘误新增记录，并在本索引标明前置、废弃或替代关系。实现进展更新对应现状文档与[验证索引](../verification/README.md)，不回填为历史决策当时已经通过。
 
-ADR 0011 允许两个不发布的测试/工程成员并退役 tools，保留产品层隔离。ADR 0010 替代 ADR 0006 的默认 MUI 选择，保留 React CSR；ADR 0009 补充开发/生产宿主方案。历史官方链接的核对时间见记录；`latest` 和主分支页面不构成依赖锁定。
+ADR 0012 规范现有产品内部的 DDD 分层与模块拆分，不取代产品及接口契约。ADR 0011 允许两个不发布的测试/工程成员并退役 tools，保留产品层隔离。ADR 0010 替代 ADR 0006 的默认 MUI 选择，保留 React CSR；ADR 0009 补充开发/生产宿主方案。历史官方链接的核对时间见记录；`latest` 和主分支页面不构成依赖锁定。
