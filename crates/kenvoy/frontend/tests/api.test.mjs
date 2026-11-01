@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiClient, ApiError, developmentChange } from '../src/api.ts';
+import { ApiClient, ApiError, developmentChange, fileUrl } from '../src/api.ts';
 
 const session = (generation = 1, user = null, csrf = 'a'.repeat(64)) => ({ user, csrf_token: csrf, expires_at: Math.floor(Date.now() / 1000) + 900, generation });
 const record = { id: 1, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: '张三' };
@@ -269,4 +269,90 @@ test('开发更新先建立基线，只对新修订明确要求整页刷新，�
   assert.equal(developmentChange(ready, { ...ready, revision: 1, generation: 1 }, 2), 'refresh');
   assert.equal(developmentChange(ready, { ...ready, revision: 1 }, 2), 'refresh');
   assert.equal(developmentChange(ready, ready, 2, true), 'refresh');
+});
+
+const uploaded = { id: '1'.repeat(64), name: '登记图.png', content_type: 'image/png', size: 12 };
+const uploadField = { name: 'attachments', label: '附件', kind: 'file', required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], upload: { accept: ['image/*'], max_size: 10485760, max_files: 5 } };
+
+test('原始二进制上传复用 CSRF、代际、模式与表单，不受 JSON 的 1 MiB 限额影响', async () => {
+  const file = new File([new Uint8Array(1024 * 1024 + 1)], '登记图.png', { type: 'image/png' });
+  const { client, calls } = harness([response(application(7)), response(session(7)), response({ data: { ...uploaded, size: file.size }, generation: 7 }, 201), new Response(null, { status: 204 })]);
+  await client.getApplication();
+  assert.deepEqual(await client.upload('entries', 'attachments', file, '/登记#form-1', 'update'), { ...uploaded, size: file.size });
+  const call = calls[2];
+  assert.equal(call.path, '/_kenvoy/uploads/entries/attachments');
+  assert.equal(call.body, file);
+  assert.equal(call.headers.get('content-type'), 'image/png');
+  assert.equal(call.headers.get('x-kenvoy-filename'), encodeURIComponent('登记图.png'));
+  assert.equal(call.headers.get('x-kenvoy-upload-mode'), 'update');
+  assert.equal(call.headers.get('x-kenvoy-form'), encodeURIComponent('/登记#form-1'));
+  assert.equal(call.headers.get('x-kenvoy-generation'), '7');
+  assert.equal(call.headers.get('x-kenvoy-csrf'), 'a'.repeat(64));
+  await client.removeUpload(uploaded.id);
+  assert.equal(calls[3].path, fileUrl(uploaded));
+  assert.equal(calls[3].method, 'DELETE');
+  assert.equal(calls[3].body, undefined);
+  assert.equal(calls[3].headers.has('content-type'), false);
+});
+
+test('附件响应保留真实数组，但不普遍放开任意数组或对象字段', async () => {
+  const withFiles = { ...record, attachments: [uploaded, { ...uploaded, id: '2'.repeat(64) }] };
+  const { client } = harness([response({ data: withFiles })]);
+  assert.deepEqual(await client.get('entries', 1), withFiles);
+  for (const attachments of [[{}], ['文件'], { ...uploaded }, [uploaded, uploaded], [{ ...uploaded, extra: '未知字段' }]]) {
+    const { client } = harness([response({ data: { ...record, attachments } })]);
+    await assert.rejects(client.get('entries', 1), error => error instanceof ApiError && error.code === 'KV6002');
+  }
+});
+
+test('上传响应丢失、损坏或超时仅发送一次，结果未知且不自动重试', async () => {
+  for (const failure of [new Error('连接中断'), response({ data: { ...uploaded, id: '../x' }, generation: 1 }, 201), response({ data: uploaded }, 201)]) {
+    const { client, calls } = harness([response(session()), failure]);
+    await assert.rejects(client.upload('entries', 'attachments', new File(['图片'], '图片.png', { type: 'image/png' })), error => error instanceof ApiError && error.outcomeUnknown);
+    assert.equal(calls.length, 2);
+  }
+  let calls = 0;
+  let signal;
+  const client = new ApiClient(async (_path, options) => {
+    if (++calls === 1) return response(session());
+    signal = options.signal;
+    return new Promise(() => {});
+  }, 10);
+  await assert.rejects(client.upload('entries', 'attachments', new File(['图片'], '图片.png', { type: 'image/png' })), error => error.code === 'KV6003' && error.outcomeUnknown);
+  assert.equal(calls, 2);
+  assert.equal(signal.aborted, true);
+});
+
+test('非法上传目标、附件标识、空文件与过大文件在发送前拒绝', async () => {
+  const { client, calls } = harness([]);
+  for (const [resource, field, file, mode] of [
+    ['../private', 'attachments', new File(['a'], 'a.txt'), 'create'],
+    ['entries', '../attachments', new File(['a'], 'a.txt'), 'create'],
+    ['entries', 'attachments', new File([], 'a.txt'), 'create'],
+    ['entries', 'attachments', new File([new Uint8Array(10485761)], 'a.bin'), 'create'],
+    ['entries', 'attachments', new File(['a'], '../a.txt'), 'create'],
+    ['entries', 'attachments', new File(['a'], 'a.txt'), 'delete'],
+  ]) await assert.rejects(client.upload(resource, field, file, undefined, mode), error => error instanceof ApiError && !error.outcomeUnknown);
+  for (const id of ['../secret', 'a'.repeat(63), 'A'.repeat(64), 'a'.repeat(64) + '\\n']) {
+    assert.throws(() => fileUrl(id), ApiError);
+    await assert.rejects(client.removeUpload(id), ApiError);
+  }
+  assert.equal(fileUrl(uploaded, true), `/_kenvoy/files/${uploaded.id}?download=1`);
+  assert.equal(calls.length, 0);
+});
+
+test('公开描述接受文件和图片重载，并拒绝不安全图片来源与缺失文件约束', async () => {
+  const value = { ...application(1), component_overrides: { file: 'file-view', image: 'image-view' },
+    resources: [{ name: 'entries', fields: [uploadField] }],
+    pages: [{ path: '/entries', title: '登记', permission: 'anonymous', components: [{ type: 'image', src: '/images/example.png', alt: '说明', width: 320, height: null, fit: 'contain' }] }] };
+  const { client } = harness([response(value)]);
+  assert.deepEqual(await client.getApplication(), value);
+  for (const src of ['javascript:alert(1)', '//external.test/a.png', 'https://user:pass@example.test/a.png', 'http:////example.test/a.png']) {
+    const broken = structuredClone(value); broken.pages[0].components[0].src = src;
+    const { client } = harness([response(broken)]);
+    await assert.rejects(client.getApplication(), error => error.code === 'KV6002');
+  }
+  const broken = structuredClone(value); delete broken.resources[0].fields[0].upload;
+  const { client: invalid } = harness([response(broken)]);
+  await assert.rejects(invalid.getApplication(), error => error.code === 'KV6002');
 });

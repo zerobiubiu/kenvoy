@@ -69,6 +69,7 @@ pub enum FieldKind {
     Date,
     Datetime,
     Select,
+    File,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -93,6 +94,8 @@ pub struct FieldDefinition {
     pub options: Vec<SelectOption>,
     #[serde(default)]
     pub options_source: Option<OptionsSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload: Option<FileConstraints>,
     pub source: SourceLocation,
 }
 
@@ -110,6 +113,7 @@ impl FieldDefinition {
             && self.unique == other.unique
             && self.index == other.index
             && self.options_source == other.options_source
+            && self.upload == other.upload
             && self
                 .options
                 .iter()
@@ -119,6 +123,36 @@ impl FieldDefinition {
                     .iter()
                     .map(|option| (&option.value, &option.when)))
     }
+}
+
+pub const MAX_UPLOAD_SIZE: u64 = 10 * 1024 * 1024;
+pub const MAX_UPLOAD_FILES: usize = 20;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FileConstraints {
+    pub accept: Vec<String>,
+    pub max_size: u64,
+    pub max_files: usize,
+}
+
+impl Default for FileConstraints {
+    fn default() -> Self {
+        Self {
+            accept: Vec::new(),
+            max_size: MAX_UPLOAD_SIZE,
+            max_files: 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UploadedFile {
+    pub id: String,
+    pub name: String,
+    pub content_type: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -208,6 +242,14 @@ pub enum ComponentDefinition {
     },
     Text {
         value: String,
+        source: SourceLocation,
+    },
+    Image {
+        src: String,
+        alt: String,
+        width: Option<u32>,
+        height: Option<u32>,
+        fit: String,
         source: SourceLocation,
     },
 }

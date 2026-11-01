@@ -4,7 +4,7 @@
 
 ## 入口、页面与资源
 
-入口默认导出单个 app 或 page。支持 app、page、resource、七种字段、option、form、table、action、navigation、item、group、override；严格校验属性、父子关系、引用和冲突。[customer-app](../../examples/customer-app/src/app.tsx) 已由真实 CLI 创建并通过 check。
+入口默认导出单个 app 或 page。支持 app、page、resource、text/textarea/number/boolean/date/datetime/select/file 八种字段、option、form、table、image、action、navigation、item、group、override；严格校验属性、父子关系、引用和冲突。[customer-app](../../examples/customer-app/src/app.tsx) 已由真实 CLI 创建并通过 check。
 
 单段 page 路径可从直接字段推导资源；多段路径须明确 page.resource。显式资源优先，同资源页面字段结构必须一致；页面 labels 独立覆盖展示，不改变持久化模型。form 支持 resource、mode=create/edit、fields 字符串数组；table 支持 resource 和 columns。
 
@@ -30,7 +30,11 @@ server 模块及其运行依赖默认私有；.shared 或显式 shared 注册构
 
 ## 组件重载与选项来源
 
-app 支持 `<override name="select" component={CustomSelect} />`。可替换七种字段及 form/table/group/page 的显示层，字段结构和数据操作继续由 Runtime 管理。select 的 option 支持 `when={{本资源依赖字段: 值}}`；远程 select 使用 `optionsSource={{resource,value,label,filters,permission}}`，与静态 option 互斥。完整属性、权限、SDK 和示例见[组件与联动选项](component-bindings.md)。
+app 支持 `<override name="select" component={CustomSelect} />`。可替换八种字段及 image/form/table/group/page 的显示层，字段结构和数据操作继续由 Runtime 管理。select 的 option 支持 `when={{本资源依赖字段: 值}}`；远程 select 使用 `optionsSource={{resource,value,label,filters,permission}}`，与静态 option 互斥。完整属性、权限、SDK 和示例见[组件与联动选项](component-bindings.md)。
+
+## 文件字段与图片
+
+`<file>` 支持多文件、`accept/maxSize/maxFiles`，值为严格的附件元数据数组；不支持 unique/index，不参与标量选项联动。`<image src="https://example.com/photo.png" alt="说明" width={320} height={180} fit="contain" />` 是展示节点，不生成业务列；alt 必须显式声明，地址及尺寸静态校验。完整用法、服务端授权、存储与取消规则见[多文件上传与图片展示](file-uploads.md)。
 
 ## 数据输入规则
 

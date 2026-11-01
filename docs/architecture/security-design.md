@@ -1,6 +1,6 @@
 # 认证、授权与 HTTP 安全
 
-状态：参考（现状文档）；核对日期：2026-11-01。本文维护认证、授权、请求、产物及开发代理的安全契约。正式生命周期与浏览器回归见[最终验收](../verification/0012-final-acceptance.md)；功能验证不表示完成独立安全审计或部署认证。
+状态：参考（现状文档）；核对日期：2026-11-02。本文维护认证、授权、请求、产物及开发代理的安全契约。首版生命周期与浏览器回归见[最终验收](../verification/0012-final-acceptance.md)，附件安全与访问见[0014 专项记录](../changes/0014-file-uploads-and-images.md)；功能验证不表示完成独立安全审计或部署认证。
 
 ## 边界与威胁模型
 
@@ -38,15 +38,18 @@ CSRF 值为以 Session token 作 key、固定域标识 kenvoy.csrf.v1 为消息�
 | POST /api/:resource | 匹配单一 Create 策略和表单 ID、字段子集，再二次验证 |
 | PATCH/DELETE /api/:resource/:id | 服务端匹配修改/删除策略，默认仅管理员 |
 | POST /api/actions/:name | 只接受 args 数组，验证 Server/Shared 登记及单条 Execute 策略；同源、Session、CSRF 与代际检查 |
+| POST /_kenvoy/uploads/:resource/:field | 先核对同源、Session、CSRF、代际与单条 Create/Update 字段策略，再接收有界原始文件 |
+| GET/HEAD /_kenvoy/files/:id | 暂存限当前有效 owner；已绑定文件须满足对应资源及字段 Read 权限 |
+| DELETE /_kenvoy/files/:id | 同源写入校验，仅取消当前 owner 的未绑定暂存；业务附件随记录修改/删除 |
 | /admin/* | 登录入口可访问；有前端产物时匿名已注册管理导航 303 跳转登录，普通用户 403；管理数据仍需 admin |
 
 匿名受控提交不能获得列表、详情、更新或删除权限。多个表单策略不合并字段授权：每个请求须完整匹配其中一项策略。非管理员 Create 响应只包含该策略允许字段及系统 ID/时间，隐藏字段默认值不会随完整数据库记录泄漏。API 权限在服务端执行，前端隐藏按钮不能代替授权。
 
 浏览器写请求必须携带与配置完全一致的 Origin、有效 Session Cookie 和 x-kenvoy-csrf。公开表单另外携带 x-kenvoy-form，使用 encodeURIComponent 编码表单 ID，宿主严格解码一次；ASCII 未编码值保持兼容，非法 UTF-8 和重复编码不能绕过策略。可附带 x-kenvoy-generation，过期代际拒绝并要求重新获取页面描述。未知资源、内部表、非法字段/ID/查询和未支持方法返回结构化错误；未知 API 不落入 SPA 页面。
 
-请求 Host 必须匹配 public_origin，绝不根据任意 Host 或 X-Forwarded-For 推导信任边界；Sec-Fetch-Site: cross-site 的会话获取和写操作拒绝，公开页面的正常跨站 GET 导航允许。重复 Host/Origin/CSRF 等安全头、同名会话 Cookie、JSON 任意层重复键、重复解码后查询参数均拒绝。请求体最多 1 MiB，接收期限 30 秒；写入 JSON 要求正确 Content-Type。查询长度、分页、搜索和筛选另受数据库契约限制；搜索和 Contains 也拒绝 NUL，避免 SQLite LIKE 截断模式。
+请求 Host 必须匹配 public_origin，绝不根据任意 Host 或 X-Forwarded-For 推导信任边界；Sec-Fetch-Site: cross-site 的会话获取和写操作拒绝，公开页面的正常跨站 GET 导航允许。重复 Host/Origin/CSRF 等安全头、同名会话 Cookie、JSON 任意层重复键、重复解码后查询参数均拒绝。普通请求体最多 1 MiB；仅上传路由在授权后使用字段限额及 10 MiB 硬上限，接收期限仍为 30 秒。写入 JSON 要求正确 Content-Type。查询长度、分页、搜索和筛选另受数据库契约限制；搜索和 Contains 也拒绝 NUL，避免 SQLite LIKE 截断模式。
 
-当前限流为进程内固定 60 秒窗口、最多 4096 个计数键：登录每来源 IP 及用户名各 5 次；匿名会话创建每 IP 20 次、全局 120 次；非管理员 Create 每 IP 60 次、每 Session 20 次；Action 每 IP 60 次、每 Session 20 次。已有会话读取不消耗新建额度。实际连接地址来自 ConnectInfo，不信任代理转发头；多实例、代理后的细粒度来源识别和配置化额度尚未实现。
+当前限流为进程内固定 60 秒窗口、最多 4096 个计数键：登录每来源 IP 及用户名各 5 次；匿名会话创建每 IP 20 次、全局 120 次；非管理员 Create 每 IP 60 次、每 Session 20 次；Action 每 IP 60 次、每 Session 20 次。附件上传限流及暂存配额见[文件契约](../contracts/file-uploads.md)。已有会话读取不消耗新建额度。实际连接地址来自 ConnectInfo，不信任代理转发头；多实例、代理后的细粒度来源识别和配置化额度尚未实现。
 
 ## 元数据、静态资源与错误
 
@@ -54,13 +57,15 @@ CSRF 值为以 Session token 作 key、固定域标识 kenvoy.csrf.v1 为消息�
 
 静态资源仅从宿主指定且规范化的 client 目录读取；仅注册页面使用 index.html，资源路径拒绝转义/父路径，并 canonicalize 后确认仍在根目录内。私有管理页先授权再读入口文件。已封存的 client 目录与 IR、generation、server bundle 同代发布。此边界假定构建目录由可信宿主管理，不抵抗具有相同文件权限的本机恶意操作者并发篡改文件。
 
-响应统一 no-store、nosniff、same-origin Referrer-Policy、DENY Frame。CSP 默认 self，脚本 self，样式保留 unsafe-inline 以兼容用户组件库的运行时样式（内置控件使用外部 CSS），图片允许 self/data；frame-ancestors none、base-uri self。仅 dev 的 connect-src 追加与 public_origin 对应的明确 ws/wss Origin；React Refresh preamble 外置为同源模块，script-src 不允许 inline script。
+响应统一 no-store、nosniff、same-origin Referrer-Policy、DENY Frame。CSP 默认 self，脚本 self，样式保留 unsafe-inline 以兼容用户组件库的运行时样式（内置控件使用外部 CSS），图片允许 self/data/blob/http/https；frame-ancestors none、base-uri self。图片组件仅接受明确的安全路径/HTTP(S)地址，并使用 no-referrer；站外图片由浏览器直接请求，不增加服务端代理或脚本/连接来源。仅 dev 的 connect-src 追加与 public_origin 对应的明确 ws/wss Origin；React Refresh preamble 外置为同源模块，script-src 不允许 inline script。
 
 错误响应有错误码和 request_id，字段校验仅包含字段/原因，不含数据库路径、SQL 或认证秘密。数据库队列拒绝与已接受写入结果不确定分别处理；结果不确定时应联系有权限的管理员核对，不能让匿名提交者查询全部数据，也不能自动重试 Create。
 
+附件 ID 不是读取凭据，匿名 create 不授予已保存文件的 Read 权限。服务器核对图片签名，仅受支持的栅格图片内联，其他文件强制 attachment；文件名不构造宿主路径，并编码后进入 Content-Disposition。暂存配额、到期、事务回滚、字段/记录归属及主动清理见[附件契约](../contracts/file-uploads.md)；签名检查不代替完整解码或病毒扫描。
+
 ## 存储、发布和部署
 
-认证使用固定 _kenvoy_users/_kenvoy_sessions/_kenvoy_auth_schema 表，对三者 owner 的完整 sqlite_master 对象（含自动/显式索引和触发器）与受控 DDL 比较，并要求版本记录严格为 [(1,1)]。部分结构、额外触发器、索引变更、损坏版本或孤立会话外键拒绝。业务迁移仅精确预留这些名字，不泛化忽略 _kenvoy_ 前缀。
+认证使用固定 _kenvoy_users/_kenvoy_sessions/_kenvoy_auth_schema 表，附件使用 _kenvoy_uploads/_kenvoy_upload_schema 表；各模块对自己所有的完整 sqlite_master 对象（含自动/显式索引和触发器）与受控 DDL 比较，并要求固定版本记录。部分结构、额外触发器、索引变更、损坏版本或孤立会话外键拒绝。业务迁移仅精确预留这些名字，不泛化忽略 _kenvoy_ 前缀；已登记文件模型但附件双表缺失时也拒绝静默重建。
 
 HTTP 请求使用同代模型读锁。发布任务被宿主跟踪，在模型写锁内先验证代际、执行迁移，提交后不再发新的可失败数据库命令，直接替换模型及资产指针；调用者取消不会取消已接受的发布任务。服务退出等待已接受发布任务后，宿主再关闭数据库。
 

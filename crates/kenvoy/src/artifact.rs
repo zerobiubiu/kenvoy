@@ -511,6 +511,7 @@ fn relocate(application: &mut ApplicationIR, root: &Path) -> Result<()> {
             match node {
                 C::Form { source: s, .. }
                 | C::Table { source: s, .. }
+                | C::Image { source: s, .. }
                 | C::Text { source: s, .. } => source(s, root)?,
                 C::Group {
                     source: s,

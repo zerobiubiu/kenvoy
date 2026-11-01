@@ -269,6 +269,23 @@ fn number(element: &StaticElement, name: &str) -> Result<Option<f64>> {
         .transpose()
 }
 
+fn positive_integer(element: &StaticElement, name: &str, limit: u64) -> Result<Option<u64>> {
+    number(element, name)?
+        .map(|value| {
+            if value < 1.0 || value > limit as f64 || value.fract() != 0.0 {
+                Err(error(
+                    element,
+                    "KV2007",
+                    format!("属性 {name} 必须为 1 到 {limit} 的整数"),
+                    "使用支持范围内的正整数字面量",
+                ))
+            } else {
+                Ok(value as u64)
+            }
+        })
+        .transpose()
+}
+
 fn list(element: &StaticElement, name: &str) -> Result<Option<Vec<String>>> {
     json(element, name)?
         .map(|value| {
@@ -360,6 +377,7 @@ fn field_kind(name: &str) -> Option<FieldKind> {
         "date" => Some(FieldKind::Date),
         "datetime" => Some(FieldKind::Datetime),
         "select" => Some(FieldKind::Select),
+        "file" => Some(FieldKind::File),
         _ => None,
     }
 }
@@ -374,11 +392,15 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
             "Resource 只允许字段和静态 Schema Component",
         )
     })?;
-    let mut allowed = vec!["name", "label", "required", "default", "index"];
+    let mut allowed = vec!["name", "label", "required", "default"];
+    if kind != FieldKind::File {
+        allowed.push("index");
+    }
     match kind {
         FieldKind::Text | FieldKind::Textarea => allowed.extend(["maxLength", "unique"]),
         FieldKind::Number => allowed.extend(["integer", "min", "max", "unique"]),
         FieldKind::Select => allowed.push("optionsSource"),
+        FieldKind::File => allowed.extend(["accept", "maxSize", "maxFiles"]),
         _ => {}
     }
     attrs(element, &allowed)?;
@@ -405,6 +427,23 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
             }
         })
         .transpose()?;
+    let upload = if kind == FieldKind::File {
+        let defaults = FileConstraints::default();
+        let constraints = FileConstraints {
+            accept: list(element, "accept")?.unwrap_or_default(),
+            max_size: positive_integer(element, "maxSize", MAX_UPLOAD_SIZE)?
+                .unwrap_or(defaults.max_size),
+            max_files: positive_integer(element, "maxFiles", MAX_UPLOAD_FILES as u64)?
+                .map(|value| value as usize)
+                .unwrap_or(defaults.max_files),
+        };
+        validation::validate_file_constraints(&constraints).map_err(|message| {
+            error(element, "KV2007", message, "检查文件数量、大小与 MIME 限制")
+        })?;
+        Some(constraints)
+    } else {
+        None
+    };
     let mut definition = FieldDefinition {
         label: string(element, "label")?.unwrap_or_else(|| name.clone()),
         name,
@@ -419,6 +458,7 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
         index: boolean(element, "index")?,
         options: vec![],
         options_source: json(element, "optionsSource")?.map(|value| serde_json::from_value(value.clone()).map_err(|_| error(element,"KV2015","optionsSource 必须声明 resource/value/label/permission，可选 filters 为源字段到本资源字段的映射","使用静态对象；permission 显式取 anonymous/user/admin"))).transpose()?,
+        upload,
         source: element.source.clone(),
     };
     if definition
@@ -506,7 +546,7 @@ fn field(element: &StaticElement) -> Result<FieldDefinition> {
         no_children(element)?;
     }
     if let Some(default) = &definition.default {
-        definition.default = Some(validation::validate_field(&definition, default).map_err(
+        definition.default = Some(validation::validate_default(&definition, default).map_err(
             |failure| {
                 error(
                     element,
@@ -992,13 +1032,52 @@ impl Analyzer<'_> {
                         source: element.source.clone(),
                     }
                 }
+                "image" if element.module_ref.is_none() => {
+                    attrs(element, &["src", "alt", "width", "height", "fit"])?;
+                    no_children(element)?;
+                    let src = required_string(element, "src")?;
+                    if !validation::valid_image_src(&src) {
+                        return Err(error(
+                            element,
+                            "KV2007",
+                            "image.src 必须为无凭据的 HTTP(S) 绝对 URL 或单斜杠开头的站内路径",
+                            "不能使用 //、反斜杠、控制字符或 javascript/data/blob URL",
+                        ));
+                    }
+                    let alt = string(element, "alt")?.ok_or_else(|| {
+                        error(
+                            element,
+                            "KV2004",
+                            "image 必须显式声明 alt，可使用空字符串",
+                            "提供图片说明；装饰图使用 alt=''",
+                        )
+                    })?;
+                    let fit = string(element, "fit")?.unwrap_or_else(|| "contain".into());
+                    if !matches!(fit.as_str(), "contain" | "cover") {
+                        return Err(error(
+                            element,
+                            "KV2007",
+                            "image.fit 只允许 contain 或 cover",
+                            "明确选择图片适配方式",
+                        ));
+                    }
+                    ComponentDefinition::Image {
+                        src,
+                        alt,
+                        width: positive_integer(element, "width", 4096)?.map(|value| value as u32),
+                        height: positive_integer(element, "height", 4096)?
+                            .map(|value| value as u32),
+                        fit,
+                        source: element.source.clone(),
+                    }
+                }
                 _ => {
                     let reference = element.module_ref.as_ref().ok_or_else(|| {
                         error(
                             element,
                             "KV2001",
                             format!("页面中未知标签 {}", element.name),
-                            "使用内置 form/table/group 或导入普通 UI 组件",
+                            "使用内置 form/table/group/image 或导入普通 UI 组件",
                         )
                     })?;
                     let module = self.register_module(
@@ -1146,6 +1225,8 @@ impl Analyzer<'_> {
                 | "date"
                 | "datetime"
                 | "select"
+                | "file"
+                | "image"
                 | "form"
                 | "table"
                 | "group"
@@ -1155,7 +1236,7 @@ impl Analyzer<'_> {
                 element,
                 "KV2016",
                 "不支持的系统组件重载目标",
-                "使用字段类型或 form/table/group/page",
+                "使用字段类型或 image/form/table/group/page",
             ));
         }
         if self.component_overrides.contains_key(&name) {
@@ -1755,6 +1836,141 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.root);
             }
         }
+    }
+
+    #[test]
+    fn files_and_images_produce_complete_ir_without_changing_scalar_serialization() -> TestResult {
+        let application = Fixture::new(
+            r#"import {View} from './view'; export default <app name='附件'><override name='file' component={View}/><override name='image' component={View}/><resource name='items'><text name='title'/><file name='attachments' label='附件' maxFiles={20} maxSize={1} accept={['image/*','application/pdf']} default={[]}/><file name='other' default={null}/></resource><page path='/items'><form resource='items'/><group label='图片'><image src='https://example.com/a.png' alt='' width={320} height={4096} fit='cover'/><image src='/images/a.png' alt='示例'/></group></page></app>;"#,
+            &[("view.tsx", "export function View(){return <div/>;}")],
+        )?.valid()?;
+        let fields = &application.resources[0].fields;
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[1].kind, FieldKind::File);
+        assert_eq!(
+            fields[1].upload,
+            Some(FileConstraints {
+                accept: vec!["image/*".into(), "application/pdf".into()],
+                max_size: 1,
+                max_files: 20,
+            })
+        );
+        assert_eq!(fields[1].default, Some(serde_json::json!([])));
+        assert_eq!(fields[2].upload, Some(FileConstraints::default()));
+        assert_eq!(fields[2].default, Some(Value::Null));
+        assert!(
+            !serde_json::to_value(&fields[0])?
+                .as_object()
+                .ok_or("缺少字段对象")?
+                .contains_key("upload")
+        );
+        assert_eq!(application.component_overrides.len(), 2);
+        let ComponentDefinition::Group { children, .. } = &application.pages[0].components[1]
+        else {
+            return Err("缺少图片组".into());
+        };
+        assert!(matches!(&children[0], ComponentDefinition::Image {
+            src, alt, width: Some(320), height: Some(4096), fit, ..
+        } if src == "https://example.com/a.png" && alt.is_empty() && fit == "cover"));
+        assert!(matches!(&children[1], ComponentDefinition::Image {
+            width: None, height: None, fit, ..
+        } if fit == "contain"));
+        let restored: ApplicationIR = serde_json::from_slice(&serde_json::to_vec(&application)?)?;
+        assert_eq!(restored, application);
+        let implicit = Fixture::new(
+            "export default <page path='/items'><group><file name='attachments'/><image src='/a.png' alt='图片'/></group></page>;",
+            &[],
+        )?.valid()?;
+        assert_eq!(implicit.resources[0].fields.len(), 1);
+        assert_eq!(implicit.resources[0].fields[0].kind, FieldKind::File);
+        Ok(())
+    }
+
+    #[test]
+    fn file_declarations_reject_invalid_constraints_defaults_and_children() -> TestResult {
+        for declaration in [
+            "<file name='attachments' maxFiles={0}/>",
+            "<file name='attachments' maxFiles={21}/>",
+            "<file name='attachments' maxFiles={1.5}/>",
+            "<file name='attachments' maxFiles='2'/>",
+            "<file name='attachments' maxSize={0}/>",
+            "<file name='attachments' maxSize={10485761}/>",
+            "<file name='attachments' accept='image/png'/>",
+            "<file name='attachments' accept={['.png']}/>",
+            "<file name='attachments' accept={['Image/png']}/>",
+            "<file name='attachments' accept={['*/*']}/>",
+            "<file name='attachments' accept={['image/png','image/png']}/>",
+            "<file name='attachments' default={[{}]}/>",
+            "<file name='attachments' default='[]'/>",
+            "<file name='attachments' required default={[]}/>",
+            "<file name='attachments' required default={null}/>",
+            "<file name='attachments' unique/>",
+            "<file name='attachments' index={false}/>",
+            "<file name='attachments' min={0}/>",
+            "<file name='attachments' maxLength={1}/>",
+            "<file name='attachments'><image src='/a.png' alt=''/></file>",
+            "<image src='/a.png' alt=''/>",
+        ] {
+            let source = format!(
+                "export default <app name='非法附件'><resource name='items'>{declaration}</resource></app>;"
+            );
+            let result = Fixture::new(&source, &[])?.analyze()?;
+            assert!(result.application.is_none(), "{declaration}");
+            assert!(!result.diagnostics.is_empty(), "{declaration}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn images_reject_invalid_attributes_urls_and_business_children() -> TestResult {
+        for declaration in [
+            "<image src='/a.png'/>",
+            "<image src='/a.png' alt={null}/>",
+            "<image src='/a.png' alt='' width={0}/>",
+            "<image src='/a.png' alt='' height={4097}/>",
+            "<image src='/a.png' alt='' width={2.5}/>",
+            "<image src='/a.png' alt='' fit='fill'/>",
+            "<image src='//example.com/a.png' alt=''/>",
+            "<image src='https://user:secret@example.com/a.png' alt=''/>",
+            "<image src='javascript:alert(1)' alt=''/>",
+            "<image src='data:image/png;base64,AA' alt=''/>",
+            "<image src='blob:https://example.com/id' alt=''/>",
+            "<image src='/a.png' alt=''><file name='attachments'/></image>",
+        ] {
+            let source = format!("export default <page path='/view'>{declaration}</page>;");
+            let result = Fixture::new(&source, &[])?.analyze()?;
+            assert!(result.application.is_none(), "{declaration}");
+            assert!(!result.diagnostics.is_empty(), "{declaration}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn option_dependencies_never_treat_file_arrays_as_scalars() -> TestResult {
+        for selector in [
+            "<select name='choice'><option value='a' when={{attachments:null}}/></select>",
+            "<select name='choice'><option value='a' when={{attachments:[]}}/></select>",
+            "<select name='choice' optionsSource={{resource:'sources',value:'attachments',label:'title',permission:'anonymous'}}/>",
+            "<select name='choice' optionsSource={{resource:'sources',value:'id',label:'attachments',permission:'anonymous'}}/>",
+            "<select name='choice' optionsSource={{resource:'sources',value:'id',label:'title',filters:{attachments:'attachments'},permission:'anonymous'}}/>",
+            "<select name='choice' optionsSource={{resource:'sources',value:'id',label:'title',filters:{title:'attachments'},permission:'anonymous'}}/>",
+            "<select name='choice' optionsSource={{resource:'sources',value:'id',label:'title',filters:{attachments:'title'},permission:'anonymous'}}/>",
+        ] {
+            let source = format!(
+                "export default <app name='联动'><resource name='sources'><text name='title'/><file name='attachments'/></resource><resource name='items'><text name='title'/><file name='attachments'/>{selector}</resource></app>;"
+            );
+            let result = Fixture::new(&source, &[])?.analyze()?;
+            assert!(result.application.is_none(), "{selector}");
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == "KV2015"),
+                "{selector}: {:?}",
+                result.diagnostics
+            );
+        }
+        Ok(())
     }
 
     #[test]

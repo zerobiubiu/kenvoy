@@ -13,8 +13,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    application::{ApplicationIR, FieldDefinition, FieldKind},
-    validation::validate_field,
+    application::{ApplicationIR, FieldDefinition, FieldKind, FileConstraints},
+    validation::{validate_default, validate_field, validate_file_constraints},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -78,6 +78,8 @@ pub struct ColumnModel {
     pub max: Option<f64>,
     pub max_length: Option<usize>,
     pub options: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload: Option<FileConstraints>,
 }
 
 fn deserialize_default<'de, D: serde::Deserializer<'de>>(
@@ -212,7 +214,7 @@ pub fn schema_model(application: &ApplicationIR) -> Result<SchemaModel> {
                 .default
                 .as_ref()
                 .map(|value| {
-                    validate_field(field, value)
+                    validate_default(field, value)
                         .map_err(|error| MigrationError::InvalidSchema(error.to_string()))
                 })
                 .transpose()?;
@@ -234,6 +236,7 @@ pub fn schema_model(application: &ApplicationIR) -> Result<SchemaModel> {
                     .map(|value| if value == 0.0 { 0.0 } else { value }),
                 max_length: field.max_length,
                 options,
+                upload: field.upload.clone(),
             };
             if columns.insert(field.name.clone(), column).is_some() {
                 return Err(MigrationError::InvalidSchema(format!(
@@ -276,6 +279,32 @@ pub fn schema_model(application: &ApplicationIR) -> Result<SchemaModel> {
 }
 
 fn validate_constraints(field: &FieldDefinition) -> Result<()> {
+    match (field.kind, &field.upload) {
+        (FieldKind::File, Some(constraints)) => {
+            validate_file_constraints(constraints).map_err(|message| {
+                MigrationError::InvalidSchema(format!("字段 {}：{message}", field.name))
+            })?;
+            if field.unique || field.index {
+                return Err(MigrationError::InvalidSchema(format!(
+                    "file 字段 {} 不支持 unique/index",
+                    field.name
+                )));
+            }
+        }
+        (FieldKind::File, None) => {
+            return Err(MigrationError::InvalidSchema(format!(
+                "file 字段 {} 缺少上传约束",
+                field.name
+            )));
+        }
+        (_, Some(_)) => {
+            return Err(MigrationError::InvalidSchema(format!(
+                "非 file 字段 {} 不能包含上传约束",
+                field.name
+            )));
+        }
+        (_, None) => {}
+    }
     if field.min.is_some_and(|value| !value.is_finite())
         || field.max.is_some_and(|value| !value.is_finite())
         || matches!((field.min,field.max),(Some(min),Some(max)) if min>max)
@@ -345,7 +374,7 @@ fn validate_constraints(field: &FieldDefinition) -> Result<()> {
         )));
     }
     if let Some(value) = &field.default {
-        validate_field(field, value)
+        validate_default(field, value)
             .map_err(|error| MigrationError::InvalidSchema(error.to_string()))?;
         if value.as_str().is_some_and(|value| value.contains('\0')) {
             return Err(MigrationError::InvalidSchema(
@@ -483,7 +512,16 @@ pub fn apply_connection(
         None
     };
     preflight_data(&transaction, &state.model, application)?;
+    if target.tables.values().any(|table| {
+        table
+            .columns
+            .values()
+            .any(|column| column.kind == FieldKind::File)
+    }) {
+        super::uploads::ensure_schema(&transaction)?;
+    }
     transaction.execute_batch(METADATA_DDL)?;
+    super::uploads::cleanup_removed_uploads(&transaction, &target)?;
     execute_changes(&transaction, &state.model, &target)?;
     let actual = actual_objects(&transaction)?;
     let actual_json = serde_json::to_string(&actual)?;
@@ -660,6 +698,7 @@ fn diff(previous: &SchemaModel, target: &SchemaModel) -> Vec<SchemaChange> {
 }
 
 fn read_state(connection: &Connection) -> Result<State> {
+    let uploads_exist = super::uploads::validate_schema(connection)?;
     let actual = actual_objects(connection)?;
     let schema_exists = table_exists(connection, "_kenvoy_schema")?;
     let migration_exists = table_exists(connection, "_kenvoy_migrations")?;
@@ -687,6 +726,18 @@ fn read_state(connection: &Connection) -> Result<State> {
     let version =
         u64::try_from(version).map_err(|_| MigrationError::Drift("迁移版本为负数".into()))?;
     let model: SchemaModel = serde_json::from_str(&model_json)?;
+    if !uploads_exist
+        && model.tables.values().any(|table| {
+            table
+                .columns
+                .values()
+                .any(|column| column.kind == FieldKind::File)
+        })
+    {
+        return Err(MigrationError::Drift(
+            "已登记附件字段的宿主存储表缺失".into(),
+        ));
+    }
     let expected_actual: Vec<ActualObject> = serde_json::from_str(&actual_json)?;
     if hash(&model)? != schema_hash
         || hash(&expected_actual)? != actual_hash
@@ -763,7 +814,7 @@ fn actual_objects(connection: &Connection) -> Result<Vec<ActualObject>> {
     let mut objects = vec![];
     for row in rows {
         let row = row?;
-        // 认证表具有独立宿主版本校验；不忽略未知 _kenvoy_ 表。
+        // 认证和附件表具有独立宿主版本校验；不忽略未知 _kenvoy_ 表。
         if !matches!(
             row.table.as_str(),
             "_kenvoy_schema"
@@ -771,6 +822,8 @@ fn actual_objects(connection: &Connection) -> Result<Vec<ActualObject>> {
                 | "_kenvoy_users"
                 | "_kenvoy_sessions"
                 | "_kenvoy_auth_schema"
+                | "_kenvoy_uploads"
+                | "_kenvoy_upload_schema"
         ) {
             objects.push(row);
         }
@@ -923,11 +976,22 @@ fn column_sql(column: &ColumnModel) -> String {
             format!("abs({name})<=1.7976931348623157e308"),
         ],
         FieldKind::Boolean => vec![format!("typeof({name})='integer' AND {name} IN (0,1)")],
+        FieldKind::File => vec![
+            format!("typeof({name})='text'"),
+            format!("CASE WHEN json_valid({name}) THEN json_type({name})='array' ELSE 0 END"),
+        ],
         _ => vec![
             format!("typeof({name})='text'"),
             format!("instr({name},char(0))=0"),
         ],
     };
+    if let Some(upload) = &column.upload {
+        checks.push(format!(
+            "CASE WHEN json_valid({name}) THEN json_array_length({name}) BETWEEN {} AND {} ELSE 0 END",
+            usize::from(column.required),
+            upload.max_files
+        ));
+    }
     if column.required
         && (matches!(column.kind, FieldKind::Text | FieldKind::Textarea)
             || (column.kind == FieldKind::Select && column.options.is_empty()))
@@ -986,7 +1050,7 @@ fn sql_literal(value: &Value) -> String {
         Value::Bool(value) => if *value { "1" } else { "0" }.into(),
         Value::Number(value) => value.to_string(),
         Value::String(value) => sql_string(value),
-        _ => "NULL".into(),
+        Value::Array(_) | Value::Object(_) => sql_string(&value.to_string()),
     }
 }
 fn create_indexes(connection: &Connection, table: &str, model: &TableModel) -> Result<()> {
@@ -1037,7 +1101,7 @@ fn preflight_data(
                         .iter()
                         .position(|name| name == &field.name)
                         .ok_or_else(|| MigrationError::Drift("已有列缺失".into()))?;
-                    from_sql(row.get_ref(index)?, field)?
+                    from_sql(row.get_ref(index)?, field, old.columns[&field.name].kind)?
                 } else {
                     field.default.clone().unwrap_or(Value::Null)
                 };
@@ -1065,7 +1129,11 @@ fn preflight_data(
     Ok(())
 }
 
-fn from_sql(value: rusqlite::types::ValueRef<'_>, field: &FieldDefinition) -> Result<Value> {
+fn from_sql(
+    value: rusqlite::types::ValueRef<'_>,
+    field: &FieldDefinition,
+    previous_kind: FieldKind,
+) -> Result<Value> {
     use rusqlite::types::ValueRef;
     Ok(match value {
         ValueRef::Null => Value::Null,
@@ -1076,6 +1144,10 @@ fn from_sql(value: rusqlite::types::ValueRef<'_>, field: &FieldDefinition) -> Re
         ValueRef::Real(value) => serde_json::Number::from_f64(value)
             .map(Value::Number)
             .ok_or_else(|| MigrationError::InvalidData("非有限 SQLite 数字".into()))?,
+        ValueRef::Text(value) if previous_kind == FieldKind::File => serde_json::from_slice(value)
+            .map_err(|_| {
+                MigrationError::InvalidData(format!("文件字段 {} 不是有效 JSON", field.name))
+            })?,
         ValueRef::Text(value) => Value::String(
             std::str::from_utf8(value)
                 .map_err(|_| MigrationError::InvalidData("SQLite 文本不是有效 UTF-8".into()))?
@@ -1260,6 +1332,7 @@ mod tests {
             index: false,
             options: vec![],
             options_source: None,
+            upload: (kind == FieldKind::File).then(FileConstraints::default),
             source: source(),
         }
     }
@@ -1289,6 +1362,197 @@ mod tests {
     }
     fn rows(connection: &Connection) -> TestResult<i64> {
         Ok(connection.query_row("SELECT count(*) FROM customers", [], |row| row.get(0))?)
+    }
+
+    #[test]
+    fn legacy_scalar_schema_keeps_identical_serialization_and_hash() -> TestResult {
+        let legacy = r#"{"tables":{"items":{"columns":{"note":{"name":"note","kind":"text","required":false,"integer":false,"min":null,"max":null,"max_length":null,"options":[]}},"indexes":{}}}}"#;
+        let model: SchemaModel = serde_json::from_str(legacy)?;
+        assert_eq!(serde_json::to_string(&model)?, legacy);
+        let expected_hash: String = Sha256::digest(legacy.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        assert_eq!(schema_hash(&model)?, expected_hash);
+        assert_eq!(model.tables["items"].columns["note"].upload, None);
+        Ok(())
+    }
+
+    #[test]
+    fn registered_file_schema_never_recreates_completely_missing_upload_storage() -> TestResult {
+        let fixture = DatabaseFile::new()?;
+        let mut connection = fixture.connect()?;
+        let mut application = app();
+        application.resources[0]
+            .fields
+            .push(field("attachments", FieldKind::File));
+        fixture.apply(&mut connection, &application)?;
+        assert!(super::super::uploads::validate_schema(&connection)?);
+        connection
+            .execute_batch("DROP TABLE _kenvoy_uploads; DROP TABLE _kenvoy_upload_schema;")?;
+        assert!(matches!(
+            preview(&fixture.path, &application),
+            Err(MigrationError::Drift(_))
+        ));
+        assert!(matches!(
+            history_path(&fixture.path),
+            Err(MigrationError::Drift(_))
+        ));
+        assert!(matches!(
+            fixture.apply(&mut connection, &application),
+            Err(MigrationError::Drift(_))
+        ));
+        assert!(!table_exists(&connection, "_kenvoy_uploads")?);
+        assert!(!table_exists(&connection, "_kenvoy_upload_schema")?);
+        Ok(())
+    }
+
+    #[test]
+    fn file_json_text_survives_rebuilds_and_rejected_constraints_preserve_data() -> TestResult {
+        let fixture = DatabaseFile::new()?;
+        let mut connection = fixture.connect()?;
+        let mut original = app();
+        let mut attachments = field("attachments", FieldKind::File);
+        attachments.default = Some(serde_json::json!([]));
+        attachments.upload = Some(FileConstraints {
+            accept: vec!["image/*".into()],
+            max_size: 10,
+            max_files: 2,
+        });
+        original.resources[0].fields.push(attachments);
+        fixture.apply(&mut connection, &original)?;
+        let payload = serde_json::json!([
+            {"id":"a".repeat(64),"name":"甲.png","content_type":"image/png","size":2},
+            {"id":"b".repeat(64),"name":"乙.webp","content_type":"image/webp","size":3}
+        ])
+        .to_string();
+        connection.execute(
+            "INSERT INTO customers(name,phone,attachments) VALUES('有附件','[]',?1)",
+            [&payload],
+        )?;
+        connection.execute("INSERT INTO customers(name) VALUES('空附件')", [])?;
+        let (storage, default): (String, String) = connection.query_row(
+            "SELECT typeof(attachments),attachments FROM customers WHERE name='空附件'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        assert_eq!(storage, "text");
+        assert_eq!(default, "[]");
+        for invalid in ["{}", "null", "\"[]\"", "[", "[{},{},{}]"] {
+            assert!(
+                connection
+                    .execute(
+                        "INSERT INTO customers(name,attachments) VALUES('非法附件',?1)",
+                        [invalid],
+                    )
+                    .is_err(),
+                "{invalid}"
+            );
+        }
+        let mut rebuilt = original.clone();
+        rebuilt.resources[0].fields[2].max_length = Some(100);
+        assert!(fixture.confirm(&mut connection, &rebuilt)?.applied);
+        drop(connection);
+        let mut connection = fixture.connect()?;
+        assert_eq!(
+            connection.query_row::<String, _, _>(
+                "SELECT attachments FROM customers WHERE name='有附件'",
+                [],
+                |row| row.get(0)
+            )?,
+            payload
+        );
+        let mut too_few = rebuilt.clone();
+        too_few.resources[0].fields[3]
+            .upload
+            .as_mut()
+            .ok_or("缺少上传约束")?
+            .max_files = 1;
+        let mut too_small = rebuilt.clone();
+        too_small.resources[0].fields[3]
+            .upload
+            .as_mut()
+            .ok_or("缺少上传约束")?
+            .max_size = 1;
+        let mut incompatible_type = rebuilt.clone();
+        incompatible_type.resources[0].fields[3]
+            .upload
+            .as_mut()
+            .ok_or("缺少上传约束")?
+            .accept = vec!["application/pdf".into()];
+        let mut required = rebuilt.clone();
+        required.resources[0].fields[3].required = true;
+        required.resources[0].fields[3].default = None;
+        let mut file_to_text = rebuilt.clone();
+        file_to_text.resources[0].fields[3].kind = FieldKind::Text;
+        file_to_text.resources[0].fields[3].upload = None;
+        file_to_text.resources[0].fields[3].default = None;
+        let mut text_to_file = rebuilt.clone();
+        text_to_file.resources[0].fields[2].kind = FieldKind::File;
+        text_to_file.resources[0].fields[2].max_length = None;
+        text_to_file.resources[0].fields[2].upload = Some(FileConstraints::default());
+        for invalid in [
+            too_few,
+            too_small,
+            incompatible_type,
+            required,
+            file_to_text,
+            text_to_file,
+        ] {
+            assert!(matches!(
+                fixture.confirm(&mut connection, &invalid),
+                Err(MigrationError::InvalidData(_))
+            ));
+            assert_eq!(rows(&connection)?, 2);
+            assert_eq!(history(&connection)?.len(), 2);
+            assert!(preview(&fixture.path, &rebuilt)?.changes.is_empty());
+            assert_eq!(
+                connection.query_row::<String, _, _>(
+                    "SELECT attachments FROM customers WHERE name='有附件'",
+                    [],
+                    |row| row.get(0)
+                )?,
+                payload
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn untrusted_ir_cannot_bypass_file_schema_and_default_restrictions() -> TestResult {
+        let mut original = app();
+        original.resources[0]
+            .fields
+            .push(field("attachments", FieldKind::File));
+        assert!(schema_model(&original).is_ok());
+        for change in 0..9 {
+            let mut invalid = original.clone();
+            let file = &mut invalid.resources[0].fields[3];
+            match change {
+                0 => file.upload = None,
+                1 => file.unique = true,
+                2 => file.index = true,
+                3 => file.min = Some(0.0),
+                4 => file.max_length = Some(10),
+                5 => {
+                    file.default = Some(serde_json::json!([{
+                        "id":"a".repeat(64),"name":"文件","content_type":"application/pdf","size":1
+                    }]))
+                }
+                6 => file.upload.as_mut().ok_or("缺少上传约束")?.max_files = 21,
+                7 => file.upload.as_mut().ok_or("缺少上传约束")?.accept = vec![".png".into()],
+                8 => {
+                    file.required = true;
+                    file.default = Some(serde_json::json!([]));
+                }
+                _ => unreachable!(),
+            }
+            assert!(schema_model(&invalid).is_err(), "{change}");
+        }
+        let mut invalid = app();
+        invalid.resources[0].fields[0].upload = Some(FileConstraints::default());
+        assert!(schema_model(&invalid).is_err());
+        Ok(())
     }
 
     #[test]

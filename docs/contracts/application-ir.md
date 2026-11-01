@@ -6,6 +6,8 @@
 
 新增兼容字段：ApplicationIR.component_overrides 保存系统组件名称到模块引用 ID 的映射，缺省为空；FieldDefinition.options_source 保存受限跨资源选项配置，缺省为空；SelectOption.when 保存静态依赖条件，缺省为空。值仍遵守原字段类型，不因控件重载改变。客户端投影携带渲染所需定义，选项查询仍需独立授权；完整规则见[组件与选项契约](component-bindings.md)。
 
+`FieldKind::File` 的 `FieldDefinition.upload` 保存 `accept/max_size/max_files`，非文件字段为 None 且不序列化，旧标量 Schema 快照/hash 保持不变。文件字段使用严格 `UploadedFile[]`（id/name/content_type/size）或可选 null，其余字段仍为标量；真实性、归属及文件生命周期由[附件契约](file-uploads.md)约束。
+
 Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定和表达式结构；分析器只沿入口默认导出的表达式及显式 Schema Component 访问声明。不能将模块中所有 JSX 搜索结果当作应用根。静态求值只存在于 Kenvoy，不改变 KEngine 对标签、标识符和表达式的通用含义。
 
 同一份经过验证的模型驱动 Schema Diff、数据库执行计划、HTTP 权限、页面描述和 Admin。模型构建失败时不产生可激活的半成品。运行时持有不可变版本化快照，请求不重新读取源码。
@@ -43,7 +45,7 @@ Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定
 
 构建产物保存宿主 `application.ir`、`client/` 资产和 `modules/server.json`，manifest 校验格式、框架版本和内容摘要。客户端投影由 HTTP 在运行时按身份构造，没有独立的静态投影文件。新增资源及安全增列通过迁移后，再发布同代业务模型；不允许数据库用新结构而请求仍按旧字段策略写入。
 
-ComponentDefinition 使用 type 字段区分 form/table/group/custom/text。Form 包含资源、字段名投影及页面 labels；PropValue 使用 kind=literal/module 区分 JSON 值和注册 ID。ModuleReference 保存模块导出或表达式来源，属于宿主数据。SourceLocation 仅用于宿主诊断。未知 Application IR 版本反序列化失败；Field.default 区分未声明与显式 null。
+ComponentDefinition 使用 type 字段区分 form/table/group/custom/text/image。Form 包含资源、字段名投影及页面 labels；Image 包含 src、alt、可选 width/height 和 fit，不推导资源字段。PropValue 使用 kind=literal/module 区分 JSON 值和注册 ID。ModuleReference 保存模块导出或表达式来源，属于宿主数据。SourceLocation 仅用于宿主诊断。未知 Application IR 版本反序列化失败；Field.default 区分未声明与显式 null。
 
 ModuleReference.kind 明确区分 ClientComponent、ClientFunction、ServerFunction、SharedFunction 和 ClientExpression。普通运行引用保留原模块门面与导出名；表达式保存原始 span，客户端经词法依赖切片生成工厂。组件/函数/表达式注册表与当前应用代际一起构建，不把运行期函数对象放入 JSON，也不承诺 module_1 等注册 ID 在不同分析代际不变。
 

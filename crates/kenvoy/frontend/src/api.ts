@@ -1,4 +1,5 @@
-import type { ApplicationDescription, DevelopmentStatus, FieldError, JsonValue, ListQuery, ListResult, OptionsQuery, OptionsResult, RecordData, SessionView } from './types.ts';
+import type { ApplicationDescription, DevelopmentStatus, FieldError, JsonValue, ListQuery, ListResult, OptionsQuery, OptionsResult, RecordData, SessionView, UploadedFile } from './types.ts';
+import { isFieldValue, isFileConstraints, isSafeImageSource, isUploadedFile, MAX_FILE_SIZE, validFileName, validMime } from './files.ts';
 
 interface ErrorOptions { status?: number; code?: string; fields?: FieldError[]; request_id?: string; outcomeUnknown?: boolean }
 export class ApiError extends Error {
@@ -18,7 +19,7 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; form?: string; write?: boolean; csrf?: boolean }
+interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; file?: File; uploadMode?: 'create' | 'update'; form?: string; write?: boolean; csrf?: boolean }
 interface ResponseValue { value: unknown; requestId?: string }
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const positiveInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
@@ -32,11 +33,12 @@ const isOption = (option: unknown): boolean => isObject(option) && typeof option
   && (option.when === undefined || (isObject(option.when) && Object.values(option.when).every(scalar)));
 function isField(value: unknown): boolean {
   return isObject(value) && typeof value.name === 'string' && typeof value.label === 'string'
-    && ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select'].includes(String(value.kind))
+    && ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'file'].includes(String(value.kind))
     && typeof value.required === 'boolean' && typeof value.integer === 'boolean' && typeof value.unique === 'boolean'
     && finiteOrNull(value.min) && finiteOrNull(value.max)
     && (value.max_length === null || (typeof value.max_length === 'number' && Number.isSafeInteger(value.max_length) && value.max_length >= 0))
     && Array.isArray(value.options) && value.options.every(isOption)
+    && (value.kind === 'file' ? isFileConstraints(value.upload) : value.upload == null)
     && (value.options_source == null || (isObject(value.options_source) && typeof value.options_source.resource === 'string'
       && typeof value.options_source.value === 'string' && typeof value.options_source.label === 'string' && role(value.options_source.permission)
       && isObject(value.options_source.filters) && Object.values(value.options_source.filters).every(item => typeof item === 'string')))
@@ -49,6 +51,8 @@ function isComponent(value: unknown, depth = 0): boolean {
       && isObject(value.labels) && Object.values(value.labels).every(label => typeof label === 'string');
     case 'table': return typeof value.resource === 'string' && strings(value.columns);
     case 'text': return typeof value.value === 'string';
+    case 'image': return isSafeImageSource(value.src) && typeof value.alt === 'string' && ['contain', 'cover'].includes(String(value.fit))
+      && [value.width, value.height].every(size => size == null || (positiveInteger(size) && size <= 4096));
     case 'group': return nullableString(value.label) && Array.isArray(value.children) && value.children.every(child => isComponent(child, depth + 1));
     case 'custom': return typeof value.module === 'string' && isObject(value.props)
       && Object.values(value.props).every(prop => isObject(prop) && (prop.kind === 'literal' ? serializable(prop.value) : prop.kind === 'module' && typeof prop.value === 'string'))
@@ -63,7 +67,7 @@ function isNavigation(value: unknown, depth = 0): boolean {
 }
 function isApplication(value: unknown): value is ApplicationDescription {
   return isObject(value) && value.format_version === 1 && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
-    && (value.component_overrides === undefined || (isObject(value.component_overrides) && Object.entries(value.component_overrides).every(([key, id]) => ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'form', 'table', 'group', 'page'].includes(key) && typeof id === 'string')))
+    && (value.component_overrides === undefined || (isObject(value.component_overrides) && Object.entries(value.component_overrides).every(([key, id]) => ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'file', 'image', 'form', 'table', 'group', 'page'].includes(key) && typeof id === 'string')))
     && (!Object.hasOwn(value, 'development') || typeof value.development === 'boolean')
     && Array.isArray(value.pages) && value.pages.every(page => isObject(page) && typeof page.path === 'string' && typeof page.title === 'string' && role(page.permission) && Array.isArray(page.components) && page.components.every(node => isComponent(node)))
     && Array.isArray(value.resources) && value.resources.every(resource => isObject(resource) && typeof resource.name === 'string' && Array.isArray(resource.fields) && resource.fields.every(isField))
@@ -89,9 +93,14 @@ function pathRecord(resource: string, id: number): string {
   if (!positiveInteger(id)) throw new ApiError('记录 id 必须为安全正整数');
   return `${pathResource(resource)}/${id}`;
 }
+export function fileUrl(file: UploadedFile | string, download = false): string {
+  const id = typeof file === 'string' ? file : file?.id;
+  if (typeof id !== 'string' || /^[a-f0-9]{64}$/.exec(id)?.[0] !== id) throw new ApiError('附件标识无效');
+  return `/_kenvoy/files/${id}${download ? '?download=1' : ''}`;
+}
 function isRecord(value: unknown): value is RecordData {
   return isObject(value) && positiveInteger(value.id) && typeof value.created_at === 'string' && typeof value.updated_at === 'string'
-    && Object.values(value).every(item => item === null || typeof item === 'string' || typeof item === 'boolean' || (typeof item === 'number' && Number.isFinite(item)));
+    && Object.values(value).every(isFieldValue);
 }
 function isSession(value: unknown): value is SessionView {
   return isObject(value) && typeof value.csrf_token === 'string' && value.csrf_token.length === 64 && /^[a-f0-9]{64}$/.test(value.csrf_token)
@@ -247,6 +256,22 @@ export class ApiClient {
     const response = await this.#request(path, { method: 'DELETE', write: true });
     if (response.value !== null) throw protocolError(true, response.requestId);
   }
+  async upload(resource: string, field: string, file: File, form?: string, mode: 'create' | 'update' = 'create'): Promise<UploadedFile> {
+    pathResource(resource);
+    if (!identifier(field) || field.startsWith('_kenvoy_') || (mode !== 'create' && mode !== 'update')) throw new ApiError('上传字段或操作模式无效');
+    if (typeof File === 'undefined' || !(file instanceof File) || !validFileName(file.name) || !Number.isSafeInteger(file.size)
+      || file.size < 1 || file.size > MAX_FILE_SIZE || !validMime(file.type || 'application/octet-stream')) throw new ApiError('文件名称、大小或 MIME 类型无效；单个文件不得超过 10 MiB');
+    await this.#ensureSession();
+    const { value, requestId } = await this.#request(`/_kenvoy/uploads/${resource}/${field}`, { method: 'POST', file, uploadMode: mode, form, write: true });
+    if (!isObject(value) || !isUploadedFile(value.data) || !positiveInteger(value.generation)) throw protocolError(true, requestId);
+    return value.data;
+  }
+  async removeUpload(id: string): Promise<void> {
+    const path = fileUrl(id);
+    await this.#ensureSession();
+    const response = await this.#request(path, { method: 'DELETE', write: true });
+    if (response.value !== null) throw protocolError(true, response.requestId);
+  }
   async executeAction(name: string, args: JsonValue[] = []): Promise<JsonValue> {
     if (/^[A-Za-z][A-Za-z0-9_]*$/.exec(name)?.[0] !== name || !Array.isArray(args) || args.length > 32) throw new ApiError('动作名称或参数数量无效');
     await this.#ensureSession();
@@ -268,12 +293,19 @@ export class ApiClient {
       headers.set('x-kenvoy-csrf', this.#session.csrf_token);
     }
     if (options.form !== undefined) headers.set('x-kenvoy-form', encodeURIComponent(options.form));
-    let body: string | undefined;
+    let body: BodyInit | undefined;
     if (options.body !== undefined) {
       if (!isObject(options.body) || !serializable(options.body)) throw new ApiError('请求必须为有效 JSON 对象，不能含非有限数字、undefined 或循环引用');
       body = JSON.stringify(options.body);
       if (new TextEncoder().encode(body).length > 1024 * 1024) throw new ApiError('请求数据超过 1 MiB 限制');
       headers.set('content-type', 'application/json');
+    }
+    if (options.file !== undefined) {
+      if (options.body !== undefined) throw new ApiError('二进制上传不能同时携带 JSON 请求体');
+      body = options.file;
+      headers.set('content-type', options.file.type || 'application/octet-stream');
+      headers.set('x-kenvoy-filename', encodeURIComponent(options.file.name));
+      headers.set('x-kenvoy-upload-mode', options.uploadMode ?? 'create');
     }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;

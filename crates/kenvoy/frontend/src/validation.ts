@@ -1,4 +1,5 @@
 import type { FieldDefinition, FieldError, JsonValue, ResourceDefinition } from './types.ts';
+import { acceptsFile, isFileConstraints, isUploadedFiles } from './files.ts';
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: FieldError[] };
 export type WriteMode = 'create' | 'patch';
@@ -46,6 +47,14 @@ export function validateField(field: FieldDefinition, value: unknown): Validatio
       if (field.required && WHITE_SPACE.test(value)) return invalid(field, 'KV4001', '必填选项值不能为空或全部为空白');
       if (!field.options_source && !field.options.some(option => option.value === value)) return invalid(field, 'KV4008', '值不属于声明的选项');
       return valid(value);
+    case 'file':
+      if (!Array.isArray(value)) return invalid(field, 'KV4002', '文件字段必须为附件数组');
+      if (field.required && value.length === 0) return invalid(field, 'KV4001', '必填文件字段至少上传一个文件');
+      if (!isFileConstraints(field.upload) || !isUploadedFiles(value)) return invalid(field, 'KV4014', '附件元数据、标识或上传约束无效，不能重复使用同一附件');
+      if (value.length > field.upload.max_files) return invalid(field, 'KV4014', `附件数量不能超过 ${field.upload.max_files} 个`);
+      if (value.some(file => file.size > field.upload!.max_size)) return invalid(field, 'KV4014', '附件大小超过该字段的单文件限制');
+      if (value.some(file => !acceptsFile(file.content_type, field.upload!.accept))) return invalid(field, 'KV4014', '附件类型不符合该字段允许的 MIME 类型');
+      return valid(value);
   }
 }
 
@@ -72,6 +81,7 @@ export function validateRecord(resource: ResourceDefinition, input: unknown, mod
 /** 仅用于 DOM 草稿到 JSON 的显式转换，随后必须调用 validateField/validateRecord。 */
 export function normalizeInput(field: FieldDefinition, draft: unknown): unknown {
   if (typeof draft !== 'string') return draft;
+  if (field.kind === 'file') return draft;
   if (field.kind === 'text' || field.kind === 'textarea') return draft;
   if (field.kind === 'select') return draft === '' && !field.options.some(option => option.value === '') ? null : draft;
   if (draft === '') return null;

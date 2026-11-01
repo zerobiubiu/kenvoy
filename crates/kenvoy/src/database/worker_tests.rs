@@ -72,12 +72,15 @@ async fn linked_options_compare_canonical_numbers_and_datetimes() -> TestResult 
         .create(
             "customers",
             json!({"count":1,"measure":1.0,"occurred":"2026-11-01T00:00:00Z","choice":"yes"}),
+            None,
         )
         .await?;
     assert_eq!(created["occurred"], "2026-11-01T00:00:00.000Z");
     let id = created["id"].as_i64().ok_or("缺少 id")?;
     assert!(matches!(
-        database.update("customers", id, json!({"count":2})).await,
+        database
+            .update("customers", id, json!({"count":2}), None)
+            .await,
         Err(DatabaseError::Validation(_))
     ));
     assert_eq!(
@@ -157,13 +160,22 @@ async fn linked_and_resource_options_validate_inside_write_transactions() -> Tes
         .create(
             "cities",
             json!({"code":"hz","name":"杭州","province":"zj","secret":"私有"}),
+            None,
         )
         .await?;
     database
-        .create("cities", json!({"code":"nb","name":"宁波","province":"zj"}))
+        .create(
+            "cities",
+            json!({"code":"nb","name":"宁波","province":"zj"}),
+            None,
+        )
         .await?;
     database
-        .create("cities", json!({"code":"nj","name":"南京","province":"js"}))
+        .create(
+            "cities",
+            json!({"code":"nj","name":"南京","province":"js"}),
+            None,
+        )
         .await?;
     let request: super::super::OptionsQuery = serde_json::from_value(
         json!({"dependencies":{"province":"zj"},"page_size":1,"selected":"hz"}),
@@ -201,6 +213,7 @@ async fn linked_and_resource_options_validate_inside_write_transactions() -> Tes
         .create(
             "customers",
             json!({"province":"zj","city":"hz","district":"xihu"}),
+            None,
         )
         .await?;
     let id = created["id"].as_i64().ok_or("缺少 id")?;
@@ -210,13 +223,13 @@ async fn linked_and_resource_options_validate_inside_write_transactions() -> Tes
         json!({"province":"zj","city":"hz","district":"gulou"}),
     ] {
         assert!(matches!(
-            database.create("customers", invalid).await,
+            database.create("customers", invalid, None).await,
             Err(DatabaseError::Validation(_))
         ));
     }
     assert!(matches!(
         database
-            .update("customers", id, json!({"province":"js"}))
+            .update("customers", id, json!({"province":"js"}), None)
             .await,
         Err(DatabaseError::Validation(_))
     ));
@@ -229,6 +242,7 @@ async fn linked_and_resource_options_validate_inside_write_transactions() -> Tes
             "customers",
             id,
             json!({"province":"js","city":"nj","district":"gulou"}),
+            None,
         )
         .await?;
     database
@@ -236,7 +250,7 @@ async fn linked_and_resource_options_validate_inside_write_transactions() -> Tes
         .await?;
     assert!(matches!(
         database
-            .create("customers", json!({"province":"zj","city":"hz"}))
+            .create("customers", json!({"province":"zj","city":"hz"}), None)
             .await,
         Err(DatabaseError::Validation(_))
     ));
@@ -265,6 +279,7 @@ async fn sqlite_crud_is_persistent_validated_and_restricted_to_registered_resour
         .create(
             "customers",
             json!({"name":"张三","phone":"13800000000","age":25}),
+            None,
         )
         .await?;
     let id = first["id"].as_i64().ok_or("缺少 id")?;
@@ -272,7 +287,7 @@ async fn sqlite_crud_is_persistent_validated_and_restricted_to_registered_resour
     assert_eq!(first["age"], 25);
     assert_eq!(database.get("customers", id).await?, Some(first));
     let edited = database
-        .update("customers", id, json!({"phone":null,"age":26}))
+        .update("customers", id, json!({"phone":null,"age":26}), None)
         .await?
         .ok_or("缺少更新结果")?;
     assert_eq!(edited["name"], "张三");
@@ -286,12 +301,14 @@ async fn sqlite_crud_is_persistent_validated_and_restricted_to_registered_resour
         json!({"name":"李四","id":7}),
     ] {
         assert!(matches!(
-            database.create("customers", invalid).await,
+            database.create("customers", invalid, None).await,
             Err(DatabaseError::Validation(_))
         ));
     }
     assert!(matches!(
-        database.update("customers", id, json!({"name":null})).await,
+        database
+            .update("customers", id, json!({"name":null}), None)
+            .await,
         Err(DatabaseError::Validation(_))
     ));
     for name in [
@@ -317,7 +334,7 @@ async fn sqlite_crud_is_persistent_validated_and_restricted_to_registered_resour
     assert!(reopened.get("customers", id).await?.is_none());
     assert!(
         reopened
-            .update("customers", id, json!({"age":30}))
+            .update("customers", id, json!({"age":30}), None)
             .await?
             .is_none()
     );
@@ -330,24 +347,24 @@ async fn all_field_types_round_trip_and_defaults_do_not_overwrite_patch_absence(
     let fixture = Fixture::new()?;
     let app = fixture.application("<text name='name' required/><textarea name='note' default='默认'/><number name='score'/><boolean name='active' default={false}/><date name='day'/><datetime name='time'/><select name='state'><option value='new'/><option value='done'/></select>")?;
     let database = Database::open(fixture.database.clone(), app).await?;
-    let record = database.create("customers", json!({"name":"含😀字符","score":1.25,"active":true,"day":"2024-02-29","time":"2024-02-29T08:00:00.123+08:00","state":"new"})).await?;
+    let record = database.create("customers", json!({"name":"含😀字符","score":1.25,"active":true,"day":"2024-02-29","time":"2024-02-29T08:00:00.123+08:00","state":"new"}), None).await?;
     let id = record["id"].as_i64().ok_or("缺少 id")?;
     assert_eq!(record["active"], true);
     assert_eq!(record["score"], 1.25);
     assert_eq!(record["note"], "默认");
     assert_eq!(record["time"], "2024-02-29T00:00:00.123Z");
     assert_eq!(
-        database.update("customers", id, json!({})).await?,
+        database.update("customers", id, json!({}), None).await?,
         Some(record.clone())
     );
     let changed = database
-        .update("customers", id, json!({"note":"修改"}))
+        .update("customers", id, json!({"note":"修改"}), None)
         .await?
         .ok_or("缺少记录")?;
     assert_eq!(changed["active"], true);
     assert_eq!(changed["note"], "修改");
     let defaulted = database
-        .create("customers", json!({"name":"默认布尔"}))
+        .create("customers", json!({"name":"默认布尔"}), None)
         .await?;
     assert_eq!(defaulted["active"], false);
     assert_eq!(defaulted["state"], Value::Null);
@@ -368,7 +385,7 @@ async fn queries_escape_like_literals_validate_types_and_use_stable_pagination()
         ("' OR 1=1 --", Some(4)),
     ] {
         database
-            .create("customers", json!({"name":name,"age":age}))
+            .create("customers", json!({"name":name,"age":age}), None)
             .await?;
     }
     for text in ["%", "_", "\\", "' OR 1=1 --"] {
@@ -505,14 +522,14 @@ async fn unique_conflicts_roll_back_and_failed_migrations_keep_previous_registry
         .application("<text name='name' required unique/><number name='age' integer min={0}/>")?;
     let database = Database::open(fixture.database.clone(), app).await?;
     let one = database
-        .create("customers", json!({"name":"甲","age":10}))
+        .create("customers", json!({"name":"甲","age":10}), None)
         .await?;
     let two = database
-        .create("customers", json!({"name":"乙","age":20}))
+        .create("customers", json!({"name":"乙","age":20}), None)
         .await?;
     assert!(matches!(
         database
-            .create("customers", json!({"name":"甲","age":30}))
+            .create("customers", json!({"name":"甲","age":30}), None)
             .await,
         Err(DatabaseError::Conflict)
     ));
@@ -521,7 +538,8 @@ async fn unique_conflicts_roll_back_and_failed_migrations_keep_previous_registry
             .update(
                 "customers",
                 two["id"].as_i64().ok_or("缺少 id")?,
-                json!({"name":"甲"})
+                json!({"name":"甲"}),
+                None,
             )
             .await,
         Err(DatabaseError::Conflict)
@@ -549,7 +567,11 @@ async fn unique_conflicts_roll_back_and_failed_migrations_keep_previous_registry
         Err(DatabaseError::Migration(_))
     ));
     let after = database
-        .create("customers", json!({"name":"丙","age":22,"phone":"123"}))
+        .create(
+            "customers",
+            json!({"name":"丙","age":22,"phone":"123"}),
+            None,
+        )
         .await?;
     assert_eq!(after["age"], 22);
     assert_eq!(after["phone"], "123");
@@ -597,7 +619,7 @@ async fn concurrent_requests_use_one_connection_and_queue_rejection_is_known_not
     }
     assert!(matches!(
         database
-            .create("customers", json!({"name":"队列拒绝"}))
+            .create("customers", json!({"name":"队列拒绝"}), None)
             .await,
         Err(DatabaseError::Busy)
     ));
@@ -622,6 +644,7 @@ async fn concurrent_requests_use_one_connection_and_queue_rejection_is_known_not
                 .create(
                     "customers",
                     json!({"name":format!("并发{index}"),"age":index}),
+                    None,
                 )
                 .await
         }));
@@ -676,7 +699,7 @@ async fn dropping_an_accepted_write_response_does_not_claim_the_write_was_cancel
     let owner = database.clone();
     let accepted = tokio::spawn(async move {
         owner
-            .create("customers", json!({"name":"响应丢弃仍需核对"}))
+            .create("customers", json!({"name":"响应丢弃仍需核对"}), None)
             .await
     });
     for _ in 0..100 {
@@ -706,7 +729,7 @@ async fn unsafe_generated_ids_roll_back_the_insert_and_sequence() -> TestResult 
     let fixture = Fixture::new()?;
     let database = Database::open(fixture.database.clone(), fixture.application(BASIC)?).await?;
     database
-        .create("customers", json!({"name":"已有记录"}))
+        .create("customers", json!({"name":"已有记录"}), None)
         .await?;
     let connection = Connection::open(&fixture.database)?;
     connection.execute(
@@ -715,7 +738,7 @@ async fn unsafe_generated_ids_roll_back_the_insert_and_sequence() -> TestResult 
     )?;
     assert!(matches!(
         database
-            .create("customers", json!({"name":"不应提交"}))
+            .create("customers", json!({"name":"不应提交"}), None)
             .await,
         Err(DatabaseError::CorruptData(_))
     ));
@@ -740,7 +763,7 @@ async fn shutdown_reaps_connection_is_idempotent_and_closes_every_clone() -> Tes
     let database = Database::open(fixture.database.clone(), app.clone()).await?;
     let clone = database.clone();
     database
-        .create("customers", json!({"name":"关闭后保留"}))
+        .create("customers", json!({"name":"关闭后保留"}), None)
         .await?;
     tokio::time::timeout(Duration::from_secs(2), database.shutdown()).await??;
     assert!(
@@ -805,7 +828,7 @@ async fn parallel_independent_databases_reopen_without_owning_old_connections() 
                     .await
                     .map_err(|error| format!("首次打开 {}：{error}", fixture.database.display()))?;
                 database
-                    .create("customers", json!({"name":"并行生命周期"}))
+                    .create("customers", json!({"name":"并行生命周期"}), None)
                     .await
                     .map_err(|error| format!("首次写入 {}：{error}", fixture.database.display()))?;
                 database
@@ -823,7 +846,7 @@ async fn parallel_independent_databases_reopen_without_owning_old_connections() 
                     1
                 );
                 reopened
-                    .create("customers", json!({"name":"重新写入"}))
+                    .create("customers", json!({"name":"重新写入"}), None)
                     .await
                     .map_err(|error| format!("重新写入 {}：{error}", fixture.database.display()))?;
                 reopened.shutdown().await?;
@@ -834,5 +857,442 @@ async fn parallel_independent_databases_reopen_without_owning_old_connections() 
     for task in tasks {
         task.await??;
     }
+    Ok(())
+}
+
+fn attachment(owner: char, field: &str, name: &str) -> crate::database::NewUpload {
+    crate::database::NewUpload {
+        resource: "customers".into(),
+        field: field.into(),
+        owner: owner.to_string().repeat(64),
+        name: name.into(),
+        content_type: "application/pdf".into(),
+        data: b"%PDF-1.7\nbinary".to_vec(),
+        expires_at: crate::database::uploads::now().expect("测试时钟有效") + 3600,
+    }
+}
+
+const ATTACHMENTS: &str = "<text name='name' required unique/><file name='attachments' maxFiles={2} accept={['application/pdf']}/><file name='secondary' maxFiles={2}/>";
+
+#[tokio::test]
+async fn uploads_survive_restart_and_crud_bind_replace_clear_delete_atomically() -> TestResult {
+    let fixture = Fixture::new()?;
+    let app = fixture.application(ATTACHMENTS)?;
+    let database = Database::open(fixture.database.clone(), app.clone()).await?;
+    let first = database
+        .stage_upload(attachment('a', "attachments", "一.pdf"))
+        .await?;
+    let second = database
+        .stage_upload(attachment('a', "attachments", "二.pdf"))
+        .await?;
+    assert_ne!(first.id, second.id);
+    let pending = database
+        .stage_upload(attachment('a', "attachments", "暂存.pdf"))
+        .await?;
+    let record = database
+        .create(
+            "customers",
+            json!({"name":"原记录","attachments":[first,second]}),
+            Some("a".repeat(64)),
+        )
+        .await?;
+    let id = record["id"].as_i64().ok_or("缺少记录 id")?;
+    assert_eq!(
+        database
+            .file_info(&first.id)
+            .await?
+            .ok_or("缺少附件")?
+            .record_id,
+        Some(id)
+    );
+    assert!(!database.delete_upload(&first.id, &"a".repeat(64)).await?);
+    assert!(!database.delete_upload(&pending.id, &"b".repeat(64)).await?);
+    let connection = Connection::open(&fixture.database)?;
+    let storage: (String, String) = connection.query_row(
+        "SELECT typeof(attachments), attachments FROM customers WHERE id=?1",
+        [id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    assert_eq!(storage.0, "text");
+    assert_eq!(
+        serde_json::from_str::<Value>(&storage.1)?,
+        record["attachments"]
+    );
+    drop(connection);
+    database.shutdown().await?;
+    let database = Database::open(fixture.database.clone(), app).await?;
+    assert_eq!(database.get("customers", id).await?, Some(record.clone()));
+    assert_eq!(
+        database.file_content(&first.id).await?,
+        Some(b"%PDF-1.7\nbinary".to_vec())
+    );
+    assert_eq!(
+        database
+            .file_info(&pending.id)
+            .await?
+            .ok_or("暂存未持久化")?
+            .record_id,
+        None
+    );
+    assert!(database.delete_upload(&pending.id, &"a".repeat(64)).await?);
+
+    let replacement = database
+        .stage_upload(attachment('a', "attachments", "替换.pdf"))
+        .await?;
+    assert!(matches!(
+        database
+            .create(
+                "customers",
+                json!({"name":"原记录","attachments":[replacement]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Conflict)
+    ));
+    assert_eq!(
+        database
+            .file_info(&replacement.id)
+            .await?
+            .ok_or("暂存附件消失")?
+            .record_id,
+        None
+    );
+    assert!(matches!(
+        database
+            .update(
+                "customers",
+                id,
+                json!({"name":"不应保存","attachments":[replacement]}),
+                Some("b".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert_eq!(database.get("customers", id).await?, Some(record.clone()));
+    let mut forged = serde_json::to_value(&replacement)?;
+    forged["size"] = (replacement.size + 1).into();
+    assert!(matches!(
+        database
+            .update(
+                "customers",
+                id,
+                json!({"attachments":[forged]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    let mut missing = serde_json::to_value(&replacement)?;
+    missing["id"] = "f".repeat(64).into();
+    assert!(matches!(
+        database
+            .update(
+                "customers",
+                id,
+                json!({"attachments":[replacement],"secondary":[missing]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert_eq!(database.get("customers", id).await?, Some(record.clone()));
+    assert!(database.file_content(&first.id).await?.is_some());
+    assert!(database.file_content(&second.id).await?.is_some());
+    assert_eq!(
+        database
+            .file_info(&replacement.id)
+            .await?
+            .ok_or("回滚丢失暂存")?
+            .record_id,
+        None
+    );
+
+    let changed = database
+        .update(
+            "customers",
+            id,
+            json!({"attachments":[replacement]}),
+            Some("a".repeat(64)),
+        )
+        .await?
+        .ok_or("缺少替换结果")?;
+    assert_eq!(changed["attachments"], json!([replacement]));
+    assert!(database.file_info(&first.id).await?.is_none());
+    assert!(database.file_content(&second.id).await?.is_none());
+    assert_eq!(
+        database
+            .file_info(&replacement.id)
+            .await?
+            .ok_or("缺少替换附件")?
+            .record_id,
+        Some(id)
+    );
+    let cleared = database
+        .update("customers", id, json!({"attachments":null}), None)
+        .await?
+        .ok_or("缺少清空结果")?;
+    assert_eq!(cleared["attachments"], Value::Null);
+    assert!(database.file_content(&replacement.id).await?.is_none());
+    let last = database
+        .stage_upload(attachment('a', "attachments", "删除.pdf"))
+        .await?;
+    database
+        .update(
+            "customers",
+            id,
+            json!({"attachments":[last]}),
+            Some("a".repeat(64)),
+        )
+        .await?
+        .ok_or("缺少更新结果")?;
+    assert!(database.delete("customers", id).await?);
+    assert!(database.file_info(&last.id).await?.is_none());
+    assert!(database.file_content(&last.id).await?.is_none());
+    database.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn upload_references_cannot_cross_sessions_fields_resources_or_records() -> TestResult {
+    let fixture = Fixture::new()?;
+    let mut app = fixture.application(ATTACHMENTS)?;
+    let mut other_resource = app.resources[0].clone();
+    other_resource.name = "accounts".into();
+    app.resources.push(other_resource);
+    let database = Database::open(fixture.database.clone(), app).await?;
+    let file = database
+        .stage_upload(attachment('a', "attachments", "会话.pdf"))
+        .await?;
+    for (resource, value, owner) in [
+        (
+            "customers",
+            json!({"name":"他人会话","attachments":[file]}),
+            Some("b".repeat(64)),
+        ),
+        (
+            "customers",
+            json!({"name":"无会话","attachments":[file]}),
+            None,
+        ),
+        (
+            "customers",
+            json!({"name":"跨字段","secondary":[file]}),
+            Some("a".repeat(64)),
+        ),
+        (
+            "accounts",
+            json!({"name":"跨资源","attachments":[file]}),
+            Some("a".repeat(64)),
+        ),
+    ] {
+        assert!(matches!(
+            database.create(resource, value, owner).await,
+            Err(DatabaseError::Validation(_))
+        ));
+    }
+    let mut forged = serde_json::to_value(&file)?;
+    forged["name"] = "伪造.pdf".into();
+    assert!(matches!(
+        database
+            .create(
+                "customers",
+                json!({"name":"伪造元数据","attachments":[forged]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert!(matches!(
+        database
+            .create(
+                "customers",
+                json!({"name":"重复引用","attachments":[file,file]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert!(matches!(
+        database
+            .create(
+                "customers",
+                json!({"name":"超数量","attachments":[file,file,file]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert_eq!(
+        database
+            .list("customers", ListQuery::default())
+            .await?
+            .total,
+        0
+    );
+    assert_eq!(
+        database.list("accounts", ListQuery::default()).await?.total,
+        0
+    );
+    assert_eq!(
+        database
+            .file_info(&file.id)
+            .await?
+            .ok_or("失败写入丢失附件")?
+            .record_id,
+        None
+    );
+    let first = database
+        .create(
+            "customers",
+            json!({"name":"拥有者","attachments":[file]}),
+            Some("a".repeat(64)),
+        )
+        .await?;
+    let first_id = first["id"].as_i64().ok_or("缺少记录 id")?;
+    let second = database
+        .create("customers", json!({"name":"其他记录"}), None)
+        .await?;
+    let second_id = second["id"].as_i64().ok_or("缺少记录 id")?;
+    assert!(matches!(
+        database
+            .create(
+                "customers",
+                json!({"name":"重复绑定","attachments":[file]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert!(matches!(
+        database
+            .update(
+                "customers",
+                second_id,
+                json!({"attachments":[file]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert!(matches!(
+        database
+            .update(
+                "customers",
+                first_id,
+                json!({"secondary":[file]}),
+                Some("a".repeat(64))
+            )
+            .await,
+        Err(DatabaseError::Validation(_))
+    ));
+    assert_eq!(
+        database.get("customers", first_id).await?,
+        Some(first.clone())
+    );
+    assert_eq!(database.get("customers", second_id).await?, Some(second));
+    let retained = database
+        .update(
+            "customers",
+            first_id,
+            json!({"name":"保留现有附件","attachments":[file]}),
+            Some("b".repeat(64)),
+        )
+        .await?
+        .ok_or("缺少保留结果")?;
+    assert_eq!(retained["attachments"], first["attachments"]);
+    assert_eq!(
+        database
+            .file_info(&file.id)
+            .await?
+            .ok_or("保留附件消失")?
+            .record_id,
+        Some(first_id)
+    );
+    database.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn confirmed_schema_removal_prunes_blobs_and_failed_migrations_keep_attachments() -> TestResult
+{
+    let fixture = Fixture::new()?;
+    let app = fixture.application(ATTACHMENTS)?;
+    let database = Database::open(fixture.database.clone(), app.clone()).await?;
+    let removed = database
+        .stage_upload(attachment('a', "attachments", "待删.pdf"))
+        .await?;
+    let kept = database
+        .stage_upload(attachment('a', "secondary", "保留.pdf"))
+        .await?;
+    let pending = database
+        .stage_upload(attachment('a', "attachments", "待删暂存.pdf"))
+        .await?;
+    let record = database
+        .create(
+            "customers",
+            json!({"name":"迁移记录","attachments":[removed],"secondary":[kept]}),
+            Some("a".repeat(64)),
+        )
+        .await?;
+    let id = record["id"].as_i64().ok_or("缺少记录 id")?;
+    let mut target = app.clone();
+    target.resources[0]
+        .fields
+        .retain(|field| field.name != "attachments");
+    let mut invalid = target.clone();
+    invalid.resources[0]
+        .fields
+        .iter_mut()
+        .find(|field| field.name == "secondary")
+        .ok_or("缺少保留字段")?
+        .upload
+        .as_mut()
+        .ok_or("缺少上传约束")?
+        .max_size = 1;
+    let failed_plan = migration::preview(&fixture.database, &invalid)?;
+    assert!(matches!(
+        database
+            .replace_application(invalid, Some(failed_plan.checksum))
+            .await,
+        Err(DatabaseError::Migration(
+            migration::MigrationError::InvalidData(_)
+        ))
+    ));
+    assert_eq!(database.get("customers", id).await?, Some(record.clone()));
+    assert!(database.file_content(&removed.id).await?.is_some());
+    assert!(database.file_content(&pending.id).await?.is_some());
+    assert!(matches!(
+        database.replace_application(target.clone(), None).await,
+        Err(DatabaseError::Migration(
+            migration::MigrationError::ConfirmationRequired { .. }
+        ))
+    ));
+    let plan = migration::preview(&fixture.database, &target)?;
+    let outcome = database
+        .replace_application(target.clone(), Some(plan.checksum))
+        .await?;
+    assert!(outcome.applied);
+    assert!(database.file_info(&removed.id).await?.is_none());
+    assert!(database.file_content(&pending.id).await?.is_none());
+    assert!(database.file_content(&kept.id).await?.is_some());
+    assert!(
+        !database
+            .get("customers", id)
+            .await?
+            .ok_or("迁移记录消失")?
+            .contains_key("attachments")
+    );
+    let backup = Connection::open(outcome.backup.ok_or("破坏性迁移缺少备份")?)?;
+    let backed_up: i64 =
+        backup.query_row("SELECT count(*) FROM _kenvoy_uploads", [], |row| row.get(0))?;
+    assert_eq!(backed_up, 3);
+    drop(backup);
+    target.resources.clear();
+    let plan = migration::preview(&fixture.database, &target)?;
+    database
+        .replace_application(target, Some(plan.checksum))
+        .await?;
+    assert!(database.file_content(&kept.id).await?.is_none());
+    database.shutdown().await?;
     Ok(())
 }

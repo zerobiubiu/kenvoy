@@ -102,8 +102,11 @@ pub(super) fn sql_value(value: &Value) -> Result<SqlValue> {
             .filter(|value| value.is_finite())
             .map(SqlValue::Real)
             .ok_or_else(|| DatabaseError::InvalidState("非有限数字不能写入 SQLite".into())),
+        Value::Array(_) => serde_json::to_string(value)
+            .map(SqlValue::Text)
+            .map_err(|_| DatabaseError::InvalidState("附件 JSON 编码失败".into())),
         _ => Err(DatabaseError::InvalidState(
-            "资源字段只支持 JSON 标量".into(),
+            "资源字段只支持 JSON 标量或已验证附件数组".into(),
         )),
     }
 }
@@ -126,6 +129,8 @@ fn decode(row: &Row<'_>, resource: &ResourceDefinition) -> Result<Record> {
             (ValueRef::Integer(value), FieldKind::Boolean) if matches!(value, 0 | 1) => {
                 Value::Bool(value == 1)
             }
+            (ValueRef::Text(value), FieldKind::File) => serde_json::from_slice(value)
+                .map_err(|_| DatabaseError::CorruptData(field.name.clone()))?,
             (ValueRef::Integer(value), FieldKind::Number) => value.into(),
             (ValueRef::Real(value), FieldKind::Number) => Number::from_f64(value)
                 .map(Value::Number)
@@ -179,6 +184,7 @@ pub(super) fn create(
     application: &ApplicationIR,
     resource: &ResourceDefinition,
     input: &Value,
+    upload_owner: Option<&str>,
 ) -> Result<Record> {
     let values = validation::validate_record(resource, input, WriteMode::Create)?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -207,6 +213,15 @@ pub(super) fn create(
     valid_id(id).map_err(|_| {
         DatabaseError::CorruptData("系统 id 已超出安全正整数范围，写入已回滚".into())
     })?;
+    super::uploads::synchronize(
+        &transaction,
+        resource,
+        id,
+        None,
+        &values,
+        upload_owner,
+        super::uploads::now()?,
+    )?;
     let result = get(&transaction, resource, id)?
         .ok_or_else(|| DatabaseError::InvalidState("写入后未找到记录".into()))?;
     transaction.commit()?;
@@ -219,6 +234,7 @@ pub(super) fn update(
     resource: &ResourceDefinition,
     id: i64,
     input: &Value,
+    upload_owner: Option<&str>,
 ) -> Result<Option<Record>> {
     valid_id(id)?;
     let values = validation::validate_record(resource, input, WriteMode::Patch)?;
@@ -249,6 +265,15 @@ pub(super) fn update(
         ),
         params_from_iter(params),
     )?;
+    super::uploads::synchronize(
+        &transaction,
+        resource,
+        id,
+        Some(&existing),
+        &merged,
+        upload_owner,
+        super::uploads::now()?,
+    )?;
     let result = get(&transaction, resource, id)?;
     transaction.commit()?;
     Ok(result)
@@ -265,6 +290,14 @@ pub(super) fn delete(
         &format!("DELETE FROM {} WHERE id = ?1", identifier(&resource.name)),
         [id],
     )?;
+    if changed == 1
+        && resource
+            .fields
+            .iter()
+            .any(|field| field.kind == FieldKind::File)
+    {
+        super::uploads::delete_record(&transaction, &resource.name, id)?;
+    }
     transaction.commit()?;
     Ok(changed == 1)
 }
@@ -285,6 +318,9 @@ fn filter(
     value: &Value,
 ) -> Result<(String, Option<SqlValue>)> {
     let name = identifier(&field.name);
+    if field.kind == FieldKind::File {
+        return Err(DatabaseError::InvalidQuery("附件字段不支持标量筛选".into()));
+    }
     if value.is_null() {
         return match operator {
             FilterOperator::Eq => Ok((format!("{name} IS NULL"), None)),
@@ -344,6 +380,12 @@ pub(super) fn list(
     let sort = query.sort.as_deref().unwrap_or("id");
     if !matches!(sort, "id" | "created_at" | "updated_at") && resource.field(sort).is_none() {
         return Err(DatabaseError::InvalidQuery("排序字段未在资源中声明".into()));
+    }
+    if resource
+        .field(sort)
+        .is_some_and(|field| field.kind == FieldKind::File)
+    {
+        return Err(DatabaseError::InvalidQuery("附件字段不支持标量排序".into()));
     }
     let mut clauses = Vec::new();
     let mut params = Vec::new();

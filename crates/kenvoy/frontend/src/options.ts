@@ -1,8 +1,8 @@
-import type { FieldDefinition, FieldError, JsonScalar, ResourceDefinition, SelectOption } from './types.ts';
+import type { FieldDefinition, FieldError, FieldValue, JsonScalar, ResourceDefinition, SelectOption } from './types.ts';
 import { normalizeInput, validateField } from './validation.ts';
 
 export interface BindingValue {
-  value: JsonScalar;
+  value: FieldValue;
   valid: boolean;
   errors: FieldError[];
 }
@@ -11,7 +11,7 @@ export interface BindingValue {
 export function normalizeBindingValue(field: FieldDefinition, draft: unknown): BindingValue {
   const result = validateField(field, normalizeInput(field, draft));
   return result.ok
-    ? { value: result.value as JsonScalar, valid: true, errors: [] }
+    ? { value: result.value as FieldValue, valid: true, errors: [] }
     : { value: null, valid: false, errors: result.errors };
 }
 
@@ -23,16 +23,17 @@ export function optionDependencies(field: FieldDefinition): string[] {
   ])];
 }
 
-export function dependencyValues(field: FieldDefinition, values: Readonly<Record<string, JsonScalar>>): Record<string, JsonScalar> {
-  return Object.fromEntries(optionDependencies(field).map(name => [name, values[name] ?? null]));
+export function dependencyValues(field: FieldDefinition, values: Readonly<Record<string, FieldValue>>): Record<string, JsonScalar> {
+  return Object.fromEntries(optionDependencies(field).map(name => [name, Array.isArray(values[name]) ? null : values[name] ?? null]));
 }
 
-export function dependenciesReady(field: FieldDefinition, values: Readonly<Record<string, JsonScalar>>): boolean {
-  return optionDependencies(field).every(name => values[name] !== undefined && values[name] !== null);
+export function dependenciesReady(field: FieldDefinition, values: Readonly<Record<string, FieldValue>>): boolean {
+  return optionDependencies(field).every(name => values[name] !== undefined && values[name] !== null && !Array.isArray(values[name]));
 }
 
-export function staticOptions(field: FieldDefinition, values: Readonly<Record<string, JsonScalar>>, resource?: ResourceDefinition, validity?: Readonly<Record<string, boolean>>): SelectOption[] {
+export function staticOptions(field: FieldDefinition, values: Readonly<Record<string, FieldValue>>, resource?: ResourceDefinition, validity?: Readonly<Record<string, boolean>>): SelectOption[] {
   return field.options.filter(option => Object.entries(option.when ?? {}).every(([name, value]) => {
+    if (Array.isArray(values[name]) || resource?.fields.some(item => item.name === name && item.kind === 'file')) return false;
     if (validity?.[name] === false) return false;
     const dependent = resource?.fields.find(item => item.name === name);
     if (!dependent) return values[name] === value;

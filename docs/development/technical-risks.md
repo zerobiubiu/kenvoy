@@ -31,7 +31,9 @@
 
 两个产品 Crate、单向依赖、React/TypeScript/原生 CSS/CSR、Axum/Tokio、SQLite/rusqlite 和 SWC/rquickjs 纯计算路线已经进入正式实现；测试/工程成员的新增不改变产品层职责。认证参数、客户端投影、Session/CSRF、迁移确认与备份不再是待设计项，分别见[安全契约](../architecture/security-design.md)、[数据库设计](../architecture/database-design.md)和[JavaScript Runtime](../architecture/javascript-runtime.md)。
 
-当前未实现完整 TS 类型检查、任意动态 Schema、服务端 npm/Node 兼容、数据库/文件/网络 Host API、不可信代码操作系统隔离、重命名映射执行、关系/上传字段、行级多租户与多框架适配。必须通过诊断或文档明确边界，不能静默忽略或由“解释执行”推导为已支持。
+当前未实现完整 TS 类型检查、任意动态 Schema、服务端 npm/Node 兼容、数据库/文件/网络 Host API、不可信代码操作系统隔离、重命名映射执行、关系字段、行级多租户与多框架适配。必须通过诊断或文档明确边界，不能静默忽略或由“解释执行”推导为已支持。
+
+文件字段和图片展示已按[附件契约](../contracts/file-uploads.md)实现并专项验证；当前采用有界小文件和同库 BLOB，签名核对不是完整图像解码或病毒扫描，也没有对象存储/分块续传。数据库空间、长时负载、断电及跨平台风险仍沿用本表边界，不因附件正常流程通过而关闭；证据见[0014 变更记录](../changes/0014-file-uploads-and-images.md)。
 
 具体实现缺口、验证补齐与可选扩展的当前边界、代码入口及关闭标准统一维护在[后续实施与验证待办](implementation-backlog.md)。本表保留风险控制和剩余条件，不重复维护任务状态；四个 Workspace 成员和默认原生 React/CSS 是已确认设计，不列为待修缺陷。
 

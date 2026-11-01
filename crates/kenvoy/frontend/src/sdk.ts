@@ -4,11 +4,14 @@ import { api } from './api';
 import { useRuntime } from './context';
 import type { JsonValue } from './types';
 
-export { ApiError } from './api';
+export { ApiError, fileUrl } from './api';
 export type { JsonValue, ApplicationDescription, SessionView } from './types';
 export { useField, useForm, useResource } from './bindings';
-export type { FieldBinding, FormBinding, TableBinding, GroupBinding, PageBinding } from './bindings';
-export type { FieldDefinition, ResourceDefinition, SelectOption, OptionsSource, OptionsQuery, OptionsResult, JsonScalar, RecordData } from './types';
+export type { FieldBinding, FormBinding, TableBinding, GroupBinding, PageBinding, ImageBinding } from './bindings';
+export type { FieldDefinition, ResourceDefinition, SelectOption, OptionsSource, OptionsQuery, OptionsResult, JsonScalar, FieldValue, FileConstraints, UploadedFile, RecordData } from './types';
+export { Image, AttachmentList } from './images';
+export type { ImageProps } from './images';
+export type { FileUploadBinding, FileUploadState } from './uploads';
 export { normalizeInput, validateField, validateRecord } from './validation';
 
 export function callAction(name: string, args: JsonValue[] = []): Promise<JsonValue> {

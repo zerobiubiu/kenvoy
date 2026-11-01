@@ -8,6 +8,8 @@
 
 当前默认组件已改用原生 React 控件与 CSS；系统组件重载和自定义数据组件使用统一字段绑定。新增 select 联动、跨资源选项与 SDK 详见[组件与选项契约](../contracts/component-bindings.md)。下文阶段 06—10 的 MUI 测试结论仅为迁移前历史证据；新实现的验证以[原生组件与联动选项变更记录](../changes/0012-native-components-and-options.md#执行验证记录)为准。
 
+多文件字段、表格/详情附件展示、Image 组件及 SDK 图片接口已经接入同一 Runtime。`FieldValue` 仅为原标量或严格附件数组；上传、逐项移除和取消由表单控制器维护，不把文件对象直接交给 JSON CRUD。用法与安全边界见[文件与图片契约](../contracts/file-uploads.md)，本轮证据见[0014 变更记录](../changes/0014-file-uploads-and-images.md)。
+
 当前浏览器验收由 `kenvoy-tests` 的 Rust 测试入口运行，Rust 拥有项目夹具和 CLI 子进程；Playwright 脚本保留页面行为断言。原 tools 进程夹具已退役，执行方式见[工程与测试流程](../development/engineering-workflow.md)。
 
 React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的受控投影渲染通用组件；普通表单和后台使用同一资源字段、验证和 API。函数/自定义组件只通过注册 ID 连接，不能 JSON 序列化函数或把完整应用入口打包给浏览器。

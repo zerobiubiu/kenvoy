@@ -9,7 +9,10 @@ use serde::{
 };
 use serde_json::{Map, Number, Value};
 
-use crate::application::{FieldDefinition, FieldKind, ResourceDefinition};
+use crate::application::{
+    FieldDefinition, FieldKind, FileConstraints, MAX_UPLOAD_FILES, MAX_UPLOAD_SIZE,
+    ResourceDefinition, UploadedFile,
+};
 
 pub const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
@@ -58,6 +61,119 @@ fn field_error(field: &FieldDefinition, code: &str, message: &str) -> Validation
         field: Some(field.name.clone()),
         message: message.into(),
     }
+}
+
+fn mime_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"!#$%&'+-.^_`|~".contains(&byte)
+        })
+}
+
+pub fn valid_mime_type(value: &str) -> bool {
+    value
+        .split_once('/')
+        .is_some_and(|(kind, subtype)| mime_token(kind) && mime_token(subtype))
+}
+
+pub fn mime_matches_accept(content_type: &str, accept: &[String]) -> bool {
+    accept.is_empty()
+        || accept.iter().any(|allowed| {
+            allowed == content_type
+                || allowed.strip_suffix("/*").is_some_and(|kind| {
+                    content_type
+                        .split_once('/')
+                        .is_some_and(|(actual, _)| actual == kind)
+                })
+        })
+}
+
+pub fn validate_file_constraints(constraints: &FileConstraints) -> Result<(), &'static str> {
+    if !(1..=MAX_UPLOAD_SIZE).contains(&constraints.max_size) {
+        return Err("maxSize 必须为 1 到 10485760 的整数");
+    }
+    if !(1..=MAX_UPLOAD_FILES).contains(&constraints.max_files) {
+        return Err("maxFiles 必须为 1 到 20 的整数");
+    }
+    let mut seen = BTreeSet::new();
+    for accepted in &constraints.accept {
+        if !(valid_mime_type(accepted) || accepted.strip_suffix("/*").is_some_and(mime_token)) {
+            return Err("accept 只允许规范小写 MIME 或 type/*，不接受后缀和 MIME 参数");
+        }
+        if !seen.insert(accepted) {
+            return Err("accept 不能包含重复 MIME");
+        }
+    }
+    Ok(())
+}
+
+pub fn valid_upload_id(id: &str) -> bool {
+    id.len() == 64
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn validate_file_metadata(
+    id: &str,
+    name: &str,
+    content_type: &str,
+    size: u64,
+) -> Result<(), &'static str> {
+    if !valid_upload_id(id) {
+        return Err("文件 id 必须为 64 位小写十六进制");
+    }
+    if name.is_empty()
+        || name.chars().count() > 255
+        || matches!(name, "." | "..")
+        || name.contains(['/', '\\'])
+        || name.chars().any(char::is_control)
+    {
+        return Err("文件名必须为不超过 255 个 Unicode 标量的非空名称，不能包含路径或控制字符");
+    }
+    if !(1..=MAX_UPLOAD_SIZE).contains(&size) {
+        return Err("文件大小必须为 1 到 10485760 字节");
+    }
+    if !valid_mime_type(content_type) {
+        return Err("文件 content_type 必须为不含参数的规范小写 MIME");
+    }
+    Ok(())
+}
+
+pub fn validate_uploaded_file(file: &UploadedFile) -> Result<(), &'static str> {
+    validate_file_metadata(&file.id, &file.name, &file.content_type, file.size)
+}
+
+/// 图片声明和客户端投影只接收明确的 HTTP(S) URL 或站内绝对路径。
+pub fn valid_image_src(src: &str) -> bool {
+    if src.is_empty()
+        || src.trim() != src
+        || src.contains('\\')
+        || src.chars().any(char::is_control)
+    {
+        return false;
+    }
+    if src.starts_with('/') {
+        return !src.starts_with("//");
+    }
+    let Some((scheme, remainder)) = src.split_once("://") else {
+        return false;
+    };
+    if !(scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
+        || remainder
+            .split(['/', '?', '#'])
+            .next()
+            .is_none_or(|authority| authority.is_empty() || authority.contains('@'))
+    {
+        return false;
+    }
+    let Ok(url) = url::Url::parse(src) else {
+        return false;
+    };
+    matches!(url.scheme(), "http" | "https")
+        && url.host().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
 }
 
 /// 验证并规范化单个显式值。可空性由 !required 决定；不做隐式字符串/布尔转换。
@@ -169,7 +285,85 @@ pub fn validate_field(field: &FieldDefinition, value: &Value) -> Result<Value, V
             }
             Ok(value.clone())
         }
+        FieldKind::File => {
+            let constraints = field
+                .upload
+                .as_ref()
+                .ok_or_else(|| field_error(field, "KV4014", "file 字段缺少上传约束"))?;
+            validate_file_constraints(constraints)
+                .map_err(|message| field_error(field, "KV4014", message))?;
+            let files = value
+                .as_array()
+                .ok_or_else(|| field_error(field, "KV4002", "文件字段必须为附件元数据数组"))?;
+            if field.required && files.is_empty() {
+                return Err(field_error(field, "KV4001", "必填附件至少需要一个文件"));
+            }
+            if files.len() > constraints.max_files {
+                return Err(field_error(field, "KV4014", "附件数量超过 maxFiles"));
+            }
+            let mut ids = BTreeSet::new();
+            for file in files {
+                let object = file
+                    .as_object()
+                    .filter(|object| {
+                        object.len() == 4
+                            && ["id", "name", "content_type", "size"]
+                                .iter()
+                                .all(|key| object.contains_key(*key))
+                    })
+                    .ok_or_else(|| {
+                        field_error(
+                            field,
+                            "KV4014",
+                            "附件必须且只能包含 id/name/content_type/size",
+                        )
+                    })?;
+                let metadata = object["id"]
+                    .as_str()
+                    .zip(object["name"].as_str())
+                    .zip(object["content_type"].as_str())
+                    .zip(object["size"].as_u64())
+                    .ok_or_else(|| {
+                        field_error(
+                            field,
+                            "KV4014",
+                            "附件 id/name/content_type 必须为字符串，size 必须为正整数",
+                        )
+                    })?;
+                let (((id, name), content_type), size) = metadata;
+                validate_file_metadata(id, name, content_type, size)
+                    .map_err(|message| field_error(field, "KV4014", message))?;
+                if !ids.insert(id) {
+                    return Err(field_error(
+                        field,
+                        "KV4014",
+                        "附件数组不能重复引用同一个文件",
+                    ));
+                }
+                if size > constraints.max_size {
+                    return Err(field_error(field, "KV4014", "附件大小超过 maxSize"));
+                }
+                if !mime_matches_accept(content_type, &constraints.accept) {
+                    return Err(field_error(field, "KV4014", "附件 MIME 不满足 accept"));
+                }
+            }
+            Ok(value.clone())
+        }
     }
+}
+
+pub fn validate_default(field: &FieldDefinition, value: &Value) -> Result<Value, ValidationError> {
+    if field.kind == FieldKind::File
+        && !value.is_null()
+        && !value.as_array().is_some_and(Vec::is_empty)
+    {
+        return Err(field_error(
+            field,
+            "KV4014",
+            "file 默认值只允许 null 或 []，不能预绑定附件",
+        ));
+    }
+    validate_field(field, value)
 }
 
 /// Create 为缺失字段应用默认值或 null；Patch 只验证显式提供的字段，不应用默认值。
@@ -385,6 +579,7 @@ mod tests {
             index: false,
             options: vec![],
             options_source: None,
+            upload: (kind == FieldKind::File).then(FileConstraints::default),
             source: SourceLocation {
                 path: "test.tsx".into(),
                 span: kengine::SourceSpan {
@@ -394,6 +589,186 @@ mod tests {
                     end_position: kengine::Position { line: 1, column: 1 },
                 },
             },
+        }
+    }
+
+    fn uploaded(id: char) -> Value {
+        json!({
+            "id": id.to_string().repeat(64),
+            "name": "图片.png",
+            "content_type": "image/png",
+            "size": 2
+        })
+    }
+
+    #[test]
+    fn files_validate_strict_metadata_arrays_and_real_constraint_boundaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut definition = field(FieldKind::File);
+        definition.upload = Some(FileConstraints {
+            accept: vec!["image/*".into()],
+            max_size: MAX_UPLOAD_SIZE,
+            max_files: 2,
+        });
+        let files = json!([uploaded('a'), uploaded('b')]);
+        assert_eq!(validate_field(&definition, &files)?, files);
+        assert_eq!(validate_field(&definition, &json!([]))?, json!([]));
+        assert_eq!(validate_field(&definition, &Value::Null)?, Value::Null);
+        for invalid in [
+            json!({}),
+            json!("[]"),
+            json!([null]),
+            json!([uploaded('a'), uploaded('a')]),
+            json!([uploaded('a'), uploaded('b'), uploaded('c')]),
+        ] {
+            assert!(validate_field(&definition, &invalid).is_err(), "{invalid}");
+        }
+        for (key, value) in [
+            ("id", json!("a".repeat(63))),
+            ("id", json!("A".repeat(64))),
+            ("name", json!("")),
+            ("name", json!(".")),
+            ("name", json!("..")),
+            ("name", json!("a/b")),
+            ("name", json!("a\\b")),
+            ("name", json!("a\u{0000}b")),
+            ("name", json!("图".repeat(256))),
+            ("content_type", json!("Image/png")),
+            ("content_type", json!("image/*")),
+            ("content_type", json!("image/png; charset=utf-8")),
+            ("content_type", json!("application/pdf")),
+            ("size", json!(0)),
+            ("size", json!(-1)),
+            ("size", json!(1.5)),
+            ("size", json!(MAX_UPLOAD_SIZE + 1)),
+        ] {
+            let mut file = uploaded('a');
+            file[key] = value;
+            assert!(
+                validate_field(&definition, &json!([file])).is_err(),
+                "{key}"
+            );
+        }
+        let mut extra = uploaded('a');
+        extra["url"] = json!("/untrusted");
+        assert!(validate_field(&definition, &json!([extra.clone()])).is_err());
+        assert!(serde_json::from_value::<UploadedFile>(extra).is_err());
+        let mut missing = uploaded('a');
+        missing
+            .as_object_mut()
+            .ok_or("缺少附件对象")?
+            .remove("name");
+        assert!(validate_field(&definition, &json!([missing])).is_err());
+        let mut boundary = uploaded('a');
+        boundary["name"] = json!("图".repeat(255));
+        boundary["size"] = json!(MAX_UPLOAD_SIZE);
+        assert!(validate_field(&definition, &json!([boundary])).is_ok());
+        definition.upload.as_mut().ok_or("缺少上传约束")?.max_size = 1;
+        assert!(validate_field(&definition, &json!([uploaded('a')])).is_err());
+        definition.required = true;
+        for invalid in [Value::Null, json!([])] {
+            assert_eq!(
+                validate_field(&definition, &invalid)
+                    .expect_err("必填附件不能为空")
+                    .code,
+                "KV4001"
+            );
+        }
+        for kind in [
+            FieldKind::Text,
+            FieldKind::Textarea,
+            FieldKind::Number,
+            FieldKind::Boolean,
+            FieldKind::Date,
+            FieldKind::Datetime,
+            FieldKind::Select,
+        ] {
+            assert!(validate_field(&field(kind), &files).is_err(), "{kind:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn file_defaults_cannot_embed_references_and_mime_constraints_are_canonical() {
+        let mut definition = field(FieldKind::File);
+        assert!(validate_default(&definition, &json!([])).is_ok());
+        assert!(validate_default(&definition, &Value::Null).is_ok());
+        assert!(validate_default(&definition, &json!([uploaded('a')])).is_err());
+        definition.required = true;
+        assert!(validate_default(&definition, &json!([])).is_err());
+        assert!(validate_default(&definition, &Value::Null).is_err());
+        for constraints in [
+            FileConstraints {
+                max_size: 0,
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                max_size: MAX_UPLOAD_SIZE + 1,
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                max_files: 0,
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                max_files: MAX_UPLOAD_FILES + 1,
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                accept: vec![".png".into()],
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                accept: vec!["IMAGE/png".into()],
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                accept: vec!["*/*".into()],
+                ..FileConstraints::default()
+            },
+            FileConstraints {
+                accept: vec!["image/png".into(), "image/png".into()],
+                ..FileConstraints::default()
+            },
+        ] {
+            assert!(
+                validate_file_constraints(&constraints).is_err(),
+                "{constraints:?}"
+            );
+        }
+        assert!(valid_mime_type("application/vnd.example+json"));
+        assert!(mime_matches_accept("image/webp", &["image/*".into()]));
+        assert!(!mime_matches_accept("application/pdf", &["image/*".into()]));
+    }
+
+    #[test]
+    fn image_sources_reject_unsafe_schemes_credentials_and_url_repair() {
+        for src in [
+            "/images/图片.png",
+            "/_kenvoy/files/abc?download=1",
+            "https://example.com/image.png",
+            "HTTP://example.com/image.png",
+            "http://[::1]:8080/image.png",
+        ] {
+            assert!(valid_image_src(src), "{src}");
+        }
+        for src in [
+            "",
+            "relative.png",
+            "//example.com/a.png",
+            "/\\example.com/a.png",
+            "https://example.com\\a.png",
+            "https://example.com/\nimage.png",
+            " https://example.com/a.png",
+            "https://user:password@example.com/a.png",
+            "https://@example.com/a.png",
+            "https:example.com/a.png",
+            "https:////example.com/a.png",
+            "javascript:alert(1)",
+            "data:image/png;base64,AA",
+            "blob:https://example.com/image",
+        ] {
+            assert!(!valid_image_src(src), "{src}");
         }
     }
 

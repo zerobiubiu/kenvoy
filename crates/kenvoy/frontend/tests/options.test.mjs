@@ -90,3 +90,15 @@ test('静态条件使用原生字段的规范值比较日期时间和数字', ()
   assert.equal(staticOptions(choice, { at: '2026-11-01T01:00:00.000Z', amount: 1.0 }, resource).length, 1);
   assert.equal(staticOptions(choice, { at: '2026-11-01T01:00:00', amount: 1 }, resource).length, 0);
 });
+
+test('附件数组保留在字段绑定中，不得伪装成选项标量依赖', () => {
+  const uploaded = { id: 'a'.repeat(64), name: '图片.png', content_type: 'image/png', size: 12 };
+  const definition = field('attachments', { kind: 'file', upload: { accept: [], max_size: 1024, max_files: 5 } });
+  assert.deepEqual(normalizeBindingValue(definition, [uploaded]), { value: [uploaded], valid: true, errors: [] });
+  const choice = field('choice', { options: [{ value: 'empty', label: '空值', when: { attachments: null } }] });
+  const values = { attachments: [uploaded] };
+  assert.equal(dependenciesReady(choice, values), false);
+  assert.deepEqual(dependencyValues(choice, values), { attachments: null });
+  assert.deepEqual(staticOptions(choice, values, { name: 'entries', fields: [definition, choice] }), []);
+  assert.deepEqual(staticOptions(choice, { attachments: null }, { name: 'entries', fields: [definition, choice] }), []);
+});

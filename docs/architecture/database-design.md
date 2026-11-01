@@ -1,6 +1,6 @@
 # SQLite、Schema 与迁移设计
 
-状态：参考（现状文档）；核对日期：2026-11-01。本篇维护连接所有权、Schema 与数据一致性；命令操作和确认步骤见[迁移执行协议](../operations/migration-design.md)。真实 CRUD、HTTP/浏览器及 dev/run 共用 SQLite 已通过[最终验收](../verification/0012-final-acceptance.md)。
+状态：参考（现状文档）；核对日期：2026-11-02。本篇维护连接所有权、Schema 与数据一致性；命令操作和确认步骤见[迁移执行协议](../operations/migration-design.md)。首版证据见[最终验收](../verification/0012-final-acceptance.md)，附件及 dev→run 交叉读写见[0014 专项验收](../changes/0014-file-uploads-and-images.md)。
 
 ## 职责与连接
 
@@ -22,15 +22,20 @@
 | boolean | INTEGER | 0/1；CRUD JSON 仍为布尔值 |
 | date | TEXT | 日历日期，服务层严格验证 |
 | datetime | TEXT | 显式时区输入规范化为 UTC 毫秒 |
+| file | JSON TEXT 元数据数组；内容位于同库 BLOB | 数组、required、数量及元数据约束；写事务核验真实归属，不接受标量筛选/排序 |
 | 系统字段 | INTEGER id；TEXT created_at/updated_at | 自增主键、UTC 毫秒时间；不接受业务输入赋值 |
 
 业务名仅允许小写 ASCII 字母开头及后续字母、数字、下划线，拒绝 sqlite_、kenvoy_、系统字段和 auth/actions 等保留名。SQL 标识符来自受检注册表，输入值使用绑定参数；DDL 常量使用受控模板和严格转义。required 文本 SQL CHECK 与 Rust 使用一致 Unicode White_Space 集合，并拒绝 NUL，避免 SQLite 文本长度遇 NUL 截断。空资源、没有可表示整数的 integer 区间、过大 maxLength、冲突约束和非法默认值在创建数据库前拒绝。
 
-CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/delete；写入及结果读取在事务中完成。列表默认每页 20，上限 100，最多 16 个筛选条件，搜索最多 256 个 Unicode 标量。排序只允许声明字段及系统字段，以 id 补充稳定顺序；LIKE 转义百分号、下划线和反斜杠。计数和分页读取使用同一事务快照。未知资源、内部表、未知字段和非法查询拒绝。
+CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/delete；写入及结果读取在事务中完成。列表默认每页 20，上限 100，最多 16 个筛选条件，搜索最多 256 个 Unicode 标量。排序只允许可排序声明字段及系统字段，以 id 补充稳定顺序；file 不接受标量筛选/排序，也不参与全文搜索。LIKE 转义百分号、下划线和反斜杠。计数和分页读取使用同一事务快照。未知资源、内部表、未知字段和非法查询拒绝。
 
 数据库 Runtime 属于内部能力，HTTP 先检查用户与 Resource 策略，再调用数据库；持有句柄不代表公开 API 已经授权。
 
 远程 select 的值仍是 TEXT，不生成静态 IN CHECK。选项查询仅取已声明的值/标签列，条件使用参数绑定，分页和 selected 值解析在同一读事务内。创建与 PATCH 在写事务内验证来源值和联动条件；PATCH 先合并已有记录。when/筛选等运行规则不参与物理 Schema hash，规则变更保留存量数据、后续写入重验；静态枚举全集变化或切换远程方式按实际约束 Diff 处理。详见[组件与选项契约](../contracts/component-bindings.md)。
+
+## 附件一致性
+
+附件通过同一专属连接线程管理，二进制与元数据保存在固定内部表；暂存归属会话摘要，绑定归属资源/字段/记录。CRUD 的校验、绑定、替换清理和记录删除共用写事务；已确认的字段/资源删除与附件清理共用迁移事务，失败保留旧状态，备份包含附件。启动及上传回收过期暂存，不创建公开文件目录。限额、访问接口及明确限制见[文件与图片契约](../contracts/file-uploads.md)。
 
 ## Diff、确认与历史
 
@@ -48,7 +53,7 @@ CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/d
 
 `_kenvoy_schema` 保存版本、规范 Schema JSON/hash、实际结构 JSON/hash；`_kenvoy_migrations` 保存递增版本、checksum、from/to hash、完整 plan_json、backup_path、执行时间。历史和 DDL 同事务提交，校验版本连续、前后 hash 链、计划 checksum 与最终 Schema。
 
-实际结构快照来自排序的 sqlite_master 对象定义，包含业务表、索引、视图和触发器。手工修改、未知内部表、缺失元数据或记录篡改均阻断；迁移两张表另外核验精确受控 DDL。仅预留精确表所有权 `_kenvoy_users`、`_kenvoy_sessions`、`_kenvoy_auth_schema` 给认证模块，由其独立核验版本与结构，绝不忽略所有同前缀对象。已有未纳管业务表拒绝自动接管。
+实际结构快照来自排序的 sqlite_master 对象定义，包含业务表、索引、视图和触发器。手工修改、未知内部表、缺失元数据或记录篡改均阻断；迁移两张表另外核验精确受控 DDL。精确表所有权分别预留给认证模块的 `_kenvoy_users/_kenvoy_sessions/_kenvoy_auth_schema` 和附件模块的 `_kenvoy_uploads/_kenvoy_upload_schema`，各自独立核验版本与结构，绝不忽略所有同前缀对象。已有未纳管业务表拒绝自动接管。
 
 ## 备份与回滚
 
@@ -62,6 +67,6 @@ CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/d
 
 replace_application 在工作队列串行迁移，成功后替换 Application IR 并增加数据库 generation，失败保留原注册表。HttpRuntime::publish_prepared 持应用写锁，在迁移成功后同步替换模型、JavaScript 包与静态资产；已接受的发布由独立跟踪任务完成，调用者取消不使状态中断。Development 在屏障前准备客户端候选，之后更新镜像和活动清单；提交后的收尾失败不能声称数据库回滚，具体策略见 [运行时设计](runtime-design.md)。
 
-关系/文件字段、改名映射、跨代际崩溃恢复、大表耗时和空间预算仍待后续设计。预检按行读取，但唯一值集合占用与数据量相关的内存，需大表实测后优化。本阶段只迁移临时测试文件，没有迁移用户生产数据。
+关系字段、改名映射、跨代际崩溃恢复、大表耗时和空间预算仍待后续设计；文件字段已按上述附件协议实现。预检按行读取，但唯一值集合占用与数据量相关的内存，需大表实测后优化。本轮仅迁移隔离测试文件，没有迁移用户生产数据。
 
 证据见 [阶段 04 验证](../verification/0006-sqlite-runtime.md)、[实施记录](../changes/0005-sqlite-runtime.md)；相关决策为 [ADR 0005](../decisions/0005-sqlite-database.md)，生命周期见 [Runtime](runtime-design.md)。

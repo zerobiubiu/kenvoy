@@ -4,12 +4,14 @@ pub(crate) mod auth;
 pub mod migration;
 mod options;
 mod query;
+mod uploads;
 mod worker;
 
 use std::path::PathBuf;
 
 pub use options::{OptionsQuery, OptionsResult};
 pub use query::{FieldFilter, FilterOperator, ListQuery, ListResult, Record};
+pub use uploads::{NewUpload, StoredFile};
 pub use worker::{Database, DatabaseInfo};
 
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +36,8 @@ pub enum DatabaseError {
     InvalidQuery(String),
     #[error("记录违反数据库约束，操作已回滚")]
     Conflict,
+    #[error("暂存附件数量或总大小已达限额，请移除未提交附件后重试")]
+    UploadLimit,
     #[error("数据库工作队列已满，请稍后再试；本次请求尚未执行")]
     Busy,
     #[error("数据库工作线程已经关闭，本次请求未执行")]

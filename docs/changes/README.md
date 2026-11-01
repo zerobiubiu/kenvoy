@@ -4,13 +4,13 @@
 
 ## 从哪里开始
 
-- 了解最近交付：先读[0013：Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md)，再读[0012：原生组件与联动选项](0012-native-components-and-options.md)。
+- 了解最近交付：先读[0014：多文件上传与图片](0014-file-uploads-and-images.md)，再读[0013：Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md)及[0012：原生组件与联动选项](0012-native-components-and-options.md)。
 - 核对执行证据：进入[验证记录索引](../verification/README.md)，其中同时索引独立验收报告和变更记录内的专项验证；当前有效行为从[整体架构](../architecture/architecture.md)及对应主题文档查询。
 - 追溯实现过程：按下表编号顺序阅读，不把早期阶段的进度或告警当作当前状态。
 
 ## 记录清单
 
-下表保留每次实施的原编号与范围。“已执行”描述当次事实，不能代替当前接口契约；关联的后续记录见本页末尾。0012、0013 的专项验证随各自变更正文保存，不另复制为验证报告。
+下表保留每次实施的原编号与范围。“已执行”描述当次事实，不能代替当前接口契约；关联的后续记录见本页末尾。0012—0014 的专项验证随各自变更正文保存，不另复制为验证报告。
 
 | 编号 | 记录 | 记录状态与范围 | 关联实现 |
 |---|---|---|---|
@@ -27,6 +27,7 @@
 | 0011 | [最终验收与边界修复](0011-final-acceptance.md) | 已执行；阶段 10 | 配置恢复、诊断、配额、统一回归与文档 |
 | 0012 | [原生组件与联动选项](0012-native-components-and-options.md) | 已执行；首版后扩展 | select、系统重载、统一数据绑定、原生 CSS 与用户 React 库 |
 | 0013 | [Rust 测试成员与工程入口](0013-rust-test-workspace-and-tools-retirement.md) | 已执行；工程重组 | kenvoy-tests、xtask、浏览器协议、tools 退役 |
+| 0014 | [多文件上传与图片组件](0014-file-uploads-and-images.md) | 已执行；E04 及本场景 V01 | SQLite 附件事务、上传/读取授权、file/image/SDK、真实模式切换与桌面/窄屏 |
 
 ## 关联代码与配置
 

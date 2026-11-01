@@ -17,6 +17,7 @@
 |---|---|---|
 | [changes/0012：原生组件与联动选项](../changes/0012-native-components-and-options.md#执行验证记录) | 已执行；默认原生 CSS、系统组件重载、统一数据绑定、联动与跨资源选项 | [组件与选项契约](../contracts/component-bindings.md)、[前端 Runtime](../architecture/frontend-runtime.md) |
 | [changes/0013：Rust 测试成员与工程入口](../changes/0013-rust-test-workspace-and-tools-retirement.md#执行验证记录) | 已执行；跨 Crate 测试、xtask、Rust 浏览器夹具及 tools 退役 | [工程与测试流程](../development/engineering-workflow.md)、[测试策略](../development/testing-strategy.md) |
+| [changes/0014：多文件上传与图片](../changes/0014-file-uploads-and-images.md#执行验证记录) | 已执行；附件权限/生命周期、Image/SDK、dev→run 同库读写和桌面/390px 专项 | [文件与图片契约](../contracts/file-uploads.md)、[数据库设计](../architecture/database-design.md)、[后续待办](../development/implementation-backlog.md) |
 
 ## 初始审查与准备计划
 

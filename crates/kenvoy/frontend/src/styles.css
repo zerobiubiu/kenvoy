@@ -78,6 +78,24 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .form-feedback { scroll-margin-top: 100px; }
 .kv-form-actions { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; }
 
+.kv-upload-field input[type="file"] { padding: 7px 10px; font-size: 0.875rem; }
+.kv-upload-field input[type="file"]::file-selector-button { margin-right: 12px; min-height: 32px; border: 1px solid var(--kv-border); border-radius: 7px; padding: 4px 10px; background: var(--kv-primary-light); color: var(--kv-primary-dark); font: inherit; cursor: inherit; }
+.kv-upload-field input[type="file"]:not(:disabled) { cursor: pointer; }
+.kv-upload-field input[type="file"]:disabled::file-selector-button { background: var(--kv-background); color: var(--kv-muted); }
+.kv-upload-field > p { margin: 0; }
+.kv-attachments { display: flex; flex-direction: column; gap: 16px; list-style: none; margin: 0; padding: 0; max-width: 100%; }
+.kv-attachments.compact { gap: 12px; min-width: 144px; }
+.kv-attachment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; min-width: 0; }
+.kv-attachment > .kv-image { grid-column: 1 / -1; }
+.kv-attachment-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kv-file-link { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; color: var(--kv-primary); overflow-wrap: anywhere; }
+.kv-file-action { font-size: 0.75rem; white-space: nowrap; }
+.kv-image { position: relative; display: inline-flex; align-items: center; justify-content: center; vertical-align: top; max-width: 100%; min-width: 0; }
+.kv-image img { display: block; max-width: 100%; min-width: 0; height: auto; }
+.kv-image-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8px; background: var(--kv-background); text-align: center; }
+.kv-image-fallback { display: inline-flex; align-items: center; padding: 8px; overflow-wrap: anywhere; }
+.kv-image-failed { border: 1px solid var(--kv-border); border-radius: 8px; }
+
 .kv-alert { display: flex; align-items: flex-start; gap: 12px; border-radius: 8px; padding: 14px 16px; font-size: 0.875rem; overflow-wrap: anywhere; }
 .kv-alert-content { flex: 1; min-width: 0; }
 .kv-alert-title { font-size: 1rem; font-weight: 650; margin: 0 0 6px; }

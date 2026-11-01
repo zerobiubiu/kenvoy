@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError } from './api';
-import { RequestError, ResourceForm, ResourceTable, displayValue, useRuntime } from './Runtime';
+import { RequestError, ResourceForm, ResourceTable, RecordValueDisplay, useRuntime } from './Runtime';
+import { canReadFile } from './files';
 import { Loading, NativeDialog, Notice } from './ui';
 import type { RecordData, ResourceDefinition } from './types';
 
 function ResourceWorkspace({ resource }: { resource: ResourceDefinition }) {
-  const { client } = useRuntime();
+  const { client, application } = useRuntime();
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const mode = search.get('view');
@@ -103,7 +104,7 @@ function ResourceWorkspace({ resource }: { resource: ResourceDefinition }) {
                 {[{ name: 'id', label: '编号' }, ...resource.fields, { name: 'created_at', label: '创建时间（UTC）' }, { name: 'updated_at', label: '更新时间（UTC）' }].map((field) =>
                   <div key={field.name} className="kv-details-row">
                     <dt>{field.label || field.name}</dt>
-                    <dd>{displayValue(record[field.name], resource.fields.find((item) => item.name === field.name))}</dd>
+                    <dd><RecordValueDisplay value={record[field.name]} field={resource.fields.find((item) => item.name === field.name)} readable={canReadFile(application, resource.name, field.name)} /></dd>
                   </div>)}
               </dl>
               <button className="kv-button outlined kv-self-start" type="button" onClick={() => navigate(route + '?view=edit&id=' + record.id)}>编辑这条记录</button>
@@ -119,7 +120,7 @@ function ResourceWorkspace({ resource }: { resource: ResourceDefinition }) {
         <p className="kv-muted">删除后无法在页面中撤销，请核对记录内容。</p>
         {deleting && <dl className="kv-delete-details">
           {resource.fields.slice(0, 3).map((field) => <div key={field.name}>
-            <dt>{field.label || field.name}</dt><dd>{displayValue(deleting[field.name], field)}</dd>
+            <dt>{field.label || field.name}</dt><dd><RecordValueDisplay value={deleting[field.name]} field={field} compact readable={canReadFile(application, resource.name, field.name)} /></dd>
           </div>)}
         </dl>}
         {deleteFailure != null && <RequestError error={deleteFailure} />}

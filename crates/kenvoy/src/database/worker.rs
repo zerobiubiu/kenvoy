@@ -200,6 +200,7 @@ impl Database {
                         Some(&path),
                         confirmation.as_deref(),
                     )?;
+                    super::uploads::initialize(&mut connection, super::uploads::now()?)?;
                     Ok(WorkerState {
                         connection,
                         path,
@@ -287,7 +288,12 @@ impl Database {
         self.submit(|state| state.info()).await
     }
 
-    pub async fn create(&self, resource: &str, input: Value) -> Result<Record> {
+    pub async fn create(
+        &self,
+        resource: &str,
+        input: Value,
+        upload_owner: Option<String>,
+    ) -> Result<Record> {
         let resource = resource.to_owned();
         self.submit(move |state| {
             let definition = state.resource(&resource)?.clone();
@@ -296,6 +302,7 @@ impl Database {
                 &state.application,
                 &definition,
                 &input,
+                upload_owner.as_deref(),
             )
         })
         .await
@@ -316,7 +323,13 @@ impl Database {
         .await
     }
 
-    pub async fn update(&self, resource: &str, id: i64, patch: Value) -> Result<Option<Record>> {
+    pub async fn update(
+        &self,
+        resource: &str,
+        id: i64,
+        patch: Value,
+        upload_owner: Option<String>,
+    ) -> Result<Option<Record>> {
         let resource = resource.to_owned();
         self.submit(move |state| {
             let definition = state.resource(&resource)?.clone();
@@ -326,6 +339,7 @@ impl Database {
                 &definition,
                 id,
                 &patch,
+                upload_owner.as_deref(),
             )
         })
         .await
@@ -338,6 +352,45 @@ impl Database {
             query::delete(&mut state.connection, &definition, id)
         })
         .await
+    }
+
+    pub async fn stage_upload(
+        &self,
+        upload: super::NewUpload,
+    ) -> Result<crate::application::UploadedFile> {
+        self.submit(move |state| {
+            let definition = state.resource(&upload.resource)?.clone();
+            super::uploads::stage(
+                &mut state.connection,
+                &definition,
+                upload,
+                super::uploads::now()?,
+            )
+        })
+        .await
+    }
+
+    pub async fn file_info(&self, id: &str) -> Result<Option<super::StoredFile>> {
+        let id = id.to_owned();
+        self.submit(move |state| {
+            super::uploads::info(&state.connection, &id, super::uploads::now()?)
+        })
+        .await
+    }
+
+    pub async fn file_content(&self, id: &str) -> Result<Option<Vec<u8>>> {
+        let id = id.to_owned();
+        self.submit(move |state| {
+            super::uploads::content(&state.connection, &id, super::uploads::now()?)
+        })
+        .await
+    }
+
+    pub async fn delete_upload(&self, id: &str, owner: &str) -> Result<bool> {
+        let id = id.to_owned();
+        let owner = owner.to_owned();
+        self.submit(move |state| super::uploads::delete_staged(&state.connection, &id, &owner))
+            .await
     }
 
     pub async fn options(

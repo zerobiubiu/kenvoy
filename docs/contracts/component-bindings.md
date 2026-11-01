@@ -1,6 +1,6 @@
 # 组件重载、数据绑定与联动选项
 
-状态：参考（现状文档）。系统字段、表单、后台及自定义数据组件共享 Application IR；运行证据见[本次变更记录](../changes/0012-native-components-and-options.md)，既有阶段验收不自动覆盖新增能力。
+状态：参考（现状文档）。系统字段、表单、后台及自定义数据组件共享 Application IR；选项与原生组件证据见[0012 变更记录](../changes/0012-native-components-and-options.md)，附件与图片见[0014 变更记录](../changes/0014-file-uploads-and-images.md)，既有阶段验收不自动覆盖新增能力。
 
 ## 静态与跨资源选项
 
@@ -44,19 +44,21 @@ export default <app name="客户系统">
 </app>;
 ```
 
-可重载 text、textarea、number、boolean、date、datetime、select、form、table、group、page。重复目标、未知目标、非组件引用或触达服务端私有模块均拒绝。重载作用于使用该应用描述的公共页面和管理表单。
+可重载 text、textarea、number、boolean、date、datetime、select、file、image、form、table、group、page。重复目标、未知目标、非组件引用或触达服务端私有模块均拒绝。字段重载作用于使用该应用描述的公共页面和管理表单；image 重载接收图片展示参数及原生 children。
 
-字段组件收到 `FieldBinding`：只读 `field/resource`、JSON 标量 `value`、有效性 `valid`、编辑文本 `draft`、`onChange/onDraftChange`、错误、禁用及选项状态。number 仍是数字，boolean 仍是布尔，select 仍是字符串；不能提交 UI 库返回的整条对象。选择器应将库的选中对象显式映射为其值。框架保留核心转换、验证、联动和提交，渲染失败由错误边界报告。
+字段组件收到 `FieldBinding`：只读 `field/resource`、规范 `value`、有效性 `valid`、编辑文本 `draft`、`onChange/onDraftChange`、错误、禁用及选项状态。number 仍是数字，boolean 仍是布尔，select 仍是字符串；file 使用严格的 `UploadedFile[]` 或可选 null，不使用文本草稿。选择器不能提交 UI 库返回的整条对象，应显式映射为值。框架保留核心转换、验证、联动和提交，渲染失败由错误边界报告。
 
 无效草稿保留在 `draft`，此时 `value=null`、`valid=false`，不能解释为合法清空；可空字段的显式 `null` 则为 `valid=true`。`values/valuesValidity` 提供表单其余字段的同一规范值与有效性，无效依赖不触发远程查询，也不匹配静态 `when: null`。提交仍检查原始草稿，避免将无效输入写成 null。
 
 form/table/group/page 的重载是展示容器：接收原生状态和 `children`，应继续渲染 children，以保留框架提供的操作和字段。`FormBinding.values/validity` 同样区分规范值和有效性。重载不生成另一份 API 或数据库模型。
 
+file 重载额外取得 `uploadState/upload/removeUpload/cancelUpload`，复用表单独占暂存和提交保护。`Image`、`AttachmentList` 与 `fileUrl` 同时从 SDK 导出；属性、限制、权限和文件生命周期统一见[文件与图片契约](file-uploads.md)。
+
 ## 自定义组件的数据接口
 
 从 `@kenvoy/client` 导入公开类型及 Hooks：
 
-- `useResource(name)`：只读资源定义、当前权限、验证过的 create/update、list/get/delete 和 options；服务端仍是授权与验证的最终依据。
+- `useResource(name)`：只读资源定义、当前权限、验证过的 create/update、list/get/delete、options 以及 upload/removeUpload；服务端仍是授权与验证的最终依据。
 - `useField()`：字段重载中的同一字段绑定，避免额外维护脱离表单的值。
 - `useForm()`：资源表单状态；只在对应上下文使用。
 - `useAction/callAction`：沿用服务端 Action 通道。

@@ -10,7 +10,7 @@
 |---|---|
 | 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
-| 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
+| 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
 | 核对完成范围与未完成项 | [阶段状态](development/development-roadmap.md) → [后续实施与验证待办](development/implementation-backlog.md) → [验证证据](verification/README.md) → [技术风险](development/technical-risks.md) |
 | 追溯方案与实施 | [架构决策](decisions/README.md) → [变更记录](changes/README.md) → [验证记录](verification/README.md) |
@@ -22,7 +22,7 @@
 | 分类入口 | 内容概览 | 治理方式 |
 |---|---|---|
 | [architecture/](architecture/README.md) | 整体架构、产品边界、语言与业务解释、前后端运行时、数据库、安全及当前技术选择 | 现状文档，维护当前设计与实现边界 |
-| [contracts/](contracts/README.md) | KEngine API、Generic/Application IR、DSL 语法、配置、组件绑定与选项协议 | 现状文档，维护有效接口契约 |
+| [contracts/](contracts/README.md) | KEngine API、Generic/Application IR、DSL 语法、配置、组件绑定、选项及[附件与图片](contracts/file-uploads.md)协议 | 现状文档，维护有效接口契约 |
 | [development/](development/README.md) | 工程流程、测试策略、阶段状态、[后续待办](development/implementation-backlog.md)与风险登记 | 现状文档，区分完成事实、实现待办和待补证据 |
 | [operations/](operations/README.md) | CLI 使用、开发与生产运行、迁移确认及备份恢复操作 | 现状文档，维护操作条件与失败边界 |
 | [reference/](reference/README.md) | 技术栈、依赖来源、锁定版本和平台实测范围 | 现状参考资料，不替代锁文件与验收记录 |
@@ -31,6 +31,8 @@
 | [verification/](verification/README.md) | 初始审查、准备计划、阶段验收及变更内附专项验证入口 | 保留各次环境、命令、实际结果和限制 |
 
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
+
+最近新增：[多文件上传与图片契约](contracts/file-uploads.md)及[0014 实施与专项验收](changes/0014-file-uploads-and-images.md)；E04 和随本轮补齐的 V01 状态见[待办追踪](development/implementation-backlog.md)。
 
 ## 文档规范
 

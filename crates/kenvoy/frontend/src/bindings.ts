@@ -4,18 +4,20 @@ import { ApiError } from './api';
 import { useRuntime } from './context';
 import { immutable } from './options';
 import { validateRecord } from './validation';
-import type { FieldDefinition, JsonScalar, JsonValue, ListQuery, OptionsQuery, PageDefinition, RecordData, ResourceDefinition, SelectOption } from './types';
+import type { FieldDefinition, FieldValue, JsonValue, ListQuery, OptionsQuery, PageDefinition, RecordData, ResourceDefinition, SelectOption } from './types';
+import type { FileUploadBinding } from './uploads';
+import type { ImageProps } from './images';
 
-/** 所有字段重载遵循同一控制协议。draft 是 DOM 编辑文本，value 是 JSON 标量。 */
-export interface FieldBinding {
+/** 所有字段重载遵循同一控制协议；文件使用真实附件数组，不使用 JSON 编辑草稿。 */
+export interface FieldBinding extends FileUploadBinding {
   field: Readonly<FieldDefinition>;
   resource?: Readonly<ResourceDefinition>;
   formId?: string;
-  value: JsonScalar;
+  value: FieldValue;
   /** false 时 value 为 null，编辑原文仍在 draft；这不表示已清空或可以提交。 */
   valid: boolean;
   draft: string;
-  values: Readonly<Record<string, JsonScalar>>;
+  values: Readonly<Record<string, FieldValue>>;
   valuesValidity: Readonly<Record<string, boolean>>;
   error?: string;
   disabled: boolean;
@@ -27,7 +29,7 @@ export interface FieldBinding {
   optionsTotal: number;
   optionsPageSize: number;
   optionsSearch: string;
-  onChange: (value: JsonScalar) => void;
+  onChange: (value: FieldValue) => void;
   onDraftChange: (value: string) => void;
   searchOptions: (value: string) => void;
   loadOptionsPage: (page: number) => void;
@@ -40,7 +42,7 @@ export interface FormBinding {
   mode: 'create' | 'edit';
   formId?: string;
   fields: readonly string[];
-  values: Readonly<Record<string, JsonScalar>>;
+  values: Readonly<Record<string, FieldValue>>;
   validity: Readonly<Record<string, boolean>>;
   errors: Readonly<Record<string, string>>;
   busy: boolean;
@@ -61,6 +63,7 @@ export interface TableBinding {
 }
 export interface GroupBinding { label: string | null; children: ReactNode }
 export interface PageBinding { page: Readonly<PageDefinition>; children: ReactNode }
+export interface ImageBinding extends ImageProps { children: ReactNode }
 
 export const FieldContext = createContext<FieldBinding | null>(null);
 export const FormContext = createContext<FormBinding | null>(null);
@@ -97,5 +100,7 @@ export function useResource(name: string) {
     update: (id: number, data: Record<string, JsonValue>) => client.update(name, id, validated(data, 'patch')),
     delete: (id: number) => client.delete(name, id),
     options: (field: string, query: OptionsQuery, formId?: string) => client.options(name, field, query, formId),
+    upload: (field: string, file: File, formId?: string, mode: 'create' | 'update' = 'create') => client.upload(name, field, file, formId, mode),
+    removeUpload: (id: string) => client.removeUpload(id),
   }), [definition, application.permissions, name, client, validated]);
 }

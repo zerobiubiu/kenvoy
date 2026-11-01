@@ -70,3 +70,23 @@ test('对象原型字段不会被当作输入或污染输出', () => {
   assert.equal(Object.getPrototypeOf(result.value), Object.prototype);
   assert.equal(result.value.__proto__, '值');
 });
+
+test('文件字段只接受真实元数据数组，数量、大小、类型与必填空数组遵循 Rust 规则', () => {
+  const definition = field('file', { upload: { accept: ['image/*', 'application/pdf'], max_size: 1024, max_files: 2 } });
+  const image = { id: 'a'.repeat(64), name: '图片.png', content_type: 'image/png', size: 12 };
+  const document = { id: 'b'.repeat(64), name: '合同.pdf', content_type: 'application/pdf', size: 20 };
+  assert.deepEqual(validateField(definition, [image, document]), { ok: true, value: [image, document] });
+  assert.equal(validateField(definition, null).ok, true);
+  assert.equal(validateField(definition, []).ok, true);
+  assert.equal(validateField({ ...definition, required: true }, []).errors[0].code, 'KV4001');
+  assert.equal(validateField(definition, JSON.stringify([image])).errors[0].code, 'KV4002');
+  for (const value of [
+    [image, image], [image, document, { ...image, id: 'c'.repeat(64) }], [{ ...image, size: 1025 }],
+    [{ ...image, size: 0 }], [{ ...image, size: 1.5 }], [{ ...image, content_type: 'text/plain' }],
+    [{ ...image, content_type: 'image/PNG' }], [{ ...image, content_type: 'image/*' }],
+    [{ ...image, name: '../图片.png' }], [{ ...image, name: 'a\\nb.png' }], [{ ...image, name: '\\ud800' }],
+    [{ ...image, id: 'A'.repeat(64) }], [{ ...image, extra: true }], [null], new Array(1),
+  ]) assert.equal(validateField(definition, value).errors[0].code, 'KV4014');
+  assert.equal(normalizeInput(definition, '').length, 0, '文件不使用空文本草稿暗中转换为 null');
+  for (const kind of ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select']) assert.equal(validateField(field(kind), [image]).ok, false, kind);
+});

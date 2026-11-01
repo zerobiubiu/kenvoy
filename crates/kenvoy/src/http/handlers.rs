@@ -59,7 +59,7 @@ impl From<AuthError> for ApiError {
     }
 }
 
-fn no_query(uri: &Uri) -> Result<(), ApiError> {
+pub(super) fn no_query(uri: &Uri) -> Result<(), ApiError> {
     if uri.query().is_some_and(|query| !query.is_empty()) {
         Err(ApiError::bad("此接口不接受查询参数"))
     } else {
@@ -363,7 +363,7 @@ pub(super) async fn action(
     Ok(Json(json!({"data":value,"generation":model.generation})))
 }
 
-fn policy<'a>(
+pub(super) fn policy<'a>(
     app: &'a ApplicationIR,
     resource: &str,
     operation: Operation,
@@ -631,7 +631,11 @@ pub(super) async fn create(
         )?;
     }
     authorize_option_write(&model.application, &resource, &input, role, false)?;
-    let mut record = shared.database.create(&resource, input).await?;
+    let owner = super::uploads::owner(&headers)?;
+    let mut record = shared
+        .database
+        .create(&resource, input, Some(owner))
+        .await?;
     if role != Role::Admin {
         record.retain(|key, _| {
             matches!(key.as_str(), "id" | "created_at" | "updated_at")
@@ -670,7 +674,12 @@ pub(super) async fn update(
     )?;
     let record = shared
         .database
-        .update(&resource, id(&record)?, input)
+        .update(
+            &resource,
+            id(&record)?,
+            input,
+            Some(super::uploads::owner(&headers)?),
+        )
         .await?
         .ok_or_else(ApiError::missing)?;
     Ok(Json(json!({"data":record})))

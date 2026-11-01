@@ -12,7 +12,7 @@
 
 ## 文档清单
 
-以下共 6 篇主题文档，均为可持续维护的参考现状文档。清单说明契约覆盖面，不额外宣称实现或验收通过；已实现、受限及待验证行为以正文、当前实现和原始证据为准。
+以下共 7 篇主题文档，均为可持续维护的参考现状文档。清单说明契约覆盖面，不额外宣称实现或验收通过；已实现、受限及待验证行为以正文、当前实现和原始证据为准。
 
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
@@ -22,6 +22,7 @@
 | [Application IR 与客户端描述](application-ir.md) | 参考 | 统一业务模型、对象标识、模块引用、身份投影及运行代际与产物的衔接。 |
 | [项目配置与路径规则](project-configuration.md) | 参考 | `kenvoy.toml` 默认值、严格校验、路径保护、开发重载和生产部署输入。 |
 | [组件重载、数据绑定与联动选项](component-bindings.md) | 参考 | 系统组件重载、字段及表单绑定、静态与跨资源选项接口、权限和 `@kenvoy/client` SDK。 |
+| [多文件上传与图片展示](file-uploads.md) | 参考 | file 数组、SQLite 附件绑定与清理、上传/访问授权、图片节点及 SDK Image。 |
 
 ## 推荐阅读顺序
 
@@ -41,8 +42,9 @@
 | Application IR 与浏览器投影 | [宿主模型](../../crates/kenvoy/src/application.rs)、[HTTP 投影](../../crates/kenvoy/src/http/projection.rs)、[客户端类型](../../crates/kenvoy/frontend/src/types.ts) |
 | 配置 | [项目加载与校验](../../crates/kenvoy/src/project.rs)、[客户应用配置](../../examples/customer-app/kenvoy.toml) |
 | 组件绑定、SDK 与选项 | [绑定类型](../../crates/kenvoy/frontend/src/bindings.ts)、[SDK 入口](../../crates/kenvoy/frontend/src/sdk.ts)、[客户端 API](../../crates/kenvoy/frontend/src/api.ts)、[服务端选项规则](../../crates/kenvoy/src/options.rs)、[组件扩展示例](../../examples/extensions-app/README.md) |
+| 附件与图片 | [附件存储](../../crates/kenvoy/src/database/uploads.rs)、[上传与访问 HTTP](../../crates/kenvoy/src/http/uploads.rs)、[上传字段](../../crates/kenvoy/frontend/src/FileField.tsx)、[图片组件](../../crates/kenvoy/frontend/src/images.tsx) |
 
-上述测试链接用于定位既有消费方式，不表示本次目录整理重新运行了这些测试。
+上述链接用于定位实现和回归；实际执行范围从[验证索引](../verification/README.md)进入，不由链接存在推定已通过。
 
 ## 维护与废弃、替代关系
 

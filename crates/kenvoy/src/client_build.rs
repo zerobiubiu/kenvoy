@@ -53,6 +53,19 @@ const SOURCES: &[(&str, &[u8])] = &[
     ("src/api.ts", include_bytes!("../frontend/src/api.ts")),
     ("src/sdk.ts", include_bytes!("../frontend/src/sdk.ts")),
     ("src/ui.tsx", include_bytes!("../frontend/src/ui.tsx")),
+    ("src/files.ts", include_bytes!("../frontend/src/files.ts")),
+    (
+        "src/uploads.ts",
+        include_bytes!("../frontend/src/uploads.ts"),
+    ),
+    (
+        "src/images.tsx",
+        include_bytes!("../frontend/src/images.tsx"),
+    ),
+    (
+        "src/FileField.tsx",
+        include_bytes!("../frontend/src/FileField.tsx"),
+    ),
     (
         "src/bindings.ts",
         include_bytes!("../frontend/src/bindings.ts"),

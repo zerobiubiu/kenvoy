@@ -11,8 +11,13 @@ import type { FieldBinding, FormBinding, GroupBinding, PageBinding, TableBinding
 import { dependencyValues, dependentFields, dependenciesReady, immutable, normalizeBindingValue, optionDependencies, staticOptions } from './options';
 import { Notice, Loading, NativeDialog } from './ui';
 import { normalizeInput, validateField } from './validation';
+import { FileField } from './FileField';
+import { canReadFile, isUploadedFiles } from './files';
+import { AttachmentList, Image } from './images';
+import { EMPTY_UPLOAD_STATE, FormUploads } from './uploads';
+import type { FileUploadBinding } from './uploads';
 import type {
-  ComponentDefinition, FieldDefinition, JsonScalar, JsonValue, SelectOption,
+  ComponentDefinition, FieldDefinition, FieldValue, JsonScalar, JsonValue, SelectOption,
   PageDefinition, RecordData, ResourceDefinition, SystemComponentName,
 } from './types';
 
@@ -31,6 +36,7 @@ export function RequestError({ error, retry }: { error: unknown; retry?: () => v
 
 function draftValue(field: FieldDefinition, value: unknown): string {
   if (value === null || value === undefined) return '';
+  if (field.kind === 'file') return '';
   if (field.kind === 'boolean') return value === true ? 'true' : 'false';
   return String(value);
 }
@@ -44,7 +50,7 @@ function OverrideView<T extends { children?: ReactNode }>({ name, model, childre
   return <ComponentBoundary key={module}><Custom {...model}>{children}</Custom></ComponentBoundary>;
 }
 
-function useOptions(field: FieldDefinition, resource: ResourceDefinition | undefined, values: Readonly<Record<string, JsonScalar>>, validity: Readonly<Record<string, boolean>>, selected: string, formId?: string) {
+function useOptions(field: FieldDefinition, resource: ResourceDefinition | undefined, values: Readonly<Record<string, FieldValue>>, validity: Readonly<Record<string, boolean>>, selected: string, formId?: string) {
   const { client, application } = useRuntime();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -95,10 +101,11 @@ function useOptions(field: FieldDefinition, resource: ResourceDefinition | undef
   };
 }
 
-export function FieldControl({ field, value, onChange, onValueChange: acceptValue, canonicalValue, canonicalValid, error, disabled = false, resource, values = {}, validity = {}, formId }: {
+export function FieldControl({ field, value, onChange, onValueChange: acceptValue, canonicalValue, canonicalValid, error, disabled = false, resource, values = {}, validity = {}, formId, uploads, readable = true }: {
   field: FieldDefinition; value: string; onChange: (value: string) => void;
-  onValueChange?: (value: JsonScalar) => void; canonicalValue?: JsonScalar; canonicalValid?: boolean;
-  error?: string; disabled?: boolean; resource?: ResourceDefinition; values?: Readonly<Record<string, JsonScalar>>; validity?: Readonly<Record<string, boolean>>; formId?: string;
+  onValueChange?: (value: FieldValue) => void; canonicalValue?: FieldValue; canonicalValid?: boolean;
+  error?: string; disabled?: boolean; resource?: ResourceDefinition; values?: Readonly<Record<string, FieldValue>>; validity?: Readonly<Record<string, boolean>>; formId?: string;
+  uploads?: FileUploadBinding; readable?: boolean;
 }) {
   const id = useId();
   const options = useOptions(field, resource, values, validity, value, formId);
@@ -106,27 +113,32 @@ export function FieldControl({ field, value, onChange, onValueChange: acceptValu
   const onDraftChange = (draft: string) => {
     if (disabled) return;
     if (typeof draft !== 'string') { setBindingError('字段草稿必须是字符串'); return; }
+    if (field.kind === 'file') { setBindingError('文件字段不接受文本草稿，请使用 upload 或 removeUpload'); return; }
     setBindingError(''); onChange(draft);
   };
-  const onValueChange = (next: JsonScalar) => {
+  const onValueChange = (next: FieldValue) => {
     if (disabled) return;
     const result = validateField(field, next);
     if (!result.ok) { setBindingError(result.errors.map(item => item.message).join('；')); return; }
     setBindingError('');
-    if (acceptValue) acceptValue(result.value as JsonScalar); else onChange(draftValue(field, result.value));
+    if (acceptValue) acceptValue(immutable(result.value as FieldValue)); else onChange(draftValue(field, result.value));
   };
-  const normalized = normalizeBindingValue(field, value);
+  const normalized = normalizeBindingValue(field, field.kind === 'file' ? canonicalValue ?? null : value);
   const valid = canonicalValid ?? normalized.valid;
   const message = error || bindingError || (!valid && value !== '' ? normalized.errors.map(item => item.message).join('；') : undefined);
   const binding: FieldBinding = {
     field: immutable(field), resource: resource ? immutable(resource) : undefined, formId,
-    value: valid ? canonicalValue === undefined ? normalized.value : canonicalValue : null, valid,
+    value: immutable(valid ? canonicalValue === undefined ? normalized.value : canonicalValue : null), valid,
     draft: value, values: immutable(values), valuesValidity: immutable(validity), error: message,
     disabled: disabled || (field.kind === 'select' && (!options.ready || options.loading)),
     options: immutable(options.options), optionsLoading: options.loading, optionsError: options.error,
     optionsReady: options.ready, optionsPage: options.page, optionsTotal: options.total, optionsPageSize: options.pageSize,
     optionsSearch: options.search, onChange: onValueChange, onDraftChange,
     searchOptions: options.searchOptions, loadOptionsPage: options.loadPage, reloadOptions: options.reload,
+    uploadState: uploads?.uploadState ?? EMPTY_UPLOAD_STATE,
+    upload: uploads?.upload ?? (() => Promise.reject(new ApiError('此字段不在可上传的资源表单内'))),
+    removeUpload: uploads?.removeUpload ?? (() => Promise.reject(new ApiError('此字段不在可上传的资源表单内'))),
+    cancelUpload: uploads?.cancelUpload ?? (() => { throw new ApiError('此字段不在可上传的资源表单内'); }),
   };
   const label = field.label || field.name;
   const hint = message || (field.kind === 'boolean' ? '选择是或否；“否”也是有效值。'
@@ -135,7 +147,7 @@ export function FieldControl({ field, value, onChange, onValueChange: acceptValu
     : field.max_length != null ? '最多 ' + field.max_length + ' 个字符' : '');
   const common = { id, name: field.name, value, required: field.required, disabled: binding.disabled, 'aria-invalid': Boolean(message), 'aria-describedby': id + '-help',
     onChange: (event: { target: { value: string } }) => onDraftChange(event.target.value) };
-  const native = <div className="kv-field">
+  const native = field.kind === 'file' ? <FileField binding={binding} id={id} readable={readable} /> : <div className="kv-field">
     <label htmlFor={id}>{label}{field.required && <span aria-hidden="true"> *</span>}</label>
     {field.kind === 'select' || field.kind === 'boolean'
       ? <select {...common}>
@@ -172,12 +184,18 @@ export interface ResourceFormProps {
   resource: ResourceDefinition; fields?: string[]; labels?: Record<string, string>; formId?: string;
   initial?: RecordData; mode?: 'create' | 'edit'; onSaved?: (record: RecordData) => void; onCancel?: () => void;
 }
-export function ResourceForm({ resource, fields, labels, formId, initial, mode = 'create', onSaved, onCancel }: ResourceFormProps) {
-  const { client, refresh } = useRuntime();
+export function ResourceForm(props: ResourceFormProps) {
+  const { application } = useRuntime();
+  const scope = JSON.stringify([props.resource.name, props.formId, props.mode ?? 'create', props.initial?.id, props.initial?.updated_at, props.fields, application.generation]);
+  return <ResourceFormContent key={scope} {...props} />;
+}
+
+function ResourceFormContent({ resource, fields, labels, formId, initial, mode = 'create', onSaved, onCancel }: ResourceFormProps) {
+  const { client, refresh, application } = useRuntime();
   const selected = resource.fields.filter(field => !fields || fields.includes(field.name));
   const makeValues = () => Object.fromEntries(selected.map(field => [field.name, draftValue(field, initial ? initial[field.name] : field.default)]));
   const [values, setValues] = useState<Record<string, string>>(makeValues);
-  const [exactValues, setExactValues] = useState<Record<string, JsonScalar>>({});
+  const [exactValues, setExactValues] = useState<Record<string, FieldValue>>({});
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
   const [unchanged, setUnchanged] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -192,12 +210,33 @@ export function ResourceForm({ resource, fields, labels, formId, initial, mode =
   const pending = useRef(false);
   const live = useRef(true);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  const [, setUploadRevision] = useState(0);
+  const uploadValues = useRef<Record<string, FieldValue>>({});
+  const uploadEditable = useRef(true);
+  const controller = useRef<FormUploads | null>(null);
+  if (controller.current === null) controller.current = new FormUploads(client, {
+    resource: resource.name, formId, mode: mode === 'edit' ? 'update' : 'create',
+    read: name => uploadValues.current[name],
+    editable: () => uploadEditable.current,
+    changed: () => setUploadRevision(revision => revision + 1),
+    accept: (name, files) => {
+      setValues(current => ({ ...current, [name]: '' }));
+      setExactValues(current => ({ ...current, [name]: files }));
+      setDirty(current => new Set([...current, name]));
+      setUnchanged(false);
+      setErrors(current => ({ ...current, [name]: '' }));
+    },
+  });
+  const uploads = controller.current;
+  useLayoutEffect(() => { uploads.activate(); return () => uploads.dispose(); }, [uploads]);
   const normalizedValues = Object.fromEntries(selected.map(field => [field.name, normalizeBindingValue(field,
     Object.hasOwn(exactValues, field.name) ? exactValues[field.name]
       : dirty.has(field.name) ? values[field.name] ?? ''
       : initial ? initial[field.name] ?? null : field.default ?? null)]));
   const jsonValues = Object.fromEntries(Object.entries(normalizedValues).map(([name, result]) => [name, result.value]));
   const validity = Object.fromEntries(Object.entries(normalizedValues).map(([name, result]) => [name, result.valid]));
+  uploadValues.current = jsonValues;
+  uploadEditable.current = !busy && !saved && !uncertain && !pending.current;
   const focusFirst = (names: string[]) => setFocusRequest(names.length ? { kind: 'fields', names } : null);
   useLayoutEffect(() => {
     // 等待错误、重置和 busy 状态提交到 DOM，在绘制前消费请求，避免迟到的帧回调抢走下一次输入。
@@ -212,7 +251,7 @@ export function ResourceForm({ resource, fields, labels, formId, initial, mode =
     }
     setFocusRequest(null);
   }, [focusRequest, busy]);
-  const change = (field: FieldDefinition, value: string, exact?: { value: JsonScalar }) => {
+  const change = (field: FieldDefinition, value: string, exact?: { value: FieldValue }) => {
     if (busy || saved || uncertain) return;
     if (values[field.name] === value && (!exact || exact.value === jsonValues[field.name]) && !Object.hasOwn(exactValues, field.name)) return;
     const cleared = dependentFields(resource, field.name);
@@ -228,19 +267,19 @@ export function ResourceForm({ resource, fields, labels, formId, initial, mode =
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (pending.current || busy || saved || uncertain) return;
+    if (pending.current || busy || saved || uncertain || uploads.blocked) return;
     if (mode === 'edit' && !initial) { setFailure(new Error('请先选择需要编辑的记录。')); return; }
     if (mode === 'edit' && dirty.size === 0) { setUnchanged(true); return; }
     const nextErrors: Record<string, string> = {};
     const input: Record<string, JsonValue> = {};
-    const complete: Record<string, JsonScalar> = { ...jsonValues };
+    const complete: Record<string, FieldValue> = { ...jsonValues };
     for (const field of selected) {
       if (mode === 'edit' && !dirty.has(field.name)) continue;
       const touched = dirty.has(field.name);
       const value = touched ? Object.hasOwn(exactValues, field.name) ? exactValues[field.name] : normalizeInput(field, values[field.name] ?? '') : field.default ?? null;
       const result = validateField(field, value);
       if (result.ok) {
-        complete[field.name] = result.value as JsonScalar;
+        complete[field.name] = result.value as FieldValue;
         if (touched) input[field.name] = result.value;
       } else nextErrors[field.name] = result.errors.map(item => item.message).join('；');
     }
@@ -263,10 +302,13 @@ export function ResourceForm({ resource, fields, labels, formId, initial, mode =
       }
       if (!live.current) return;
       if (Object.keys(nextErrors).length) { setErrors(nextErrors); focusFirst(Object.keys(nextErrors)); return; }
+      uploads.retainForSubmission();
       const record = mode === 'edit' ? await client.update(resource.name, Number(initial!.id), input) : await client.create(resource.name, input, formId);
+      uploads.committed();
       if (!live.current) return;
       setSaved(record); onSaved?.(record); setFocusRequest({ kind: 'feedback' });
     } catch (error) {
+      uploads.submissionFailed(error instanceof ApiError && error.outcomeUnknown);
       if (!live.current) return;
       setFailure(error);
       if (error instanceof ApiError) {
@@ -277,31 +319,45 @@ export function ResourceForm({ resource, fields, labels, formId, initial, mode =
       }
     } finally { pending.current = false; if (live.current) setBusy(false); }
   };
+  const reset = () => {
+    uploads.reset();
+    setValues(makeValues()); setExactValues({}); setDirty(new Set()); setUnchanged(false); setSaved(null);
+    setFailure(null); setUncertain(false); setErrors({}); setCopyState(''); focusFirst(selected.map(field => field.name));
+  };
   const content = mode === 'edit' && !initial ? <Notice>请先从数据列表选择需要编辑的记录。</Notice> : <>
     <div className="field-grid">{selected.map(field => <FieldControl key={field.name}
       field={{ ...field, label: labels?.[field.name] ?? field.label }} resource={resource} values={jsonValues} validity={validity} formId={formId}
       value={values[field.name] ?? ''} canonicalValue={jsonValues[field.name]} canonicalValid={validity[field.name]} disabled={busy || Boolean(saved) || uncertain} error={errors[field.name]}
-      onChange={value => change(field, value)} onValueChange={value => change(field, draftValue(field, value), { value })} />)}</div>
+      readable={!saved || canReadFile(application, resource.name, field.name)}
+      uploads={field.kind === 'file' ? {
+        uploadState: immutable(uploads.state(field.name)),
+        upload: files => uploads.upload(field, files),
+        removeUpload: file => uploads.remove(field.name, file),
+        cancelUpload: () => uploads.cancel(field.name),
+      } : undefined}
+      onChange={value => change(field, value)} onValueChange={value => {
+        if (field.kind === 'file') void uploads.replace(field.name, Array.isArray(value) ? value : null).catch(error => setErrors(current => ({ ...current, [field.name]: errorMessage(error) })));
+        else change(field, draftValue(field, value), { value });
+      }} />)}</div>
     {failure != null && <RequestError error={failure} />}
     {unchanged && <Notice>内容没有变化，无需保存。</Notice>}
     {failure instanceof ApiError && !uncertain && [401, 403, 409].includes(failure.status) && <button type="button" className="kv-button" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>刷新登录与页面状态</button>}
     {saved && <div ref={feedback} tabIndex={-1} className="form-feedback"><Notice kind="success" role="status" title={mode === 'edit' ? '修改已保存' : '提交成功'}>
       记录编号：{String(saved.id)}。{mode === 'create' ? '您的信息已保存。' : '记录已更新。'}</Notice></div>}
     <div className="kv-row kv-form-actions">
-      {!saved && <button type="submit" className="kv-button primary" disabled={busy || uncertain}>{busy ? '正在保存…' : mode === 'edit' ? '保存修改' : '提交信息'}</button>}
-      {saved && !onSaved && mode === 'create' && <button type="button" className="kv-button" onClick={() => {
-        setValues(makeValues()); setExactValues({}); setDirty(new Set()); setUnchanged(false); setSaved(null); setErrors({}); setCopyState(''); focusFirst(selected.map(field => field.name));
-      }}>再登记一条</button>}
-      {onCancel && <button type="button" className="kv-button" onClick={onCancel} disabled={busy}>{saved ? '返回列表' : '取消'}</button>}
+      {!saved && <button type="submit" className="kv-button primary" disabled={busy || uncertain || uploads.blocked}>{busy ? '正在保存…' : uploads.blocked ? '请先完成文件操作' : mode === 'edit' ? '保存修改' : '提交信息'}</button>}
+      {saved && !onSaved && mode === 'create' && <button type="button" className="kv-button" onClick={reset}>再登记一条</button>}
+      {!saved && !uncertain && !onCancel && uploads.hasWork && <button type="button" className="kv-button" onClick={reset} disabled={busy}>取消本次填写</button>}
+      {onCancel && <button type="button" className="kv-button" onClick={() => { uploads.dispose(); onCancel(); }} disabled={busy}>{saved ? '返回列表' : '取消'}</button>}
       {uncertain && <button type="button" className="kv-button" onClick={() => {
-        void navigator.clipboard.writeText(JSON.stringify(values, null, 2)).then(() => setCopyState('填写内容已复制，可交给管理员核对。')).catch(() => setCopyState('无法访问剪贴板，请保留当前页面并联系管理员。'));
+        void navigator.clipboard.writeText(JSON.stringify({ ...values, ...exactValues }, null, 2)).then(() => setCopyState('填写内容已复制，可交给管理员核对。')).catch(() => setCopyState('无法访问剪贴板，请保留当前页面并联系管理员。'));
       }}>复制填写内容</button>}
     </div>
     {copyState && <p role="status" className="kv-hint">{copyState}</p>}
   </>;
   const binding: FormBinding = { resource: immutable(resource), mode, formId, fields: selected.map(field => field.name),
-    values: immutable(jsonValues), validity: immutable(validity), errors: immutable(errors), busy, saved: saved ? immutable(saved) : null, submit, children: content };
-  return <FormContext.Provider value={binding}><form ref={form} noValidate onSubmit={submit} className="kv-stack" aria-busy={busy}>
+    values: immutable(jsonValues), validity: immutable(validity), errors: immutable(errors), busy: busy || uploads.blocked, saved: saved ? immutable(saved) : null, submit, children: content };
+  return <FormContext.Provider value={binding}><form ref={form} noValidate onSubmit={submit} className="kv-stack" aria-busy={busy || uploads.blocked}>
     <OverrideView name="form" model={binding}>{content}</OverrideView>
   </form></FormContext.Provider>;
 }
@@ -310,7 +366,17 @@ export function displayValue(value: unknown, field?: FieldDefinition): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? '是' : '否';
   if (field?.kind === 'select') return field.options.find(option => option.value === value)?.label ?? String(value);
+  if (field?.kind === 'file' && isUploadedFiles(value)) return value.length ? value.map(file => file.name).join('、') : '未上传文件';
   return String(value);
+}
+
+export function RecordValueDisplay({ value, field, compact = false, readable = true }: { value: unknown; field?: FieldDefinition; compact?: boolean; readable?: boolean }) {
+  if (field?.kind === 'file') {
+    if (value == null) return <span className="kv-hint">未上传文件</span>;
+    if (!isUploadedFiles(value)) return <span className="kv-error">附件信息无效，请重新加载记录。</span>;
+    return <AttachmentList files={value} compact={compact} readable={readable} />;
+  }
+  return <>{displayValue(value, field)}</>;
 }
 
 export function ResourceTable({ resource, columns, onEdit, onInspect, onDelete, highlightedId, refreshToken = 0 }: {
@@ -330,13 +396,14 @@ export function ResourceTable({ resource, columns, onEdit, onInspect, onDelete, 
   const [failure, setFailure] = useState<unknown>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterField, setFilterField] = useState(resource.fields[0]?.name ?? '');
+  const filterable = resource.fields.filter(field => field.kind !== 'file');
+  const [filterField, setFilterField] = useState(filterable[0]?.name ?? '');
   const [filterDraft, setFilterDraft] = useState('');
   const [filterError, setFilterError] = useState('');
   const [filters, setFilters] = useState<Record<string, JsonScalar>>({});
   const [actionRecord, setActionRecord] = useState<RecordData | null>(null);
   const tableId = useId();
-  const filterDefinition = resource.fields.find(field => field.name === filterField);
+  const filterDefinition = filterable.find(field => field.name === filterField);
   const hasConditions = Boolean(query) || Object.keys(filters).length > 0;
   const selected = resource.fields.filter(field => !columns || columns.includes(field.name));
   const actions = Boolean(onEdit || onInspect || onDelete);
@@ -359,12 +426,12 @@ export function ResourceTable({ resource, columns, onEdit, onInspect, onDelete, 
       <label className="kv-field kv-search"><span>搜索记录</span><input value={search} maxLength={256} onChange={event => setSearch(event.target.value)} /></label>
       <button type="submit" className="kv-button" disabled={busy}>搜索</button>
       {query && <button type="button" className="kv-button" onClick={() => { setSearch(''); setQuery(''); setPage(0); }}>清除搜索</button>}
-      <button type="button" className="kv-button" onClick={() => setFilterOpen(value => !value)} aria-expanded={filterOpen}>筛选</button>
+      <button type="button" className="kv-button" onClick={() => setFilterOpen(value => !value)} disabled={filterable.length === 0} aria-expanded={filterOpen}>筛选</button>
       <button type="button" className="kv-button" onClick={refresh} disabled={busy}>刷新列表</button>
     </form>
     {filterOpen && <div className="kv-panel kv-stack"><div className="kv-row">
       <label className="kv-field"><span>筛选字段</span><select aria-label="筛选字段" value={filterField} onChange={event => { setFilterField(event.target.value); setFilterDraft(''); setFilterError(''); }}>
-        {resource.fields.map(field => <option key={field.name} value={field.name}>{field.label || field.name}</option>)}</select></label>
+        {filterable.map(field => <option key={field.name} value={field.name}>{field.label || field.name}</option>)}</select></label>
       {filterDefinition && <FieldControl field={{ ...filterDefinition, label: '筛选值' }} resource={resource} values={filters} value={filterDraft} onChange={setFilterDraft} error={filterError} />}
     </div><div className="kv-row">
       <button type="button" className="kv-button" disabled={busy} onClick={() => {
@@ -382,13 +449,13 @@ export function ResourceTable({ resource, columns, onEdit, onInspect, onDelete, 
     <div tabIndex={0} role="region" aria-label={resource.name + ' 数据表，可左右滚动'} aria-describedby={tableId + '-scroll-hint'} className="kv-table-scroll">
       <table className="kv-table" aria-label={resource.name + ' 数据列表'} aria-busy={busy}>
         <thead><tr>{[{ name: 'id', label: '编号' }, ...selected].map(field => <th key={field.name} aria-sort={sort === field.name ? direction === 'asc' ? 'ascending' : 'descending' : undefined}>
-          <button type="button" className="kv-sort" disabled={busy} onClick={() => sortColumn(field.name)}>{field.label || field.name}{sort === field.name && <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><path d={direction === 'asc' ? 'M9 14V4M5 8l4-4 4 4' : 'M9 4v10M5 10l4 4 4-4'} /></svg>}</button></th>)}
+          {'kind' in field && field.kind === 'file' ? field.label || field.name : <button type="button" className="kv-sort" disabled={busy} onClick={() => sortColumn(field.name)}>{field.label || field.name}{sort === field.name && <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><path d={direction === 'asc' ? 'M9 14V4M5 8l4-4 4 4' : 'M9 4v10M5 10l4 4 4-4'} /></svg>}</button>}</th>)}
           {actions && <th className="kv-actions-cell">操作</th>}</tr></thead>
         <tbody>{busy ? <tr><td colSpan={cellCount}><Loading label="正在加载记录" /></td></tr>
           : failure ? <tr><td colSpan={cellCount} className="kv-empty">列表暂时无法加载，请查看上方提示。</td></tr>
           : items.length === 0 ? <tr><td colSpan={cellCount} className="kv-empty"><strong>{hasConditions ? '没有找到匹配的记录' : '还没有记录'}</strong><p>{hasConditions ? '试试其他关键词或筛选条件，或清除查询条件查看全部记录。' : '提交表单后，已保存的数据会显示在这里。'}</p></td></tr>
           : items.map(record => <tr key={record.id} className={record.id === highlightedId ? 'row-updated' : undefined}>
-            <td className="data-cell">{record.id}</td>{selected.map(field => <td key={field.name} className="data-cell">{displayValue(record[field.name], field)}</td>)}
+            <td className="data-cell">{record.id}</td>{selected.map(field => <td key={field.name} className="data-cell"><RecordValueDisplay value={record[field.name]} field={field} compact readable={canReadFile(application, resource.name, field.name)} /></td>)}
             {actions && <td className="kv-actions-cell"><div className="kv-row desktop-only">
               {onInspect && <button type="button" className="kv-button" onClick={() => onInspect(record)} aria-label={'查看记录 ' + record.id}>详情</button>}
               {onEdit && <button type="button" className="kv-button" onClick={() => onEdit(record)} aria-label={'编辑记录 ' + record.id}>编辑</button>}
@@ -463,6 +530,11 @@ function RegisteredComponent({ node }: { node: Extract<ComponentDefinition, { ty
 export function RenderNode({ node }: { node: ComponentDefinition }) {
   const { application } = useRuntime();
   if (node.type === 'text') return <p className="kv-text">{node.value}</p>;
+  if (node.type === 'image') {
+    const props = { src: node.src, alt: node.alt, width: node.width ?? undefined, height: node.height ?? undefined, fit: node.fit };
+    const content = <Image {...props} />;
+    return <OverrideView name="image" model={{ ...props, children: content }}>{content}</OverrideView>;
+  }
   if (node.type === 'group') {
     const content = <section className="kv-stack">{node.label && <h2>{node.label}</h2>}{node.children.map((child, index) => <RenderNode key={index} node={child} />)}</section>;
     const model: GroupBinding = { label: node.label, children: content };

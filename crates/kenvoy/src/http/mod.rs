@@ -3,6 +3,7 @@
 mod development;
 mod handlers;
 mod projection;
+mod uploads;
 pub use development::{DevelopmentPhase, DevelopmentProxy};
 
 use std::{
@@ -164,6 +165,14 @@ impl HttpRuntime {
             .route("/_kenvoy/development", get(development::status))
             .route("/_kenvoy/vite/hmr", get(development::websocket))
             .route("/_kenvoy/vite/{*path}", get(development::assets))
+            .route(
+                "/_kenvoy/uploads/{resource}/{field}",
+                post(uploads::upload).layer(axum::extract::DefaultBodyLimit::disable()),
+            )
+            .route(
+                "/_kenvoy/files/{id}",
+                get(uploads::read).delete(uploads::remove),
+            )
             .route("/api/actions/{name}", post(handlers::action))
             .route("/api/{resource}/options/{field}", post(handlers::options))
             .route(
@@ -375,6 +384,11 @@ impl From<DatabaseError> for ApiError {
             },
             DatabaseError::UnknownResource(_) => Self::missing(),
             DatabaseError::InvalidQuery(_) => Self::bad("查询参数不符合资源字段约束"),
+            DatabaseError::UploadLimit => Self::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "KV5129",
+                "暂存文件已达到数量或总大小限制，请移除文件或稍后重试",
+            ),
             DatabaseError::Conflict => Self::new(
                 StatusCode::CONFLICT,
                 "KV5009",
@@ -538,6 +552,18 @@ async fn protect(State(shared): State<Arc<Shared>>, request: Request, next: Next
             ));
         }
         cookie(request.headers())?;
+        let upload = if request.method() == axum::http::Method::POST
+            && request.uri().path().starts_with("/_kenvoy/uploads/")
+        {
+            let peer = request
+                .extensions()
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|peer| peer.0);
+            Some(uploads::prepare(&shared, request.headers(), request.uri(), peer).await?)
+        } else {
+            None
+        };
+        let body_limit = upload.as_ref().map_or(BODY_LIMIT, |upload| upload.max_size);
         let length = header_once(request.headers(), "content-length")?
             .map(|value| {
                 value
@@ -545,11 +571,11 @@ async fn protect(State(shared): State<Arc<Shared>>, request: Request, next: Next
                     .map_err(|_| ApiError::bad("Content-Length 无效"))
             })
             .transpose()?;
-        if length.is_some_and(|value| value > BODY_LIMIT) {
+        if length.is_some_and(|value| value > body_limit) {
             return Err(ApiError::new(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "KV5014",
-                "请求体不能超过 1 MiB",
+                format!("请求体不能超过 {body_limit} 字节"),
             ));
         }
         let (mut parts, body) = request.into_parts();
@@ -558,7 +584,10 @@ async fn protect(State(shared): State<Arc<Shared>>, request: Request, next: Next
             .get::<ConnectInfo<SocketAddr>>()
             .map(|peer| peer.0);
         parts.extensions.insert(ClientPeer(peer));
-        let bytes = tokio::time::timeout(Duration::from_secs(30), to_bytes(body, BODY_LIMIT))
+        if let Some(upload) = upload {
+            parts.extensions.insert(upload);
+        }
+        let bytes = tokio::time::timeout(Duration::from_secs(30), to_bytes(body, body_limit))
             .await
             .map_err(|_| ApiError::new(StatusCode::REQUEST_TIMEOUT, "KV5008", "请求体接收超时"))?
             .map_err(|_| {
@@ -589,13 +618,13 @@ async fn protect(State(shared): State<Arc<Shared>>, request: Request, next: Next
     if shared.development.read().await.is_some() {
         let scheme = if shared.secure_cookie { "wss" } else { "ws" };
         if let Ok(value) = HeaderValue::from_str(&format!(
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' {scheme}://{}; frame-ancestors 'none'; base-uri 'self'",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; connect-src 'self' {scheme}://{}; frame-ancestors 'none'; base-uri 'self'",
             shared.authority
         )) {
             headers.insert("content-security-policy", value);
         }
     } else {
-        headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"));
+        headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"));
     }
     if !headers.contains_key("x-request-id")
         && let Ok(value) = HeaderValue::from_str(&request_id())

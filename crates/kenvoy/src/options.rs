@@ -34,6 +34,12 @@ pub fn validate_definitions(
                     let dependent = resource
                         .field(name)
                         .ok_or_else(|| fail(field, format!("选项依赖字段 {name} 不存在")))?;
+                    if dependent.kind == FieldKind::File {
+                        return Err(fail(
+                            field,
+                            "file 字段不能作为 option.when 的联动依赖".into(),
+                        ));
+                    }
                     validation::validate_field(dependent, value)
                         .map_err(|error| fail(field, format!("option.when 条件无效：{error}")))?;
                 }
@@ -77,6 +83,12 @@ pub fn validate_definitions(
                     let local_field = resource
                         .field(local_name)
                         .ok_or_else(|| fail(field, format!("联动字段 {local_name} 不存在")))?;
+                    if target_field.kind == FieldKind::File || local_field.kind == FieldKind::File {
+                        return Err(fail(
+                            field,
+                            "file 字段不能作为 optionsSource 的筛选或联动依赖".into(),
+                        ));
+                    }
                     if category(target_field.kind) != category(local_field.kind) {
                         return Err(fail(
                             field,

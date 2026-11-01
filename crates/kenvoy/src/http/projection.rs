@@ -60,6 +60,9 @@ fn field(field: &FieldDefinition) -> Value {
     if let Some(default) = &field.default {
         value["default"] = default.clone();
     }
+    if let Some(upload) = &field.upload {
+        value["upload"] = json!(upload);
+    }
     value
 }
 
@@ -103,6 +106,16 @@ fn component(
             ..
         } => {
             json!({"type":"custom","module":module,"props":props,"children":children.iter().map(|node|component(node,visible)).collect::<Vec<_>>()})
+        }
+        ComponentDefinition::Image {
+            src,
+            alt,
+            width,
+            height,
+            fit,
+            ..
+        } => {
+            json!({"type":"image","src":src,"alt":alt,"width":width,"height":height,"fit":fit})
         }
         ComponentDefinition::Text { value, .. } => json!({"type":"text","value":value}),
     }
