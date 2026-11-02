@@ -35,21 +35,31 @@ flowchart TD
 
 目标清单集中在 [.github/distribution-targets.json](../../.github/distribution-targets.json)。`platforms=all` 构建六目标；`platforms=windows` 只补打包 Windows 两目标，避免重跑已完成的 Linux/macOS 归档。Windows 固定在包含 Visual Studio 2022 的 windows-2022 runner，仍使用 SDK 10.0.26100.0 / 工具集 14.44；Windows 的 Cargo 编译步骤使用 PowerShell，保留开发者环境 PATH，避免 Git Bash 的同名 link.exe 抢占 MSVC 链接器。
 
+
+## 分支模型与自动发布
+
+- `dev`：常驻开发分支；推送不触发发布。
+- `dev.MAJOR.MINOR.PATCH`：每个新版本从 `dev` 分出，一个版本一个分支，成熟后合并。
+- `main`：只承载最新 MAJOR.MINOR.0；PATCH（z>0）不进 main。
+- **只有 main 更新触发 CI/CD**：读取 main 上 `crates/kenvoy/Cargo.toml` 的版本，必须为 x.y.0（否则告警跳过）；crates.io 与 GitHub Release 均已存在则空跑结束，否则发布。
+- **发布规则**：仅发布 MAJOR.MINOR.0；PATCH 版本不发布 crate、不发布 Release。
+- **全历史补齐**：每次触发扫描全部 v*.*.* tag，缺失 crate/Release 的历史 x.y.0 按语义化顺序逐个补发。
+- **crates.io 自动发布**：`CARGO_TOKEN` 仓库 Secret 注入 `CARGO_REGISTRIES_CRATES_IO_TOKEN`，按 kengine → kenvoy 串行发布；先查 registry 已存在则跳过该 crate；任何一步失败即停，不发布坏包。发布不可逆：合并 main 前必须确认版本号正确。
+
+## 工作流结构
+
+- 主工作流 [distribution.yml](../../.github/workflows/distribution.yml)：main 推送触发，检测待发布版本清单（head），调用可复用工作流。
+- 单版本工作流 [release-one-version.yml](../../.github/workflows/release-one-version.yml)：一个版本的完整发布——crates.io 校验与串行发布、六目标构建、GitHub Release（标题 `Kenvoy <version>`，正文说明覆盖 Linux/Windows/macOS 的 arm64 与 x86_64）。
+- 六个目标分配到平台原生 Runner（Windows 目标在 windows-2022 上用 MSVC，Linux 在 ubuntu-24.04，macOS 在 macos-15）；同一平台内 aarch64/x86_64 交叉由官方工具链完成（MSVC 交叉或 Zig）。不存在用 Linux Runner 统一交叉编译所有平台。
+- 产物上传 Actions artifacts（保留 14 天），六目标全部成功后创建 Release 并附六份 ZIP/SHA256。
+
+## 手动触发
+
 ```text
-gh workflow run distribution.yml --ref main -f mode=source -f version=0.2.0
-gh workflow run distribution.yml --ref main -f mode=registry -f version=0.2.0
+gh workflow run distribution.yml --ref main -f version=0.2.0
 ```
 
-分发文件名为 `kenvoy-{version}-{target}.zip`，归档根仅含 `kenvoy.exe` 或 `kenvoy`、README.md、LICENSE，旁附 `.sha256` 校验文件。`cargo xtask dist` 负责归档及机器架构检查，不管理用户项目数据。
-
-工作流支持两种触发方式：
-
-- **tag 推送（推荐）**：推送 `vX.Y.Z` 形式的版本 tag 自动触发六目标 source 构建；全部成功后自动创建对应 GitHub Release 并附六份 ZIP/SHA256。版本号从 tag 名派生，不用手动输入。crates.io 仍需手动发布，工作流不发布 crate、不创建 tag。
-- **手动 dispatch**：按需指定 mode/version/platforms，只构建并上传 Actions artifacts（保留 14 天），不创建 Release。用于补打包特定平台（`platforms=windows`）或 registry 模式的最终分发核验。
-
-普通分支推送不触发任何 CI/CD。
-
-tag 推送必须**逐个执行**（`git push origin v0.3.0`，一次一个）。GitHub 官方规定一次推送超过三个 tag 时不生成任何 push 事件；且一次推送 2—3 个 tag 存在未修复的触发不可靠问题（actions/runner#3644）。禁止用 `git push --tags` 或 `git push --follow-tags` 批量推版本 tag；若批量推送后未触发，用手动 dispatch 补打包。
+`version` 留空则按 main 与全历史扫描自动检测；指定则只处理该版本（仍要求 x.y.0）。
 
 ## 身份与安装
 

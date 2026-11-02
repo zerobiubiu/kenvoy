@@ -1,37 +1,29 @@
-name: Kenvoy 六目标分发构建
+name: Kenvoy 分支模型全自动发布
 
-# tag 推送（v*.*.*）以 source 模式构建并发布 GitHub Release；不发布 crate、不创建 tag。
-# 手动 dispatch 只构建和上传 Actions artifacts，不发布 Release。
+# 分支模型：
+# - dev：常驻开发分支，推送不触发发布。
+# - dev.MAJOR.MINOR.PATCH：每个新版本从 dev 分出，成熟后由维护者决定是否合并。
+# - main：只承载最新 MAJOR.MINOR.0（PATCH 不进 main）；main 更新才触发本工作流。
+# 发布规则：
+# - 读取 main 上 crates/kenvoy/Cargo.toml 的版本号，必须为 x.y.0，否则本次不发布并告警。
+# - 对该版本检查 crates.io 与 GitHub Release：均存在则空跑跳过。
+# - 全历史扫描：所有 x.y.0 历史版本中缺 crate 或 Release 的，按语义化顺序逐个补齐。
+# - 自动 cargo publish（kengine → kenvoy 串行），失败即停，不发布坏包。
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [main]
   workflow_dispatch:
     inputs:
-      mode:
-        description: source 为上传前编译；registry 为已发布包的最终分发
-        required: true
-        type: choice
-        default: source
-        options: [source, registry]
       version:
-        description: 精确发布版本
-        required: true
-        type: choice
-        default: '0.2.0'
-        options: ['0.2.0']
-      platforms:
-        description: all 构建六目标；windows 仅补打包 Windows 两目标
-        required: true
-        type: choice
-        default: all
-        options: [all, windows]
+        description: 精确发布版本（如 0.2.0）；留空则按 main 与历史扫描检测
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: distribution-${{ github.ref }}
+  group: distribution-main
   cancel-in-progress: false
 
 env:
@@ -39,369 +31,125 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: '2'
   PYTHONUTF8: '1'
-  DIST_MODE: ${{ inputs.mode || 'source' }}
-  DIST_VERSION: ${{ inputs.version || github.ref_name }}
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
   CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
 
 jobs:
-  targets:
-    name: 选择本次打包目标
+  detect:
+    # 派生本次要发布的版本清单（语义化升序，仅 x.y.0）。空清单 = 无需更新，空跑结束。
+    name: 检测待发布版本
     runs-on: ubuntu-24.04
     outputs:
-      matrix: ${{ steps.select.outputs.matrix }}
+      versions: ${{ steps.detect.outputs.versions }}
+      head: ${{ steps.detect.outputs.head }}
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - id: select
+      - id: detect
         env:
-          DIST_PLATFORMS: ${{ inputs.platforms }}
-        shell: bash
+          DISPATCH_VERSION: ${{ inputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import json, os, pathlib
-          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
-          selection = os.environ['DIST_PLATFORMS']
-          if selection == 'windows':
-              targets = [item for item in targets if item['target'].endswith('-pc-windows-msvc')]
-          elif selection != 'all':
-              raise SystemExit('不支持的打包平台选择')
-          expected = 2 if selection == 'windows' else 6
-          if len(targets) != expected:
-              raise SystemExit('打包目标清单数量不符')
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '\n')
-          print('本次目标：' + ', '.join(item['target'] for item in targets))
-          PY
+          import json, os, subprocess, urllib.request
 
-  distribution:
-    needs: targets
-    name: ${{ inputs.mode || 'source' }} · ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      DIST_TARGET: ${{ matrix.target }}
-      DIST_HOST: ${{ matrix.host }}
-      DIST_HOST_ARCH: ${{ matrix.host_arch }}
-      DIST_EXTENSION: ${{ matrix.extension }}
-
-    steps:
-      - name: 取得工程编排代码
-        uses: actions/checkout@v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: 准备固定 Python
-        uses: actions/setup-python@v5.6.0
-        with:
-          python-version: '3.12.10'
-
-      - name: 核对 runner 并准备独占构建目录
-        run: |
-          python - <<'PY'
-          import os, pathlib, platform, re, tempfile
-          event = os.environ['GITHUB_EVENT_NAME']
-          # 手动 dispatch 用输入版本与模式；tag 推送强制 source 模式并从 tag 名（vX.Y.Z）派生版本。
-          if event == 'push':
-              tag = os.environ['GITHUB_REF_NAME']
-              if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag):
-                  raise SystemExit(f'仅接受 vX.Y.Z 版本 tag，实际 {tag}')
-              version, mode = tag[1:], 'source'
-          else:
-              version = os.environ['DIST_VERSION']
-              mode = os.environ['DIST_MODE']
-              if mode not in ('source', 'registry'):
-                  raise SystemExit('分发模式必须是 source 或 registry')
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-              env.write(f'DIST_VERSION={version}\nDIST_MODE={mode}\n')
-          arch = platform.machine().lower()
-          arch = {'amd64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
-          expected = {'aarch64': 'arm64'}.get(os.environ['DIST_HOST_ARCH'], os.environ['DIST_HOST_ARCH'])
-          if arch != expected:
-              raise SystemExit(f'runner 架构不符：实际 {arch}，预期 {expected}')
-          print(f'实际 runner：{platform.system()} {arch}；目标：{os.environ["DIST_TARGET"]}')
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-              for name, prefix in (
-                  ('DIST_BUILD_DIR', 'kenvoy-product-build-'),
-                  ('DIST_ARTIFACT_DIR', 'kenvoy-artifacts-'),
-                  ('DIST_ZIG_TOOLS', 'kenvoy-zig-tools-'),
-                  ('DIST_ZIGBUILD_ROOT', 'kenvoy-cargo-zigbuild-'),
-              ):
-                  path = pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=os.environ['RUNNER_TEMP']))
-                  env.write(f'{name}={path.as_posix()}\n')
-          PY
-
-      - name: 准备产品源码并核对版本
-        run: |
-          python - <<'PY'
-          import hashlib, json, os, pathlib, tarfile, tempfile, tomllib, urllib.request
-          version = os.environ['DIST_VERSION']
-          registry = os.environ['DIST_MODE'] == 'registry'
           def fetch(url):
               request = urllib.request.Request(url, headers={
                   'User-Agent': 'kenvoy-distribution (https://github.com/zerobiubiu/kenvoy)',
+                  'Authorization': f"Bearer {os.environ['GITHUB_TOKEN']}",
               })
               with urllib.request.urlopen(request, timeout=60) as response:
                   return response.read()
-          def release(crate):
-              metadata = json.loads(fetch(f'https://crates.io/api/v1/crates/{crate}/{version}'))['version']
-              if metadata['crate'] != crate or metadata['num'] != version:
-                  raise SystemExit(f'{crate} 的 registry 版本响应不匹配')
-              return metadata
-          if registry:
-              work = pathlib.Path(tempfile.mkdtemp(prefix='kenvoy-registry-', dir=os.environ['RUNNER_TEMP']))
-              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-                  env.write(f'DIST_REGISTRY_ROOT={work.as_posix()}\n')
-              metadata = release('kenvoy')
-              payload = fetch(f'https://static.crates.io/crates/kenvoy/kenvoy-{version}.crate')
-              checksum = hashlib.sha256(payload).hexdigest()
-              if checksum != metadata['checksum']:
-                  raise SystemExit('kenvoy .crate 与 crates.io 官方 SHA256 不匹配')
-              archive = work / f'kenvoy-{version}.crate'
-              archive.write_bytes(payload)
-              print(f'crates.io kenvoy {version} SHA256：{checksum}')
-              prefix = f'kenvoy-{version}'
-              with tarfile.open(archive, mode='r:gz') as package:
-                  members = package.getmembers()
-                  for member in members:
-                      path = pathlib.PurePosixPath(member.name)
-                      if (not path.parts or path.is_absolute() or path.parts[0] != prefix
-                          or '..' in path.parts or '\\' in member.name or ':' in member.name
-                          or not (member.isfile() or member.isdir())):
-                          raise SystemExit(f'.crate 包含不允许的解压条目：{member.name}')
-                  package.extractall(work, members=members, filter='data')
-              source = work / prefix
+
+          def crate_exists(crate, version):
+              try:
+                  fetch(f'https://crates.io/api/v1/crates/{crate}/{version}')
+                  return True
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      return False
+                  raise
+
+          def release_exists(tag):
+              try:
+                  fetch(f"https://api.github.com/repos/zerobiubiu/kenvoy/releases/tags/{tag}")
+                  return True
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      return False
+                  raise
+
+          def declared_kenvoy_version(treeish):
+              manifest = subprocess.run(
+                  ['git', 'show', f'{treeish}:crates/kenvoy/Cargo.toml'],
+                  capture_output=True, text=True, check=True,
+              ).stdout
+              return next(
+                  (line.split('"')[1] for line in manifest.splitlines()
+                   if line.strip().startswith('version = "')),
+                  None,
+              )
+
+          manual = os.environ.get('DISPATCH_VERSION', '').strip()
+          candidates = set()
+
+          if manual:
+              # 手动指定版本：仍走 x.y.0 门禁与存在性检测
+              parts = manual.split('.')
+              if len(parts) != 3 or parts[2] != '0':
+                  raise SystemExit(f'发布规则仅允许 MAJOR.MINOR.0，实际 {manual}')
+              candidates.add(manual)
           else:
-              source = pathlib.Path(os.environ['GITHUB_WORKSPACE']) / 'crates' / 'kenvoy'
-          manifest = source / 'Cargo.toml'
-          package = tomllib.loads(manifest.read_text(encoding='utf-8'))
-          if package['package']['name'] != 'kenvoy' or package['package']['version'] != version:
-              raise SystemExit('产品 Cargo.toml 与精确分发版本不匹配')
-          if registry:
-              dependency = package['dependencies']['kengine']
-              if not isinstance(dependency, dict) or 'path' in dependency or 'workspace' in dependency:
-                  raise SystemExit('registry 分发禁止本地 kengine 路径或 workspace 依赖')
-              lock = tomllib.loads((source / 'Cargo.lock').read_text(encoding='utf-8'))
-              engines = [item for item in lock['package'] if item['name'] == 'kengine']
-              engine = release('kengine')
-              if (len(engines) != 1 or engines[0]['version'] != version
-                  or engines[0].get('source') != 'registry+https://github.com/rust-lang/crates.io-index'
-                  or engines[0].get('checksum') != engine['checksum']):
-                  raise SystemExit('发布包锁文件必须引用 crates.io 的精确 kengine 版本与官方校验和')
-              if 'patch' in package or 'replace' in package:
-                  raise SystemExit('registry 分发不接受 patch/replace 覆盖')
-              print(f'crates.io kengine {version} 锁文件 SHA256：{engine["checksum"]}')
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-              env.write(f'DIST_PACKAGE_DIR={source.as_posix()}\n')
-              env.write(f'DIST_MANIFEST={manifest.as_posix()}\n')
-          PY
+              # 1) main 当前版本：必须为 x.y.0，否则告警且不作为候选
+              head_version = declared_kenvoy_version('origin/main')
+              parts = head_version.split('.') if head_version else []
+              if len(parts) == 3 and parts[2] == '0':
+                  candidates.add(head_version)
+              else:
+                  print(f'::warning::main 上 kenvoy 版本为 {head_version}，不是 x.y.0，本次不作为发布候选')
 
-      - name: 安装固定 Rust 并添加真实目标
-        run: |
-          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
-          rustup target add --toolchain "$RUSTUP_TOOLCHAIN" "$DIST_TARGET"
-          python - <<'PY'
-          import os, subprocess
-          result = subprocess.run(['rustc', '-vV'], check=True, capture_output=True, text=True)
-          print(result.stdout)
-          host = next(line.removeprefix('host: ') for line in result.stdout.splitlines() if line.startswith('host: '))
-          if host != os.environ['DIST_HOST']:
-              raise SystemExit(f'实际 Rust host {host} 与 runner 契约不符')
-          PY
+              # 2) 全历史扫描：所有 v*.*.* tag 中 x.y.0 且缺失 crate/Release 的补齐
+              result = subprocess.run(
+                  ['git', 'tag', '-l', 'v*.*.*', '--sort', 'v:refname'],
+                  capture_output=True, text=True, check=True,
+              )
+              for tag in (line.strip() for line in result.stdout.splitlines() if line.strip()):
+                  version = tag[1:]
+                  if version.split('.')[-1] != '0':
+                      continue  # PATCH 不发布
+                  tag_version = declared_kenvoy_version(tag)
+                  if tag_version != version:
+                      print(f'::warning::tag {tag} 内 kenvoy 版本为 {tag_version}，与 tag 名不一致，跳过')
+                      continue
+                  if not crate_exists('kenvoy', version) or not release_exists(tag):
+                      candidates.add(version)
 
-      - name: 选择固定 Apple SDK
-        if: runner.os == 'macOS'
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-        run: |
-          set -euo pipefail
-          sdk="$(xcrun --sdk macosx15.5 --show-sdk-path)"
-          test -d "$sdk"
-          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
-          echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
-          echo 'MACOSX_DEPLOYMENT_TARGET=13.0' >> "$GITHUB_ENV"
-          xcodebuild -version
+          versions = sorted(candidates, key=lambda v: tuple(int(p) for p in v.split('.')))
+          print(f'待发布版本（升序）：{versions or "无"}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'versions={json.dumps(versions)}\n')
+              output.write(f"head={versions[0] if versions else ''}\n")
 
-      # cargo-zigbuild v0.24.0 的官方 CI 使用 Zig 0.17.0；Zig 不替代 Apple SDK。
-      - name: 准备固定 Zig
-        if: runner.os != 'Windows'
-        uses: mlugg/setup-zig@v2.0.5
-        with:
-          version: '0.17.0'
-          use-cache: false
+  publish_and_release:
+    # head 版本完整发布：crates.io（kengine→kenvoy 串行）+ 六目标构建 + GitHub Release。
+    # 剩余版本由 detect 的全历史扫描在下次 main 更新时继续补齐（避免单次运行无限链深）。
+    if: needs.detect.outputs.head != ''
+    needs: detect
+    name: 发布 ${{ needs.detect.outputs.head }}
+    uses: ./.github/workflows/release-one-version.yml
+    with:
+      version: ${{ needs.detect.outputs.head }}
+    secrets:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
 
-      - name: 准备固定 cargo-zigbuild 与 Zig host 编译入口
-        if: runner.os != 'Windows'
-        run: |
-          set -euo pipefail
-          # 官方二进制 wheel 避免编译工具时隐式使用 GCC；不安装 ziglang。
-          python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: \
-            --ignore-installed --prefix "$DIST_ZIGBUILD_ROOT" 'cargo-zigbuild==0.24.0'
-          case "$RUNNER_OS" in
-            Linux) export DIST_ZIG_HOST=x86_64-linux-gnu ;;
-            macOS) export DIST_ZIG_HOST=aarch64-macos ;;
-            *) echo '不支持的 Zig host' >&2; exit 1 ;;
-          esac
-          tools="$DIST_ZIG_TOOLS"
-          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig cc -- -target "$DIST_ZIG_HOST" "$@"\n' > "$tools/cc"
-          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig c++ -- -target "$DIST_ZIG_HOST" "$@"\n' > "$tools/c++"
-          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig ar -- "$@"\n' > "$tools/ar"
-          chmod +x "$tools/cc" "$tools/c++" "$tools/ar"
-          # Rust 的 host build-script/proc-macro 默认 linker 也必须经过 Zig。
-          export PATH="$tools:$PATH" CC="$tools/cc" CXX="$tools/c++" AR="$tools/ar"
-          export CARGO_ZIGBUILD_ZIG_PATH="$(command -v zig)"
-          echo "$DIST_ZIGBUILD_ROOT/bin" >> "$GITHUB_PATH"
-          echo "$tools" >> "$GITHUB_PATH"
-          echo "CC=$CC" >> "$GITHUB_ENV"
-          echo "CXX=$CXX" >> "$GITHUB_ENV"
-          echo "AR=$AR" >> "$GITHUB_ENV"
-          echo "HOST_CC=$CC" >> "$GITHUB_ENV"
-          echo "HOST_CXX=$CXX" >> "$GITHUB_ENV"
-          echo "HOST_AR=$AR" >> "$GITHUB_ENV"
-          echo "DIST_ZIG_HOST=$DIST_ZIG_HOST" >> "$GITHUB_ENV"
-          echo "CARGO_ZIGBUILD_CACHE_DIR=$tools/cache" >> "$GITHUB_ENV"
-          echo "CARGO_ZIGBUILD_ZIG_PATH=$CARGO_ZIGBUILD_ZIG_PATH" >> "$GITHUB_ENV"
-          zig version
-          "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" --version
-
-      - name: 准备 Windows 原生工程编译器
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1.13.0
-        with:
-          arch: x64
-          sdk: '10.0.26100.0'
-          toolset: '14.44'
-          vsversion: '2022'
-
-      - name: 构建 Windows host 的 Rust 分发工具
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cargo build --locked --release --package xtask --bin xtask `
-            --target $env:DIST_HOST --target-dir $env:DIST_BUILD_DIR
-
-      - name: 构建 Linux/macOS host 的 Rust 分发工具
-        if: runner.os != 'Windows'
-        run: |
-          set -euo pipefail
-          cargo zigbuild --locked --release --package xtask --bin xtask \
-            --target "$DIST_HOST" --target-dir "$DIST_BUILD_DIR"
-
-      - name: 准备固定 Node（仅 checkout 源码模式）
-        if: env.DIST_MODE == 'source'
-        uses: actions/setup-node@v4.4.0
-        with:
-          node-version: '24.22.0'
-          cache: npm
-          cache-dependency-path: crates/kenvoy/frontend/package-lock.json
-
-      - name: 准备源码模式的内置前端
-        if: env.DIST_MODE == 'source'
-        working-directory: crates/kenvoy/frontend
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run build
-
-      - name: 准备 Windows 目标交叉编译器（MSVC，不是 GCC）
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1.13.0
-        with:
-          arch: ${{ matrix.msvc_arch }}
-          sdk: '10.0.26100.0'
-          toolset: '14.44'
-          vsversion: '2022'
-
-      - name: 从所选真实源码构建 Windows release CLI
-        # PowerShell 保留开发者环境 PATH，避免 Git Bash 的 link.exe 抢占 MSVC。
-        if: runner.os == 'Windows'
-        working-directory: ${{ env.DIST_PACKAGE_DIR }}
-        shell: pwsh
-        run: |
-          cargo build --locked --release --bin kenvoy --manifest-path $env:DIST_MANIFEST `
-            --target $env:DIST_TARGET --target-dir $env:DIST_BUILD_DIR
-
-      - name: 从所选真实源码交叉构建 Linux/macOS release CLI
-        # registry 目录在 checkout 之外；不复制源码、不改依赖、不运行 npm。
-        if: runner.os != 'Windows'
-        working-directory: ${{ env.DIST_PACKAGE_DIR }}
-        run: |
-          set -euo pipefail
-          cargo zigbuild --locked --release --bin kenvoy --manifest-path "$DIST_MANIFEST" \
-            --target "$DIST_TARGET" --target-dir "$DIST_BUILD_DIR"
-
-      - name: 校验格式/架构并归档（只有 host 兼容产物执行限时版本核验）
-        run: |
-          "$DIST_BUILD_DIR/$DIST_HOST/release/xtask$DIST_EXTENSION" dist \
-            --binary "$DIST_BUILD_DIR/$DIST_TARGET/release/kenvoy$DIST_EXTENSION" \
-            --target "$DIST_TARGET" --version "$DIST_VERSION" --output "$DIST_ARTIFACT_DIR" \
-            --readme "$DIST_PACKAGE_DIR/README.md" --license "$DIST_PACKAGE_DIR/LICENSE"
-
-      - name: 上传 ZIP 与 SHA256（不创建 Release）
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: kenvoy-${{ env.DIST_VERSION }}-${{ env.DIST_MODE }}-${{ matrix.target }}
-          path: |
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip.sha256
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
-      - name: 清理本次独占临时目录
-        if: always()
-        run: |
-          python - <<'PY'
-          import os, pathlib, shutil
-          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
-          names = [
-              'DIST_BUILD_DIR', 'DIST_ARTIFACT_DIR',
-              'DIST_REGISTRY_ROOT', 'DIST_ZIG_TOOLS', 'DIST_ZIGBUILD_ROOT',
-          ]
-          paths = [os.environ[name] for name in names if os.environ.get(name)]
-          for value in paths:
-              path = pathlib.Path(value).resolve()
-              if path.parent != root or not path.name.startswith('kenvoy-'):
-                  raise SystemExit(f'拒绝清理非本次独占路径：{path}')
-              if path.exists():
-                  shutil.rmtree(path)
-          PY
-
-  release:
-    # 仅 tag 推送在六目标全部成功后发布；手动 dispatch 不创建 Release。
-    if: github.event_name == 'push'
-    needs: distribution
-    name: 发布 GitHub Release
+  noop:
+    # 空跑：没有待发布版本时给出明确结果，运行成功结束。
+    if: needs.detect.outputs.head == ''
+    needs: detect
+    name: 无待发布版本
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
-      - name: 下载六目标归档
-        uses: actions/download-artifact@v4.3.0
-        with:
-          path: dist
-          pattern: kenvoy-*-source-*
-          merge-multiple: true
-      - name: 核对归档与校验和数量
-        run: |
-          set -euo pipefail
-          count=$(find dist -maxdepth 1 -name '*.zip' | wc -l)
-          sums=$(find dist -maxdepth 1 -name '*.zip.sha256' | wc -l)
-          if [ "$count" -ne 6 ] || [ "$sums" -ne 6 ]; then
-            echo "归档或校验和数量不符：ZIP=$count SHA256=$sums" >&2
-            exit 1
-          fi
-          cd dist && sha256sum --check --strict ./*.zip.sha256
-      - name: 创建 GitHub Release
-        run: |
-          set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.zip.sha256 \
-            --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "Kenvoy / KEngine ${{ env.DIST_VERSION }}" \
-            --notes "六目标预编译分发（Windows MSVC、Linux musl、macOS，各 x86_64/aarch64）。每个 ZIP 附 .sha256；安装方式见仓库 README。"
+      - name: 说明
+        run: echo 'main 版本与全部历史 x.y.0 的 crate/Release 均已存在，本次无需发布。'
