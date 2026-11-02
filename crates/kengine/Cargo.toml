@@ -10,7 +10,7 @@ description = "通用 JavaScript、TypeScript、JSX、TSX 源码解析与模块�
 readme = "README.md"
 keywords = ["parser", "typescript", "jsx", "static-analysis"]
 categories = ["parsing", "development-tools"]
-include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
+include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE"]
 
 [dependencies]
 swc_common.workspace = true

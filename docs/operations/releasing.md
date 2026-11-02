@@ -12,17 +12,18 @@ Workspace 保留四成员，仅发布 `kengine` 和 `kenvoy`。`kenvoy-tests`、
 
 ```mermaid
 flowchart TD
-  A[版本与包内容准备] --> B[本机独立包编译校验]
-  B --> C[推送验证用源码与工作流]
-  C --> D[source 模式六目标交叉编译]
-  D --> E[发布 kengine]
-  E --> F[发布 kenvoy]
-  F --> G[registry 模式六目标交叉编译]
-  G --> H[核对归档与 SHA256 后发布 GitHub Release]
-  H --> I[cargo-binstall 安装核验]
+  A[提交版本与包内容准备] --> B[仓库外独占源码快照生成前端并打包]
+  B --> C[推送源码与工作流]
+  C --> D[发布 kengine]
+  D --> E[发布 kenvoy]
+  E --> F[registry 模式六目标交叉编译]
+  F --> G[核对归档与 SHA256 后发布 GitHub Release]
+  G --> H[cargo-binstall 基本安装核验]
 ```
 
 每次发布确认版本、授权、干净提交、包内容和凭据。版本上传后不能覆盖；若客户端等待索引超时，先查询 registry，不能盲目重复上传。源码推送、crates.io 上传和 GitHub Release 是三个独立的对外操作，不把部分成功写成整次成功。
+
+前端资产属于生成的发行输入，不提交进源码仓库。正式源包从已提交 Git SHA 的 `git archive` 快照组装：在仓库外独占目录重建前端，再运行 Cargo 打包/发布。包白名单均锚定包根，不能因 README/LICENSE 的同名匹配带入 node_modules；不以 `--allow-dirty` 或 `--no-verify` 代替受控输入和正常包编译。
 
 ## 交叉编译与归档
 
@@ -41,7 +42,7 @@ gh workflow run distribution.yml --ref main -f mode=registry -f version=0.2.0
 
 工作流只手动触发，不自行上传 crate、创建 tag 或发布 GitHub Release：
 
-- `source`：从指定提交准备前端并交叉编译，用于上传前的构建校验。
+- `source`：可选的源码交叉构建入口。0.2.0 根据用户最后要求不把额外 source 全平台预检作为发布门禁。
 - `registry`：下载精确发布版本的 `.crate`、核对 crates.io checksum、独占解压后交叉编译，作为最终分发来源；不回用本地 path 依赖或要求用户再次 npm 构建。
 
 ## 身份与安装

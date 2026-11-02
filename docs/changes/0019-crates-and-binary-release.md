@@ -35,6 +35,9 @@
 - `cargo build -p kenvoy --release --offline --locked` 退出 0；`target/release/kenvoy.exe --version` 为 `kenvoy 0.2.0`。
 - 本机 `cargo xtask dist` 已核对 x86_64 Windows PE32+ 与限时版本，归档根仅有 kenvoy.exe/README.md/LICENSE；源码候选 ZIP SHA256 为 `e4cc42ff8151e1fd096f9b72cf9bc93a80b0bc56e02674a139f07e3a26656f8b`，不冒充最终 registry 分发产物。
 - 验收工具 cargo-binstall 1.26.2 来自官方不可变 Release，Windows ZIP 与 GitHub 资产 SHA256 `c377a4977ffdbdcbf58dd263055b2f1d56ba873c69fbd6bfc60bef98256183a3` 一致，仅解压至本机忽略的独占工具目录。
+- 用户随后要求不做详细检验、以打包为准，因此取消额外 source 六目标预检门禁，保留 Cargo 自带源包编译和最终二进制打包。
+- 首次多包 dry-run 未上传；它拦下了未锚定 README/LICENSE 导致 node_modules 同名文件入选，以及工作区中未跟踪前端产物的 dirty 限制。白名单已改为包根锚定；正式打包改用精确提交的仓库外独占源码快照生成前端，不提交产物、不跳过编译检查。
+- 初始 source workflow `41462154639` 未生成发布资产：Windows 日志为 Python cp1252 UnicodeEncodeError，Linux/macOS 为 Zig host 包装器缺少 `--` 参数分隔；已分别设置 workflow UTF-8 与正确参数转发。该失败不记作任何目标构建通过。
 
 ### 发布验收边界
 
