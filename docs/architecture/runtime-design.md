@@ -109,7 +109,7 @@ flowchart TD
 
 HTTP 开发状态仅在 dev 开放：`/_kenvoy/development` 返回 revision/generation/state/error?/reload。revision 随状态变化递增，generation 只在有效发布时变化。前端首次轮询建立基线，之后按 ready/reload 或新 generation 刷新；error 保留有效界面。首导航在 building 期间最多等待 10 秒，等待不持有模型读锁；超时返回 503 与 Retry-After:1，完成后按新模型重新鉴权，不返回混合代际入口。
 
-Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，注入内部密钥，禁止 Cookie/Authorization/CSRF 转发，拒绝重定向及未注册页面的 HTML。WebSocket 要求同源 Origin、vite-hmr 协议和限流；限制连接、消息、缓冲及关闭时间。React preamble 外置为同源模块，CSP 不放开 inline script。真实回环代理、安全边界、浏览器 HMR 和关闭均已验证。
+Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，注入内部密钥，禁止 Cookie/Authorization/CSRF 转发，拒绝重定向及不属于获准内建入口/声明页的 HTML。WebSocket 要求同源 Origin、vite-hmr 协议和限流；限制连接、消息、缓冲及关闭时间。React preamble 外置为同源模块，CSP 不放开 inline script。真实回环代理、安全边界、浏览器 HMR 和关闭均已验证。
 
 ## build 与 run
 

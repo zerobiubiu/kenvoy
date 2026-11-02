@@ -55,7 +55,7 @@ CSRF 值为以 Session token 作 key、固定域标识 kenvoy.csrf.v1 为消息�
 
 浏览器 DTO 显式构造，不序列化内部 Application IR 整体。只提供可见页面和这些页面需要的字段；管理员可见全部资源。普通组件、客户端函数和表达式只发送注册 ID，不发送宿主路径、SourceSpan、原始函数或 server handler 实现。页面文本与静态 Props 由 React 文本/属性渲染，不使用未经验证的 HTML；用户自定义 UI 代码仍属于可信项目边界。
 
-静态资源仅从宿主指定且规范化的 client 目录读取；仅注册页面使用 index.html，资源路径拒绝转义/父路径，并 canonicalize 后确认仍在根目录内。私有管理页先授权再读入口文件。已封存的 client 目录与 IR、generation、server bundle 同代发布。此边界假定构建目录由可信宿主管理，不抵抗具有相同文件权限的本机恶意操作者并发篡改文件。
+静态资源仅从宿主指定且规范化的 client 目录读取；获准的内建根/管理入口或声明页面使用 index.html，资源路径拒绝转义/父路径，并 canonicalize 后确认仍在根目录内。显式根页和私有管理页先授权再读入口文件；未声明根页的 Runtime 壳不授予资源数据权限，落点来自按角色过滤的客户端描述。已封存的 client 目录与 IR、generation、server bundle 同代发布。此边界假定构建目录由可信宿主管理，不抵抗具有相同文件权限的本机恶意操作者并发篡改文件。
 
 响应统一 no-store、nosniff、same-origin Referrer-Policy、DENY Frame。CSP 默认 self，脚本 self，样式保留 unsafe-inline 以兼容用户组件库的运行时样式（内置控件使用外部 CSS），图片允许 self/data/blob/http/https；frame-ancestors none、base-uri self。图片组件仅接受明确的安全路径/HTTP(S)地址，并使用 no-referrer；站外图片由浏览器直接请求，不增加服务端代理或脚本/连接来源。仅 dev 的 connect-src 追加与 public_origin 对应的明确 ws/wss Origin；React Refresh preamble 外置为同源模块，script-src 不允许 inline script。
 
@@ -81,7 +81,7 @@ HTTP 请求使用同代模型读锁。发布任务被宿主跟踪，在模型写
 
 dev 监听只唤醒有界构建协调队列，原始用户源码不直接交给 Vite watch。Rust 先完成分析、边界检查、构建和输入指纹复核，再准备受控镜像。候选失败不更新有效模型或 Schema；已发布运行态后的 Vite 更新失败会停用代理并回到已验证静态产物，不能把该失败描述为数据库回滚。
 
-Vite 监听随机回环端口，每个 HTTP 请求和 WebSocket upgrade 均验证只在宿主内部传递的随机密钥。浏览器只访问 Kenvoy 的 `/_kenvoy/vite/*`；代理目标固定，不接受用户指定 URL，只接受 GET/HEAD 或专用 HMR upgrade。入口 HTML 仍在注册页面及身份检查后读取；未知 API、资源路径和开发命名空间中的任意 HTML 不回退应用入口。生产不存在开发状态和代理路由。
+Vite 监听随机回环端口，每个 HTTP 请求和 WebSocket upgrade 均验证只在宿主内部传递的随机密钥。浏览器只访问 Kenvoy 的 `/_kenvoy/vite/*`；代理目标固定，不接受用户指定 URL，只接受 GET/HEAD 或专用 HMR upgrade。入口 HTML 仍通过内建入口/声明页匹配及身份检查后读取；未知 API、资源路径和开发命名空间中的任意 HTML 不回退应用入口。生产不存在开发状态和代理路由。
 
 HTTP 代理拒绝非法百分号、重复编码、路径穿越及编码分隔符；不转发 Cookie、Authorization、Origin、CSRF 或浏览器伪造的内部密钥。上游只收到有限缓存/内容头和宿主密钥，不将 Set-Cookie、Location 转回浏览器。reqwest 禁用环境代理与重定向，固定 2 秒连接、15 秒请求期限，最多 32 个并发请求和单响应 16 MiB；上游错误转换为脱敏 404/503。
 

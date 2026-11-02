@@ -128,16 +128,21 @@ async fn static_assets_require_real_files_and_admin_navigation_preserves_api_aut
         Some(client),
     )
     .await?;
-    let (status, headers, body) = f.request("GET", "/customers", &[], Body::empty()).await?;
+    for path in ["/", "/customers"] {
+        let (status, headers, body) = f.request("GET", path, &[], Body::empty()).await?;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        assert!(
+            headers
+                .get(header::CONTENT_TYPE)
+                .ok_or("缺少类型")?
+                .to_str()?
+                .starts_with("text/html")
+        );
+        assert!(body.starts_with(b"<!doctype html>"));
+    }
+    let (status, _, body) = f.request("HEAD", "/", &[], Body::empty()).await?;
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        headers
-            .get(header::CONTENT_TYPE)
-            .ok_or("缺少类型")?
-            .to_str()?
-            .starts_with("text/html")
-    );
-    assert!(body.starts_with(b"<!doctype html>"));
+    assert!(body.is_empty());
     assert_eq!(
         f.request("GET", "/assets/app.js", &[], Body::empty())
             .await?
@@ -169,6 +174,10 @@ async fn static_assets_require_real_files_and_admin_navigation_preserves_api_aut
         "/private.txt",
         "/app.sqlite",
         "/api/missing",
+        "/api",
+        "/_kenvoy",
+        "/_kenvoy/missing",
+        "/not-a-page",
     ] {
         assert_eq!(
             f.request("GET", path, &[], Body::empty()).await?.0,
@@ -182,6 +191,53 @@ async fn static_assets_require_real_files_and_admin_navigation_preserves_api_aut
             .0,
         StatusCode::UNAUTHORIZED
     );
+    f.database.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn declared_root_permissions_take_precedence_over_runtime_entry() -> TestResult {
+    let source = SOURCE.replace("/private", "/");
+    let mut f = Fixture::new(&source).await?;
+    let client = f.root.join("client");
+    fs::create_dir(&client)?;
+    fs::write(
+        client.join("index.html"),
+        "<!doctype html><div id='root'></div>",
+    )?;
+    f.runtime = HttpRuntime::new(
+        f.app.clone(),
+        f.database.clone(),
+        f.auth.clone(),
+        "http://127.0.0.1:3000".into(),
+        Some(client),
+    )
+    .await?;
+    assert_eq!(
+        f.request("GET", "/", &[], Body::empty()).await?.0,
+        StatusCode::UNAUTHORIZED
+    );
+    f.auth.add_user("visitor", PASSWORD, Role::User).await?;
+    let (visitor, _) = f.login_as("visitor").await?;
+    assert_eq!(
+        f.request("GET", "/", &[("cookie", &visitor)], Body::empty())
+            .await?
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let (admin, _) = f.login().await?;
+    let (status, headers, body) = f
+        .request("GET", "/", &[("cookie", &admin)], Body::empty())
+        .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers
+            .get(header::CONTENT_TYPE)
+            .ok_or("缺少类型")?
+            .to_str()?
+            .starts_with("text/html")
+    );
+    assert!(body.starts_with(b"<!doctype html>"));
     f.database.shutdown().await?;
     Ok(())
 }

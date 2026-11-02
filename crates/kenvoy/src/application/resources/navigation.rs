@@ -15,6 +15,7 @@ pub fn page(
     role: Role,
     has_assets: bool,
 ) -> Result<PageAccess, AuthorizationError> {
+    // 未声明的根路径只加载 Runtime；显式根页仍优先校验权限。
     if path == "/admin" || path == "/admin/login" || path.starts_with("/admin/") {
         if path != "/admin/login" {
             if path != "/admin"
@@ -36,7 +37,7 @@ pub fn page(
         if !authorization::permits(role, page.permission) {
             return Err(AuthorizationError::Denied(role));
         }
-    } else {
+    } else if path != "/" {
         return Err(AuthorizationError::UnknownResource);
     }
     Ok(PageAccess::Index)

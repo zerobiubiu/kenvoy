@@ -67,6 +67,8 @@ kenvoy run
 
 dev 先构建有效候选，再初始化 SQLite、Auth、QuickJS 和 Axum，输出真实应用与管理登录 Origin。notify 监听源码、配置和受支持资产；180ms 去抖后按内容指纹构建。语法、字段、边界、构建或迁移错误保留最后有效页面与数据库，浏览器显示脱敏开发错误。数据库、输出目录、监听地址或 public_origin 变更要求重启。
 
+启动日志中的应用 Origin 可直接访问：未声明 `/` 页面时，根地址加载 Runtime 并进入当前身份的首个可访问页面，无可访问页面则显示登录页；显式根页仍按声明权限处理。未知页面、API 和私有文件不会因此开放或返回页面壳。
+
 仅使用内置 DSL 的项目直接使用 CLI 携带的 React 原生 CSS Runtime，不启动 Node/Vite。自定义组件使用已验证源文件和资产的开发镜像，候选发布后才通知 Vite 更新；浏览器通过同一个 Kenvoy Origin 访问代理与 HMR。正式组件/CSS 状态保持与错误恢复已验收，详见 [运行时设计](../architecture/runtime-design.md)。
 
 build 不连接业务数据库。它检查完整项目、构建客户端及服务端函数包，写入独立版本目录，验证文件清单、大小和哈希后激活 dist/manifest.json。输出包括 application.ir、client/ 和 modules/server.json；旧产物和持久化数据不自动清理。已有非框架管理的输出目录拒绝接管。
