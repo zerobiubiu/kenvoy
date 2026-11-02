@@ -22,7 +22,7 @@ KEngine 负责 Source 到通用分析结果；Kenvoy 负责 DSL 之后的业务�
 
 Engine 为无状态入口：parse_source/parse_file 返回 ParseOutput，analyze_project 返回 ProgramIR；模块图和诊断由结果对象持有，不保存进程级“最后一次分析”。需要跨次更新时，由调用方持有 AnalysisSession 并取得 AnalysisUpdate。
 
-ParseOptions 控制语言，AnalyzeOptions 控制入口、解析和模块解析选项。项目根与入口由调用者提供，KEngine 不发现 Kenvoy 项目、不读取 kenvoy.toml。具体参数、返回类型和访问方法统一维护在[公共 API](../contracts/kengine-api.md)。
+ParseOptions 控制语言，AnalyzeOptions 控制入口、解析和模块解析选项。项目根与入口由调用者提供，KEngine 不发现 kenvoy 项目、不读取 kenvoy.toml。具体参数、返回类型和访问方法统一维护在[公共 API](../contracts/kengine-api.md)。
 
 解析成功仍可能含恢复错误。KEngine 收集 fatal 和 recovered diagnostics；Kenvoy 只接受无阻断诊断的模块。I/O 和内部不可恢复错误使用 thiserror 类型保留 source；语法和语义问题以结构化 Diagnostic 返回，不能把错误全部压成字符串。
 

@@ -12,6 +12,7 @@
 
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
+| [称呼与术语](terminology.md) | 参考 | “kenvoy 项目”“Kenvoy CLI”“KEngine”“本仓库”的唯一含义、歧义改法与强制使用规则 |
 | [技术栈与可行性调查](technology-stack.md) | 参考 | 环境与证据等级、锁定的 Cargo/npm 直接依赖、SWC 与两层 IR、React/原生 CSS、Vite/Rolldown、QuickJS、SQLite/HTTP 的实现边界及官方依据 |
 
 ## 推荐阅读顺序

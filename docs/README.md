@@ -8,6 +8,7 @@
 
 | 目的 | 推荐阅读顺序 |
 |---|---|
+| 确认称呼与术语 | [称呼与术语](reference/terminology.md)（“kenvoy 项目”＝用户应用、“Kenvoy CLI”＝`crates/kenvoy`、“KEngine”＝`crates/kengine`、“本仓库”＝Workspace） |
 | 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [DDD 目录规范](architecture/ddd-structure.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
@@ -25,7 +26,7 @@
 | [contracts/](contracts/README.md) | KEngine API、Generic/Application IR、DSL 语法、配置、组件绑定、选项及[附件与图片](contracts/file-uploads.md)协议 | 现状文档，维护有效接口契约 |
 | [development/](development/README.md) | 工程流程、测试策略、阶段状态、[后续待办](development/implementation-backlog.md)与风险登记 | 现状文档，区分完成事实、实现待办和待补证据 |
 | [operations/](operations/README.md) | CLI 使用、开发与生产运行、迁移确认及备份恢复操作 | 现状文档，维护操作条件与失败边界 |
-| [reference/](reference/README.md) | 技术栈、依赖来源、锁定版本和平台实测范围 | 现状参考资料，不替代锁文件与验收记录 |
+| [reference/](reference/README.md) | [称呼与术语](reference/terminology.md)、技术栈、依赖来源、锁定版本和平台实测范围 | 现状参考资料，不替代锁文件与验收记录 |
 | [decisions/](decisions/README.md) | 架构选择的背景、备选方案、原因、代价及替代关系 | 决策正文定稿后不可变，当前适用性由索引维护 |
 | [changes/](changes/README.md) | 各次实施的背景、方案、文件范围、接口变化与验证 | 已执行记录定稿后不可变，后续变化另建记录 |
 | [verification/](verification/README.md) | 初始审查、准备计划、阶段验收及变更内附专项验证入口 | 保留各次环境、命令、实际结果和限制 |

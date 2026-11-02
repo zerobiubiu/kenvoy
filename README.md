@@ -8,7 +8,7 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 首版基线已完成阶段 00—10，并在 Windows 上通过真实浏览器闭环：通用解析与增量分析、业务 DSL、真实 SQLite 和迁移、管理员认证、受控 HTTP CRUD、前后台、自定义组件、TypeScript/ESM 服务端函数、HMR，以及 create/dev/build/run/check/inspect/migrate。当时 201 项常规 Rust 测试、2 项显式跨工具测试和 90 项前端测试通过；历史命令与边界见[首版验收](docs/verification/0012-final-acceptance.md)，后续变更见[变更索引](docs/changes/README.md)。
 
-产品仍由 crates/kengine（Library）和 crates/kenvoy（Binary）构成，依赖方向为 Kenvoy → KEngine。Workspace 另有专门的 [kenvoy-tests](crates/kenvoy-tests/) 测试成员和根目录 [xtask](xtask/) 工程编排成员，均不发布，产品不依赖它们。各产品 Crate 保留自己的独立 tests。详细状态与证据从 [文档索引](docs/README.md)进入；项目工作规则见 [AGENTS.md](AGENTS.md)。
+产品仍由 crates/kengine（Library）和 crates/kenvoy（Binary，即 Kenvoy CLI）构成，依赖方向为 Kenvoy → KEngine。Workspace 另有专门的 [kenvoy-tests](crates/kenvoy-tests/) 测试成员和根目录 [xtask](xtask/) 工程编排成员，均不发布，产品不依赖它们。各产品 Crate 保留自己的独立 tests。详细状态与证据从 [文档索引](docs/README.md)进入；本仓库工作规则见 [AGENTS.md](AGENTS.md)，称呼约定见[称呼与术语](docs/reference/terminology.md)：**kenvoy 项目**指用本产品 DSL 编写的用户应用，不指本仓库。
 
 内部代码已按 DDD 分层：领域模型与规则、应用用例与静态端口、基础设施、接口及宿主装配；前端同样分离纯规则、API 和展示。自有代码（含测试）每文件硬上限 500 行，目标 400 行内，由 `cargo xtask architecture/check` 检查。目录与依赖规则见[DDD 规范](docs/architecture/ddd-structure.md)，本次行为兼容验证见 [0016](docs/changes/0016-ddd-structure-and-module-split.md)。
 
