@@ -12,6 +12,7 @@ jobs:
         run: echo "head=9.9.9" >> "$GITHUB_OUTPUT"
   call:
     needs: detect
-    uses: ./.github/workflows/probe2-callee.yml
+    uses: ./.github/workflows/release-one-version.yml
     with:
       version: ${{ needs.detect.outputs.head }}
+    secrets: inherit
