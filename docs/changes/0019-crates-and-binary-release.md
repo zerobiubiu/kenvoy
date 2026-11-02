@@ -53,6 +53,8 @@
 
 官方版本已通过 crates.io API 返回确认。registry workflow `41469164866` 已成功打包 Linux/macOS 四目标；Windows 两目标因 windows-2025 未找到所指定 Visual Studio 2022 而失败。已按官方镜像清单切换 windows-2022，并增加平台筛选只补打包 Windows，不重跑四份成功归档。该构建失败不记作 Windows 通过。
 
+Windows 补打包 workflow `41472155432` 已正确找到 VS 2022，但 Git Bash 将自身的 `link.exe` 放到 MSVC 前面，导致 host 工具链接失败。Windows 两处 Cargo 编译改为 PowerShell，保留开发者环境 PATH；Linux/macOS 仍用 Bash/Zig。四份已下载的 Unix ZIP 已通过独立字节级 SHA256 对比，与各自侧车一致。
+
 ### 发布验收边界
 
 本次按用户要求不新增/运行测试套件。后续只执行发布必需编译、独立包验证、架构/归档/SHA256 和基本安装版本核验；不能把交叉编译声称为对应架构的运行测试。最终 registry、CI、Release 和安装结果以本记录实际执行输出为准，不由工作流存在推定已经发布。

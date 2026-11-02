@@ -268,16 +268,19 @@ jobs:
           toolset: '14.44'
           vsversion: '2022'
 
-      - name: 构建当前 host 的 Rust 分发工具
+      - name: 构建 Windows host 的 Rust 分发工具
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --locked --release --package xtask --bin xtask `
+            --target $env:DIST_HOST --target-dir $env:DIST_BUILD_DIR
+
+      - name: 构建 Linux/macOS host 的 Rust 分发工具
+        if: runner.os != 'Windows'
         run: |
           set -euo pipefail
-          if [[ "$RUNNER_OS" == 'Windows' ]]; then
-            cargo build --locked --release --package xtask --bin xtask \
-              --target "$DIST_HOST" --target-dir "$DIST_BUILD_DIR"
-          else
-            cargo zigbuild --locked --release --package xtask --bin xtask \
-              --target "$DIST_HOST" --target-dir "$DIST_BUILD_DIR"
-          fi
+          cargo zigbuild --locked --release --package xtask --bin xtask \
+            --target "$DIST_HOST" --target-dir "$DIST_BUILD_DIR"
 
       - name: 准备固定 Node（仅 checkout 源码模式）
         if: inputs.mode == 'source'
@@ -303,18 +306,23 @@ jobs:
           toolset: '14.44'
           vsversion: '2022'
 
-      - name: 从所选真实源码构建 release CLI
+      - name: 从所选真实源码构建 Windows release CLI
+        # PowerShell 保留开发者环境 PATH，避免 Git Bash 的 link.exe 抢占 MSVC。
+        if: runner.os == 'Windows'
+        working-directory: ${{ env.DIST_PACKAGE_DIR }}
+        shell: pwsh
+        run: |
+          cargo build --locked --release --bin kenvoy --manifest-path $env:DIST_MANIFEST `
+            --target $env:DIST_TARGET --target-dir $env:DIST_BUILD_DIR
+
+      - name: 从所选真实源码交叉构建 Linux/macOS release CLI
         # registry 目录在 checkout 之外；不复制源码、不改依赖、不运行 npm。
+        if: runner.os != 'Windows'
         working-directory: ${{ env.DIST_PACKAGE_DIR }}
         run: |
           set -euo pipefail
-          if [[ "$RUNNER_OS" == 'Windows' ]]; then
-            cargo build --locked --release --bin kenvoy --manifest-path "$DIST_MANIFEST" \
-              --target "$DIST_TARGET" --target-dir "$DIST_BUILD_DIR"
-          else
-            cargo zigbuild --locked --release --bin kenvoy --manifest-path "$DIST_MANIFEST" \
-              --target "$DIST_TARGET" --target-dir "$DIST_BUILD_DIR"
-          fi
+          cargo zigbuild --locked --release --bin kenvoy --manifest-path "$DIST_MANIFEST" \
+            --target "$DIST_TARGET" --target-dir "$DIST_BUILD_DIR"
 
       - name: 校验格式/架构并归档（只有 host 兼容产物执行限时版本核验）
         run: |
