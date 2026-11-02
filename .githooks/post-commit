@@ -1,31 +1,3 @@
 #!/bin/sh
-# 提交已经成功；只维护 dev 的本地版本标签，失败不撤销提交，也不推送。
-
-branch=$(git symbolic-ref --quiet HEAD)
-status=$?
-if [ "$status" -eq 1 ]; then
-    exit 0
-fi
-if [ "$status" -ne 0 ]; then
-    printf '%s\n' '提交已完成，但无法确定当前分支，已跳过本地版本标签维护。' >&2
-    exit 0
-fi
-if [ "$branch" != refs/heads/dev ]; then
-    exit 0
-fi
-
-root=$(git rev-parse --show-toplevel)
-if [ "$?" -ne 0 ]; then
-    printf '%s\n' '提交已完成，但无法确定仓库根目录，已跳过本地版本标签维护。' >&2
-    exit 0
-fi
-
-if ! (
-    cd "$root" &&
-    cargo run --offline --locked --package xtask -- version-tags --apply --repo "$root"
-); then
-    printf '%s\n' \
-        '提交已完成，但本地版本标签维护失败；提交没有被撤销，也没有推送。' \
-        '请处理以上错误后运行 cargo xtask version-tags 预览，再显式添加 --apply 重试。' >&2
-fi
-exit 0
+# 提交完成后补齐 dev 的本地版本标签，不撤销已完成的提交。
+exec "$(dirname "$0")/maintain-version-tags" post-commit

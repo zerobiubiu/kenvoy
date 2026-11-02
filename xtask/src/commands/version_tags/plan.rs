@@ -24,16 +24,6 @@ pub(super) struct Plan {
 impl Plan {
     pub(super) fn build(history: &History, existing: Vec<ExistingTag>) -> Result<Self> {
         for tag in &existing {
-            if tag.name == "v0.0.0" {
-                if tag.commit != history.root {
-                    return Err(format!(
-                        "标签 v0.0.0 必须指向根 {}，实际指向 {}；不会移动既有标签",
-                        history.root, tag.commit
-                    )
-                    .into());
-                }
-                continue;
-            }
             let version = history.versions.get(&tag.commit).ok_or_else(|| {
                 format!("标签 {} 的目标 {} 不在 dev 历史中", tag.name, tag.commit)
             })?;
@@ -49,13 +39,6 @@ impl Plan {
         }
         let names: HashSet<&str> = existing.iter().map(|tag| tag.name.as_str()).collect();
         let mut missing = Vec::new();
-        if !names.contains("v0.0.0") {
-            missing.push(NewTag {
-                name: "v0.0.0".to_owned(),
-                commit: history.root.clone(),
-                message: "0.0.0 init".to_owned(),
-            });
-        }
         for introduction in &history.introductions {
             let name = format!("v{}", introduction.version);
             if !names.contains(name.as_str()) {

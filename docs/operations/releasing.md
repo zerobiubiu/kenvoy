@@ -17,11 +17,11 @@
 
 ## 根节点与版本标签
 
-共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，附注标签 `v0.0.0` 的说明为 `0.0.0 init`。它只是初始化标记，不改原始提交消息、文件内容或 SHA，也不发布到 crates.io/Release。根 manifest 声明的真实产品版本仍正常补标签：本仓库 `v0.1.0` 与初始化标签共同指向该根提交，与[已发布 0.1.0 的来源记录](https://docs.rs/crate/kenvoy/0.1.0/source/.cargo_vcs_info.json)一致；这不是新增或复制提交节点。
+共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，原始提交消息、文件内容与 SHA 不改。其真实产品版本标签为 `v0.1.0`，与[已发布 0.1.0 的来源记录](https://docs.rs/crate/kenvoy/0.1.0/source/.cargo_vcs_info.json)一致。人工初始化标签 `v0.0.0` 已退役并删除，不再凭根节点身份额外生成它；标签只来自提交中真实声明的版本。
 
 - 产品版本来自各产品 `Cargo.toml`，不是 kenvoy 项目的配置版本或 IR 版本；Kenvoy CLI 的版本用于仓库 `vMAJOR.MINOR.PATCH` 标签与 Release 名称。
 - KEngine 保留自身 manifest 版本；Kenvoy 的依赖约束和 Cargo.lock 必须同步。仅工作流、文档、工程工具变更不机械递增产品版本。
-- dev 中已提交的 Kenvoy CLI 版本变化时，创建对应附注标签；补齐历史中明确发生过版本变化而遗漏的标签。工作区、暂存区尚未提交的版本不参与判断。
+- dev 中已提交的 Kenvoy CLI 版本每次变化时，立即创建对应附注标签。缺失的历史标签补到该版本首次出现的提交，不挂到补齐时的 HEAD；根的真实版本同样纳入。工作区、暂存区尚未提交的版本不参与判断，同版本普通提交不重打标签；既有合法发布标签保留其原目标。
 - 既有合法标签保持原目标；不会自动移动、覆盖、删除或推送。轻量标签、指错版本、目标不在 dev 历史等冲突会阻断维护，不能强行改写。
 - **补标签不等于补发布**：缺失历史标签可补，历史 crate/Release 不自动补发。
 
@@ -34,14 +34,14 @@ cargo xtask version-tags
 cargo xtask version-tags --apply
 ```
 
-[post-commit 钩子](../../.githooks/post-commit)在 dev 成功提交后执行 `version-tags --apply`，其他分支不执行。启用仅影响本仓库；先检查既有 hooksPath，存在自定义钩子时先协调，不能覆盖用户配置：
+可写任务开始/收尾均按需核对补齐；[post-commit](../../.githooks/post-commit)、[post-checkout](../../.githooks/post-checkout)、[post-merge](../../.githooks/post-merge)、[pre-push](../../.githooks/pre-push) 共用[标签维护入口](../../.githooks/maintain-version-tags)，在 dev 提交后、切换回 dev、合并到 dev 后及获准推送前自动执行 `version-tags --apply`。其他分支、分离 HEAD 不自动写标签；只读任务不写引用。启用仅影响本仓库，存在自定义钩子时先协调，不能覆盖用户配置：
 
 ```text
 git config --local --get core.hooksPath
 git config --local core.hooksPath .githooks
 ```
 
-克隆仓库后需单独启用该本地配置，先准备 xtask 的 Rust 依赖缓存。钩子采用 `--offline --locked`，失败会明确提示“提交已完成、标签维护失败”，不会伪称提交回滚或自动上传；修复原因后按上方命令补齐标签。
+克隆仓库后需单独启用该本地配置，先准备 xtask 的 Rust 依赖缓存。钩子采用 `--offline --locked`：提交/切换/合并后的失败会说明 Git 操作已完成，不伪称回滚；推送前维护失败则阻止本次推送。修复原因后按上方命令补齐标签。钩子不联网推送，也不扩大用户给定的 refspec；获准推送时把保留的本地标签逐个显式推送到 GitHub，不遗漏先前补齐项。
 
 ## 正式发布顺序
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# 推送前再补本地 tag；失败阻止推送，不扩大用户给定的推送 refspec。
+exec "$(dirname "$0")/maintain-version-tags" pre-push

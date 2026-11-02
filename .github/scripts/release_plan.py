@@ -8,7 +8,7 @@ from pathlib import Path
 
 import registry
 from release_common import (
-    ROOT_COMMIT, GitHub, ReleaseError, asset_name, git, manifest_at,
+    GitHub, ReleaseError, asset_name, git, manifest_at,
     release_assets, release_context, require_tag, write_outputs,
 )
 
@@ -29,9 +29,6 @@ def plan_release(root, environ, github=None, registry_client=registry):
     }
     if github.main_sha() != sha:
         plan["reason"] = "此运行已不是远端 main 最新提交，跳过，不补发历史版本。"
-        return plan
-    if sha == ROOT_COMMIT or version == "0.0.0":
-        plan["reason"] = "0.0.0 init 仅标记共同根节点，不是发布版本。"
         return plan
 
     cli_state = registry_client.registry_version("kenvoy", version)

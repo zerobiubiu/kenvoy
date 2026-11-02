@@ -10,7 +10,6 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT_COMMIT = "7d3b5c2860d6e3c64948612a53d0df74ddf47883"
 VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 
 

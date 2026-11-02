@@ -135,13 +135,9 @@ fn preview_and_apply_use_committed_versions_and_are_idempotent() -> Result<()> {
     fixture.git(&["add", "crates/kenvoy/Cargo.toml"])?;
     let worktree = fixture.git(&["status", "--porcelain"])?;
     fixture.run(true)?;
-    assert_eq!(fixture.git(&["rev-parse", "v0.0.0^{commit}"])?, root);
-    assert_eq!(fixture.git(&["cat-file", "-t", "v0.0.0"])?, "tag");
-    assert_eq!(
-        fixture.git(&["for-each-ref", "--format=%(contents)", "refs/tags/v0.0.0"])?,
-        "0.0.0 init"
-    );
-    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0\nv0.1.0");
+    assert_eq!(fixture.git(&["rev-parse", "v0.1.0^{commit}"])?, root);
+    assert_eq!(fixture.git(&["cat-file", "-t", "v0.1.0"])?, "tag");
+    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.1.0");
     assert_eq!(fixture.git(&["status", "--porcelain"])?, worktree);
     let tags = fixture.tags()?;
     fixture.run(true)?;
@@ -265,7 +261,7 @@ fn merge_preserves_original_version_introduction_and_root_version() -> Result<()
     fixture.git(&["merge", "--no-ff", "--message", "合并版本变更", "topic"])?;
     fixture.run(true)?;
     assert_eq!(fixture.git(&["rev-parse", "v0.2.0^{commit}"])?, introduced);
-    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0\nv0.1.0\nv0.2.0");
+    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.1.0\nv0.2.0");
     Ok(())
 }
 
@@ -297,26 +293,34 @@ fn versions_are_parsed_as_toml_and_reject_non_release_semver() -> Result<()> {
 }
 
 #[test]
-fn init_marker_and_declared_root_version_coexist_without_moving_tags() -> Result<()> {
-    for version in ["0.0.0", "0.1.0"] {
-        let fixture = Fixture::new()?;
-        let root = fixture.commit_version(version)?;
-        fixture.annotated_tag("v0.0.0", &root)?;
-        let init_object = fixture.git(&["rev-parse", "refs/tags/v0.0.0"])?;
-        fixture.run(true)?;
-        assert_eq!(
-            fixture.git(&["rev-parse", "refs/tags/v0.0.0"])?,
-            init_object
-        );
-        let version_tag = format!("v{version}");
-        assert_eq!(
-            fixture.git(&["rev-parse", &format!("{version_tag}^{{commit}}")])?,
-            root
-        );
-        assert_eq!(fixture.git(&["cat-file", "-t", &version_tag])?, "tag");
-        let tags = fixture.tags()?;
-        fixture.run(true)?;
-        assert_eq!(fixture.tags()?, tags);
-    }
+fn missing_historical_tag_is_restored_at_its_version_commit_not_head() -> Result<()> {
+    let fixture = Fixture::new()?;
+    fixture.commit_version("0.1.0")?;
+    let version_commit = fixture.commit_version("0.2.0")?;
+    fixture.commit_version("0.2.1")?;
+    fixture.run(true)?;
+    let original = fixture.git(&["rev-parse", "refs/tags/v0.1.0"])?;
+    let current = fixture.git(&["rev-parse", "refs/tags/v0.2.1"])?;
+    fixture.git(&["tag", "--delete", "v0.2.0"])?;
+    fixture.commit_source("当前版本没有变化，但历史标签缺失")?;
+    fixture.run(true)?;
+    assert_eq!(
+        fixture.git(&["rev-parse", "v0.2.0^{commit}"])?,
+        version_commit
+    );
+    assert_eq!(fixture.git(&["rev-parse", "refs/tags/v0.1.0"])?, original);
+    assert_eq!(fixture.git(&["rev-parse", "refs/tags/v0.2.1"])?, current);
+    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.1.0\nv0.2.0\nv0.2.1");
+    Ok(())
+}
+
+#[test]
+fn unrelated_init_marker_is_not_accepted_as_a_real_version() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let root = fixture.commit_version("0.1.0")?;
+    fixture.annotated_tag("v0.0.0", &root)?;
+    let tags = fixture.tags()?;
+    assert!(fixture.run(true).is_err());
+    assert_eq!(fixture.tags()?, tags);
     Ok(())
 }

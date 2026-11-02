@@ -1,4 +1,4 @@
-//! 按父提交在先的顺序扫描 dev；初始化标记不排除根声明的真实版本。
+//! 按父提交在先的顺序扫描 dev，只收集已提交 manifest 中实际出现的版本。
 
 use super::{git::Repository, manifest::ManifestReader};
 use crate::Result;
@@ -16,7 +16,6 @@ pub(super) struct Introduction {
 
 pub(super) struct History {
     pub(super) head: String,
-    pub(super) root: String,
     pub(super) versions: HashMap<String, Option<Rc<str>>>,
     pub(super) introductions: Vec<Introduction>,
 }
@@ -29,7 +28,7 @@ pub(super) fn scan(repository: &Repository, expected_root: Option<&str>) -> Resu
     let mut versions: HashMap<String, Option<Rc<str>>> = HashMap::new();
     let mut introductions = Vec::new();
     let mut introduced = HashSet::new();
-    let mut root = None;
+    let mut root_seen = false;
     for line in commits.lines() {
         let mut fields = line.split_whitespace();
         let commit = fields.next().ok_or("Git 提交历史包含空记录")?;
@@ -43,9 +42,10 @@ pub(super) fn scan(repository: &Repository, expected_root: Option<&str>) -> Resu
             inherited |= parent_version.as_deref() == version.as_deref();
         }
         if is_root {
-            if root.replace(commit.to_owned()).is_some() {
-                return Err("dev 历史包含多个根，无法唯一确定 v0.0.0；未创建标签".into());
+            if root_seen {
+                return Err("dev 历史包含多个根，无法唯一确定版本来源；未创建标签".into());
             }
+            root_seen = true;
             if let Some(expected) = expected_root
                 && commit != expected
             {
@@ -56,7 +56,6 @@ pub(super) fn scan(repository: &Repository, expected_root: Option<&str>) -> Resu
             }
         }
         if let Some(version) = &version
-            && version.as_ref() != "0.0.0"
             && (is_root || !inherited)
             && introduced.insert(Rc::clone(version))
         {
@@ -73,7 +72,6 @@ pub(super) fn scan(repository: &Repository, expected_root: Option<&str>) -> Resu
     }
     Ok(History {
         head,
-        root: root.ok_or("dev 没有可确定的根提交")?,
         versions,
         introductions,
     })

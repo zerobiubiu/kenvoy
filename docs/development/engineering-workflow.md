@@ -28,13 +28,13 @@ xtask/                     # 不发布的 Rust 工程编排
 | `cargo xtask browser` | 先构建 CLI，再显式运行测试成员的浏览器用例 |
 | `cargo xtask dist --binary PATH --target TRIPLE --version VERSION --output DIR` | 校验已有二进制的目标架构，生成 ZIP 与 SHA256；兼容 host 可做限时版本核验，不执行测试套件 |
 | `cargo xtask version-tags` | 只读预览 dev 中已提交版本的缺失附注标签，不读取未提交版本、不推送 |
-| `cargo xtask version-tags --apply` | 在 dev 本地补齐缺失标签，保留既有标签；根为 v0.0.0 init，不改写历史 |
+| `cargo xtask version-tags --apply` | 在 dev 将缺失标签补到对应版本首次出现的提交，保留既有合法标签；不生成初始化标签、不推送或改写历史 |
 
 xtask 不自动安装工具或框架依赖。首次从源码构建仍需按[根 README](../../README.md)准备 npm 依赖；浏览器需要已有 Playwright/Chromium。内部 Cargo 命令使用 `--offline --locked`。CLI 路径从 Cargo 的 compiler-artifact 消息取得，并通过 `KENVOY_BINARY` 传给测试，支持不同 target 目录和构建 profile。
 
 dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitHub；发布与交叉编译流程见[发布操作](../operations/releasing.md)。正式对外操作由发布操作者在对应门禁完成后执行。
 
-开发统一使用 dev，只有用户批准合并 main 才进入发布。版本变更后由[提交钩子](../../.githooks/post-commit)维护本地 tag；首次克隆需按[Git 与发布操作](../operations/releasing.md)启用本仓库 hooksPath。轻量 CI 协调脚本位于 [.github/scripts](../../.github/scripts/)，与本地 Rust 工程入口分工，不恢复 tools 或额外产品 Workspace 成员。
+开发统一使用 dev，只有用户批准合并 main 才进入发布。[标签维护入口](../../.githooks/maintain-version-tags)由提交、切换回 dev、合并完成及推送前钩子复用；首次克隆需按[Git 与发布操作](../operations/releasing.md)启用本仓库 hooksPath。轻量 CI 协调脚本位于 [.github/scripts](../../.github/scripts/)，与本地 Rust 工程入口分工，不恢复 tools 或额外产品 Workspace 成员。
 
 ## 代码层次与拆分
 
