@@ -133,8 +133,10 @@ jobs:
               output.write(f"head={versions[0] if versions else ''}\n")
 
   noop:
+    # 空跑
+    if: needs.detect.outputs.head == ""
     needs: detect
-    name: 探针空跑
+    name: 无待发布版本
     runs-on: ubuntu-24.04
     steps:
       - run: echo ok
