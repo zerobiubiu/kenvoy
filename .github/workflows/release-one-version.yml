@@ -10,8 +10,6 @@ on:
         required: true
 permissions:
   contents: read
-env:
-  DIST_VERSION: ${{ inputs.version }}
 jobs:
   noop:
     runs-on: ubuntu-24.04
