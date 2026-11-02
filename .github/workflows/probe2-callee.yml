@@ -5,6 +5,8 @@ on:
       version:
         required: true
         type: string
+permissions:
+  contents: read
 env:
   RUSTUP_TOOLCHAIN: '1.98.0'
   DIST_VERSION: ${{ inputs.version }}
