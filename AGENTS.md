@@ -10,6 +10,7 @@
 - **Kenvoy CLI**：`crates/kenvoy` 产品包及其二进制 `kenvoy`。
 - **KEngine**：`crates/kengine` Library 包，不区分其他称呼。
 - **本仓库 / 本 Workspace**：当前 Git 仓库与四成员 Workspace；不用“本项目”“Kenvoy 项目”指代它。
+- **KenvoySpace / `kspace`、Kenvoy-Runtime / `krt`**：规划中的闭源组件（云平台、生产调度器），**当前未实现**，没有接口、仓库或部署方式。文档、README 与回复提到时必须标注“规划中、未实现”，不得描述为可用能力，也不得据此预建代码目录或接口。
 
 指代不清时按此表改写成明确名称，不新造第三种叫法；代码、配置与命令中的英文标识符保持原样。
 

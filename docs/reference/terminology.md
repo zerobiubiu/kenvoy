@@ -9,6 +9,8 @@
 | **kenvoy 项目**（kenvoy project） | 使用者用本产品规定的 DSL（`jsx`/`tsx`）编写、含 `kenvoy.toml` 的应用项目 | 不是本仓库，不是 Workspace，不是 `crates/kenvoy` |
 | **Kenvoy CLI** | `crates/kenvoy` 这个产品包与其二进制 `kenvoy` | 不是用户应用，不是 KEngine |
 | **KEngine** | `crates/kengine` 这个 Library 包 | 不承载 Web 业务、数据库、HTTP、认证、React |
+| **KenvoySpace**（`kspace`） | 规划中的企业数字化云工作空间（控制台/Dashboard），闭源 | 当前未实现，不是现有 Cargo 成员，没有接口或部署方式 |
+| **Kenvoy-Runtime**（`krt`） | 规划中的生产调度中枢（路由分发、CI/CD、版本、日志、多服务协同），闭源 | 当前未实现，不等同 `kenvoy run` 或现有构建流水线 |
 | **本仓库 / 本 Workspace** | 这个 Git 仓库及其四成员 Workspace（`kengine`、`kenvoy`、`kenvoy-tests`、`xtask`） | 不是用户的应用项目 |
 
 ## 使用规则
