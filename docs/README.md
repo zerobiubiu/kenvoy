@@ -32,7 +32,7 @@
 
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
 
-最近新增：[DDD 目录规范](architecture/ddd-structure.md)、[ADR 0012](decisions/0012-ddd-layers-and-module-boundaries.md)及[0016 分层与兼容验证](changes/0016-ddd-structure-and-module-split.md)。上传用法见[可运行示例](../examples/uploads-app/README.md)与[0015](changes/0015-uploads-example.md)，附件基础契约和实现证据保留在[多文件上传与图片](contracts/file-uploads.md)及[0014](changes/0014-file-uploads-and-images.md)。
+最近新增：[Windows 密码提示乱码修复及原生控制台验证](changes/0017-windows-password-prompt-encoding.md)。结构规范与兼容证据见[DDD 目录规范](architecture/ddd-structure.md)、[ADR 0012](decisions/0012-ddd-layers-and-module-boundaries.md)及[0016](changes/0016-ddd-structure-and-module-split.md)；上传用法与实现证据见[可运行示例](../examples/uploads-app/README.md)、[多文件上传与图片](contracts/file-uploads.md)及[0014](changes/0014-file-uploads-and-images.md)。
 
 ## 文档规范
 

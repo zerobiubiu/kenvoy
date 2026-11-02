@@ -20,6 +20,7 @@
 | [changes/0014：多文件上传与图片](../changes/0014-file-uploads-and-images.md#执行验证记录) | 已执行；附件权限/生命周期、Image/SDK、dev→run 同库读写和桌面/390px 专项 | [文件与图片契约](../contracts/file-uploads.md)、[数据库设计](../architecture/database-design.md)、[后续待办](../development/implementation-backlog.md) |
 | [changes/0015：上传与图片示例](../changes/0015-uploads-example.md#执行验证记录) | 已执行；正式示例副本的上传/下载、权限、URL/SDK 图片、生产重启、空状态与桌面/390px | [示例 README](../../examples/uploads-app/README.md)、[文件与图片契约](../contracts/file-uploads.md) |
 | [changes/0016：DDD 分层与模块拆分](../changes/0016-ddd-structure-and-module-split.md#执行验证记录) | 已执行；AST 层依赖/规模门禁、Rust/前端/七套浏览器、CLI 逐字基线与旧库/旧附件读回 | [DDD 目录规范](../architecture/ddd-structure.md)、[工程流程](../development/engineering-workflow.md)、[ADR 0012](../decisions/0012-ddd-layers-and-module-boundaries.md) |
+| [changes/0017：Windows 密码提示乱码修复](../changes/0017-windows-password-prompt-encoding.md#执行验证记录) | 已执行；代码页 936/65001 原生控制台、中文提示、不回显、输入模式恢复及错误拒绝 | [CLI 账号管理](../operations/cli-design.md#账号管理)、[密码约束](../architecture/security-design.md#账户初始化与密码) |
 
 ## 初始审查与准备计划
 

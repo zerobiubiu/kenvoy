@@ -51,7 +51,9 @@ kenvoy admin add-user --username operator --role user
 kenvoy admin add-user --username maintainer --role admin
 ```
 
-交互终端隐藏输入并二次确认。自动化可显式添加 `--password-stdin`，只读取一行有效 UTF-8，去掉行结尾而不裁剪密码空格；非交互但未指定此选项会拒绝。密码不得放在命令参数或源码中。用户名和密码限制见 [安全设计](../architecture/security-design.md)。重复 init 不覆盖已有管理员，add-user 要求已初始化管理员，账号和 Session 真实保存在项目 SQLite 中。
+交互终端隐藏输入并二次确认，输入时不显示字符或星号，输入完成后按回车。自动化可显式添加 `--password-stdin`，只读取一行有效 UTF-8，去掉行结尾而不裁剪密码空格；非交互但未指定此选项会拒绝。密码不得放在命令参数或源码中。用户名和密码限制见 [安全设计](../architecture/security-design.md)。重复 init 不覆盖已有管理员，add-user 要求已初始化管理员，账号和 Session 真实保存在项目 SQLite 中。
+
+交互提示通过标准错误的 Rust Unicode 终端输出并立即刷新，Windows 不依赖当前控制台输出代码页，也不修改它。隐藏读取仍由 rpassword 完成。提示乱码修复不放宽密码限制：校验错误应按原规则处理，而不是重建数据库或改成明文输入；修复及原生控制台证据见 [0017](../changes/0017-windows-password-prompt-encoding.md)。
 
 ## 开发、构建与生产
 
