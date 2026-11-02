@@ -7,7 +7,7 @@ default-members = ["crates/kengine", "crates/kenvoy"]
 edition = "2024"
 rust-version = "1.98"
 authors = ["zerobiubiu"]
-license = "MIT"
+license-file = "LICENSE"
 repository = "https://github.com/zerobiubiu/kenvoy"
 
 [workspace.dependencies]

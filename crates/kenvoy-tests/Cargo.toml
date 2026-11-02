@@ -3,7 +3,7 @@ name = "kenvoy-tests"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+license-file.workspace = true
 publish = false
 description = "KEngine 与 Kenvoy 真实进程的跨 Crate 集成验收"
 

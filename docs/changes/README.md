@@ -33,6 +33,7 @@
 | 0017 | [Windows 密码提示乱码修复](0017-windows-password-prompt-encoding.md) | 已执行；交互终端输出兼容修复 | 中文提示使用 Unicode 终端输出，保留隐藏读取、二次确认及密码策略 |
 | 0018 | [Runtime 根入口修复](0018-runtime-root-entry.md) | 已执行；通用页面入口修复 | 未声明根页时加载既有 Runtime，保持显式根页权限及未知请求 404；真实 dev/run 和浏览器验证 |
 | 0019 | [0.2.0 源包与跨平台二进制发布](0019-crates-and-binary-release.md) | 已执行；两源包、六目标二进制与安装核验 | 独立包构建、真实锁定元数据、Zig/MSVC 分发、crates.io 与 cargo-binstall |
+| 0020 | [许可证正文单一来源](0020-license-single-source.md) | 已执行；打包元数据与仓库布局 | license-file 继承、删除两份 crate LICENSE 副本、重复文件排查 |
 
 ## 关联代码与配置
 
