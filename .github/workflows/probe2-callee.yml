@@ -27,8 +27,7 @@ jobs:
           import json, os, pathlib
           targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '
-')
+              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '\n')
           PY
   noop:
     needs: targets
