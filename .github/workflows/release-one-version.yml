@@ -5,6 +5,13 @@ on:
       version:
         required: true
         type: string
+    secrets:
+      CARGO_TOKEN:
+        required: true
+permissions:
+  contents: read
+env:
+  DIST_VERSION: ${{ inputs.version }}
 jobs:
   noop:
     runs-on: ubuntu-24.04
