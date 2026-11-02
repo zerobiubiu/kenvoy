@@ -9,12 +9,12 @@ permissions:
   contents: read
 env:
   RUSTUP_TOOLCHAIN: '1.98.0'
-  DIST_VERSION: ${{ inputs.version }}
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: '2'
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
   CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  DIST_VERSION: ${{ inputs.version }}
 jobs:
   targets:
     runs-on: ubuntu-24.04
@@ -23,29 +23,20 @@ jobs:
     steps:
       - id: select
         run: |
-          python3 - <<'PY'
-          import json, os, pathlib
-          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '\n')
-          PY
-  noop:
+          echo 'matrix={"include":[{"runner":"ubuntu-24.04","target":"t1"},{"runner":"ubuntu-24.04","target":"t2"}]}' >> "$GITHUB_OUTPUT"
+  distribution:
     needs: targets
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
-    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4.2.2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v5.6.0
-        with:
-          python-version: '3.12.10'
-      - name: 读取目标清单
-        run: |
-          python3 - <<'PY'
-          import json, pathlib
-          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
-          print(len(targets))
-          PY
+      - run: echo 'target job'
+  release:
+    needs: distribution
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - run: echo release-ok
