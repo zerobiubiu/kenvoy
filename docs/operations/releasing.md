@@ -48,10 +48,23 @@ flowchart TD
 
 ## 工作流结构
 
-- 主工作流 [distribution.yml](../../.github/workflows/distribution.yml)：main 推送触发，检测待发布版本清单（head），调用可复用工作流。
-- 单版本工作流 [release-one-version.yml](../../.github/workflows/release-one-version.yml)：一个版本的完整发布——crates.io 校验与串行发布、六目标构建、GitHub Release（标题 `Kenvoy <version>`，正文说明覆盖 Linux/Windows/macOS 的 arm64 与 x86_64）。
-- 六个目标分配到平台原生 Runner（Windows 目标在 windows-2022 上用 MSVC，Linux 在 ubuntu-24.04，macOS 在 macos-15）；同一平台内 aarch64/x86_64 交叉由官方工具链完成（MSVC 交叉或 Zig）。不存在用 Linux Runner 统一交叉编译所有平台。
-- 产物上传 Actions artifacts（保留 14 天），六目标全部成功后创建 Release 并附六份 ZIP/SHA256。
+- 主工作流 [distribution.yml](../../.github/workflows/distribution.yml)：main 推送触发；detect 派生待发布版本；publish_crates 直接在主工作流内执行 crates.io 串行发布（本仓库 reusable workflow 无法传递 Secret，见下）；build_and_release 调用单版本工作流完成六目标构建与 Release。
+- 单版本工作流 [release-one-version.yml](../../.github/workflows/release-one-version.yml)：六目标构建 + GitHub Release（标题 `Kenvoy <version>`，附六份 ZIP/SHA256）。不含 crates.io 发布，不声明 job 级 write 权限。
+- PATCH 紧急发布 [patch-release.yml](../../.github/workflows/patch-release.yml)：仅 `dev.MAJOR.MINOR.PATCH` 分支手动触发，输入 confirm=yes 后发布当前分支版本（crate + Release）。用于 main 已发布 x.y.0 后立即修 bug、不推进 MINOR 的场景；版本已存在于 crates.io 时拒绝。
+- 手动单平台打包 [manual-package.yml](../../.github/workflows/manual-package.yml)：任意分支手动触发；一次只打包一个平台的一个架构（windows/linux/macos × x86_64/ARM64），产物仅上传 artifacts（14 天），不发布。
+
+## 已验证的平台限制
+
+本仓库（zerobiubiu/kenvoy，免费计划）实测 GitHub Actions 行为，编写工作流时必须遵守：
+
+- reusable workflow 被调方中**任何 job 声明 `permissions: contents: write`** 会导致整个调用 startup_failure（0 jobs、无日志）。需要写权限的 job 放在普通工作流（如 patch-release.yml），或把写权限提升到被调方顶级 `permissions`。
+- reusable workflow 的 secrets 透传不可用：caller 传 `secrets:`（逐个映射或 `inherit`）、被调方声明 `workflow_call.secrets`、被调方引用 `secrets.X`，任一存在都 startup_failure。Secret 依赖的步骤放在主工作流直接执行（如 publish_crates）。
+- caller `if` 表达式中空串比较必须用单引号（`== ''`）；双引号导致运行启动后 0 jobs 失败。
+- 顶层 `env` 引用 `inputs.*`、matrix strategy、checkout/setup 动作均正常。
+
+## 归档命名
+
+分发文件名为 `kenvoy-{version}-{platform}-{arch}.zip`：platform 取 windows/linux/macos；arch 取 `x86_64` 或 `ARM64`（不用 aarch64），由 `cargo xtask dist` 按目标生成，旁附同名 `.sha256`。
 
 ## 手动触发
 
