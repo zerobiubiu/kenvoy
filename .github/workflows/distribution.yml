@@ -197,15 +197,6 @@ jobs:
           DIST_VERSION: ${{ needs.detect.outputs.head }}
           CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
 
-  build_and_release:
-    # 六目标构建 + GitHub Release（可复用工作流，不涉及 secrets）。
-    if: needs.detect.outputs.head != ''
-    needs: [detect, publish_crates]
-    name: 发布 ${{ needs.detect.outputs.head }}
-    uses: ./.github/workflows/release-one-version.yml
-    with:
-      version: ${{ needs.detect.outputs.head }}
-
   noop:
     # 空跑：没有待发布版本时给出明确结果，运行成功结束。
     if: needs.detect.outputs.head == ''
