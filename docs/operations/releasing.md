@@ -17,7 +17,7 @@
 
 ## 根节点与版本标签
 
-共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，附注标签 `v0.0.0` 的说明为 `0.0.0 init`。它只是初始化标记，不改原始提交消息、文件内容或 SHA，也不发布到 crates.io/Release。根中原有的 manifest 版本仅作为历史比较基线，不伪造新的版本变更提交。
+共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，附注标签 `v0.0.0` 的说明为 `0.0.0 init`。它只是初始化标记，不改原始提交消息、文件内容或 SHA，也不发布到 crates.io/Release。根 manifest 声明的真实产品版本仍正常补标签：本仓库 `v0.1.0` 与初始化标签共同指向该根提交，与[已发布 0.1.0 的来源记录](https://docs.rs/crate/kenvoy/0.1.0/source/.cargo_vcs_info.json)一致；这不是新增或复制提交节点。
 
 - 产品版本来自各产品 `Cargo.toml`，不是 kenvoy 项目的配置版本或 IR 版本；Kenvoy CLI 的版本用于仓库 `vMAJOR.MINOR.PATCH` 标签与 Release 名称。
 - KEngine 保留自身 manifest 版本；Kenvoy 的依赖约束和 Cargo.lock 必须同步。仅工作流、文档、工程工具变更不机械递增产品版本。

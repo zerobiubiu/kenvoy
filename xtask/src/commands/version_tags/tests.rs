@@ -141,7 +141,7 @@ fn preview_and_apply_use_committed_versions_and_are_idempotent() -> Result<()> {
         fixture.git(&["for-each-ref", "--format=%(contents)", "refs/tags/v0.0.0"])?,
         "0.0.0 init"
     );
-    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0");
+    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0\nv0.1.0");
     assert_eq!(fixture.git(&["status", "--porcelain"])?, worktree);
     let tags = fixture.tags()?;
     fixture.run(true)?;
@@ -255,7 +255,7 @@ fn foreign_history_tags_and_shallow_clones_are_rejected() -> Result<()> {
 }
 
 #[test]
-fn merge_uses_original_version_introduction_without_tagging_root_baseline() -> Result<()> {
+fn merge_preserves_original_version_introduction_and_root_version() -> Result<()> {
     let fixture = Fixture::new()?;
     fixture.commit_version("0.1.0")?;
     fixture.git(&["switch", "--create", "topic"])?;
@@ -265,7 +265,7 @@ fn merge_uses_original_version_introduction_without_tagging_root_baseline() -> R
     fixture.git(&["merge", "--no-ff", "--message", "合并版本变更", "topic"])?;
     fixture.run(true)?;
     assert_eq!(fixture.git(&["rev-parse", "v0.2.0^{commit}"])?, introduced);
-    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0\nv0.2.0");
+    assert_eq!(fixture.git(&["tag", "--list"])?, "v0.0.0\nv0.1.0\nv0.2.0");
     Ok(())
 }
 
@@ -293,5 +293,30 @@ fn versions_are_parsed_as_toml_and_reject_non_release_semver() -> Result<()> {
     );
     assert!(parse_manifest(b"[package]\nname = 'another'\nversion = '1.2.3'\n").is_err());
     assert!(parse_manifest(b"[package]\nname = 'kenvoy'\nversion.workspace = true\n").is_err());
+    Ok(())
+}
+
+#[test]
+fn init_marker_and_declared_root_version_coexist_without_moving_tags() -> Result<()> {
+    for version in ["0.0.0", "0.1.0"] {
+        let fixture = Fixture::new()?;
+        let root = fixture.commit_version(version)?;
+        fixture.annotated_tag("v0.0.0", &root)?;
+        let init_object = fixture.git(&["rev-parse", "refs/tags/v0.0.0"])?;
+        fixture.run(true)?;
+        assert_eq!(
+            fixture.git(&["rev-parse", "refs/tags/v0.0.0"])?,
+            init_object
+        );
+        let version_tag = format!("v{version}");
+        assert_eq!(
+            fixture.git(&["rev-parse", &format!("{version_tag}^{{commit}}")])?,
+            root
+        );
+        assert_eq!(fixture.git(&["cat-file", "-t", &version_tag])?, "tag");
+        let tags = fixture.tags()?;
+        fixture.run(true)?;
+        assert_eq!(fixture.tags()?, tags);
+    }
     Ok(())
 }

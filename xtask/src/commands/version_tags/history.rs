@@ -1,4 +1,4 @@
-//! 按父提交在先的顺序扫描 dev；根的旧版本仅作比较基线。
+//! 按父提交在先的顺序扫描 dev；初始化标记不排除根声明的真实版本。
 
 use super::{git::Repository, manifest::ManifestReader};
 use crate::Result;
@@ -54,9 +54,10 @@ pub(super) fn scan(repository: &Repository, expected_root: Option<&str>) -> Resu
                 )
                 .into());
             }
-        } else if let Some(version) = &version
+        }
+        if let Some(version) = &version
             && version.as_ref() != "0.0.0"
-            && !inherited
+            && (is_root || !inherited)
             && introduced.insert(Rc::clone(version))
         {
             introductions.push(Introduction {

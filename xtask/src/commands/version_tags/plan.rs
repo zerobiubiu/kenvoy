@@ -34,13 +34,6 @@ impl Plan {
                 }
                 continue;
             }
-            if tag.commit == history.root {
-                return Err(format!(
-                    "标签 {} 指向根提交；根仅保留 v0.0.0，不按根的旧 manifest 版本补标签",
-                    tag.name
-                )
-                .into());
-            }
             let version = history.versions.get(&tag.commit).ok_or_else(|| {
                 format!("标签 {} 的目标 {} 不在 dev 历史中", tag.name, tag.commit)
             })?;

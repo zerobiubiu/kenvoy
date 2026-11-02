@@ -19,7 +19,7 @@ pub(super) fn execute(root: &Path, arguments: &[OsString]) -> Result<()> {
              默认只读预览 dev 全部可达历史，只依据已提交的 crates/kenvoy/Cargo.toml。\n\
              --apply 仅在当前 dev 分支和完整非浅仓库创建缺失的 annotated 标签。\n\
              --repo PATH 显式选择工作区根目录，隔离仓库使用其唯一根；默认校验本仓库固定根。\n\
-             根标记 v0.0.0（0.0.0 init），根的旧 manifest 版本只作比较基线。\n\
+             根标记 v0.0.0（0.0.0 init），同时保留或补齐根 manifest 声明的真实版本标签。\n\
              正式 X.Y.Z 在首次版本变化处标记；已有同版本有效标签保留，不移动、不删除、不推送。\n\
              需要 Git 2.36 或更新版本；冲突会失败，不会自动修复既有标签。"
         );
