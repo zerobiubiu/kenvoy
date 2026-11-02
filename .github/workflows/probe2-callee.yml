@@ -5,6 +5,10 @@ on:
       version:
         required: true
         type: string
+    secrets:
+      CARGO_TOKEN:
+        description: test
+        required: false
 jobs:
   noop:
     runs-on: ubuntu-24.04
