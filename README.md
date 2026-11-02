@@ -34,6 +34,38 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 称呼约定见[称呼与术语](docs/reference/terminology.md)：**kenvoy 项目**专指用本产品 DSL 编写的用户应用，不指本仓库。
 
+## 仓库结构
+
+当前为 Rust 工作区（Rust 1.98 / edition 2024 / resolver 3），四成员，默认成员为两个产品包：
+
+```text
+kenvoy/
+├── crates/
+│   ├── kengine/        # 解析引擎 Library：SWC 解析、Generic IR、语义与模块图
+│   │                   #   发布到 crates.io；可独立 check/test，不需要数据库/HTTP/前端
+│   ├── kenvoy/         # Kenvoy CLI + 内置前端：DSL、Application IR、SQLite、HTTP、构建与运行
+│   │   ├── frontend/   # React + TypeScript + 原生 CSS 的框架前端，构建产物随源包发布
+│   │   └── tests/      # 产品独立测试
+│   └── kenvoy-tests/   # 跨 Crate 集成测试与真实进程/浏览器夹具（不发布）
+├── xtask/              # 工程编排：check/architecture/docs/build/test/browser/dist（不发布）
+├── examples/           # 可运行示例：customer-app、uploads-app、options-app、extensions-app
+├── docs/               # 文档中心：架构、契约、开发、运维、参考、决策、变更、验证
+├── .github/            # 分发工作流与六目标清单（Windows MSVC / Linux musl / macOS）
+├── .cargo/             # Cargo 配置
+├── AGENTS.md           # 本仓库工作规则（含称呼与术语）
+├── PRODUCT.md          # 产品事实
+├── DESIGN.md           # 视觉与界面约定
+├── Cargo.toml          # Workspace 定义与共享依赖/属性
+├── Cargo.lock          # 锁定依赖
+└── LICENSE             # MIT
+```
+
+依赖方向固定为 `kenvoy → kengine`；`kenvoy-tests` 与 `xtask` 只用于开发验证，产品不依赖它们，且禁止发布。各产品 Crate 保留独立 `tests`。
+
+开源部分为 **Kenvoy CLI（`crates/kenvoy`）+ KEngine（`crates/kengine`）**，两者发布到 [crates.io](https://crates.io) 并提供 GitHub Release 预编译二进制。`KenvoySpace`（`kspace`）与 `Kenvoy-Runtime`（`krt`）是闭源商业产品规划，**不在本仓库**，当前也未实现。
+
+构建产物、依赖目录与运行数据不入库：`target/`、`node_modules/`、`dist/`、`.kenvoy/`、`artifacts/`、`*.sqlite*` 由 `.gitignore` 排除。
+
 ## 当前进度
 
 当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。另支持 SQLite 持久化的多文件字段、附件下载及可显示上传图片/图片 URL 的 Image 组件。用法见[组件与选项契约](docs/contracts/component-bindings.md)、[文件与图片契约](docs/contracts/file-uploads.md)、[联动选项示例](examples/options-app/README.md)和[上传与图片示例](examples/uploads-app/README.md)。
