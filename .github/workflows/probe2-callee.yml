@@ -10,6 +10,11 @@ permissions:
 env:
   RUSTUP_TOOLCHAIN: '1.98.0'
   DIST_VERSION: ${{ inputs.version }}
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: '2'
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+  CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 jobs:
   noop:
     runs-on: ubuntu-24.04
