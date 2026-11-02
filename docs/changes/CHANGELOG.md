@@ -9,6 +9,7 @@
 - 本轮不递增产品版本；实施与验证见 [0021](0021-dev-main-release-rules.md)。
 - 修复根提交产品版本漏标：初始化 v0.0.0 与根声明的 v0.1.0 可共存，已有标签不移动；见 [0022](0022-root-version-tag.md)。
 - 版本标签仅来自真实已提交版本，及时补到对应版本提交；退役 v0.0.0 初始化特例，增加切换、合并及推送前维护入口；见 [0023](0023-version-tag-rules.md)。
+- 新增 npm / Homebrew / Scoop / WinGet / Chocolatey / AUR 与 APT/RPM/Alpine/Arch 仓库发布工作流，只消费已发布 Release 归档；见 [0024](0024-package-channels.md)。
 
 ## 0.2.0
 

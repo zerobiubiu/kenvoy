@@ -15,6 +15,7 @@
 | [CLI 当前行为](cli-design.md) | 参考 | 项目创建、检查与解析结果、迁移、账号管理、dev/build/run、依赖安装、产物部署、退出和日志 |
 | [迁移执行协议](migration-design.md) | 参考 | Schema Diff、只读预览、漂移检查、安全应用、checksum 确认、一致性备份、事务与恢复边界 |
 | [Git、版本标签与产品发布](releasing.md) | 参考 | dev/main 双分支、自动本地 tag、main 当前版本自动发布及手动兜底、单目标下载 artifact、六目标 registry 构建与安装边界 |
+| [多渠道软件包发布](distribution-channels.md) | 参考 | npm、Homebrew、Scoop、WinGet、Chocolatey、AUR、APT/RPM/Alpine/Arch Pages 仓库的产物流、Secret 与外部审核边界 |
 
 ## 推荐阅读顺序
 
