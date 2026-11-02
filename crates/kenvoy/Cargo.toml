@@ -1,14 +1,42 @@
 [package]
 name = "kenvoy"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "将 TypeScript/JSX 声明解释为页面、受控 API 和 SQLite 持久化应用的原生 CLI"
+readme = "README.md"
+keywords = ["cli", "typescript", "web", "sqlite"]
+categories = ["command-line-utilities", "web-programming"]
+include = [
+    "src/**",
+    "tests/**",
+    "build.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "LICENSE",
+    "frontend/index.html",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/tsconfig.json",
+    "frontend/vite.config.mjs",
+    "frontend/src/**",
+    "frontend/scripts/client-builder.mjs",
+    "frontend/scripts/client-dev.mjs",
+    "frontend/dist/index.html",
+    "frontend/dist/assets/**",
+]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }.zip"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "zip"
 
 [dependencies]
-kengine = { path = "../kengine" }
+kengine = { path = "../kengine", version = "0.2.0" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -43,3 +71,4 @@ futures-util.workspace = true
 
 [build-dependencies]
 sha2.workspace = true
+toml.workspace = true

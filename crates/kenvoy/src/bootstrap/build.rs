@@ -2,7 +2,12 @@
 use kengine::{AnalysisSession, ProgramIR};
 
 use super::error::{Error, Result};
-use crate::infrastructure::{artifacts as artifact, client_build, javascript, project::Project};
+use crate::infrastructure::{
+    artifacts as artifact, client_build,
+    frontend::{CARGO_LOCK_SHA256, KENGINE_VERSION},
+    javascript,
+    project::Project,
+};
 
 pub struct Candidate {
     pub output: artifact::Loaded,
@@ -55,14 +60,14 @@ pub async fn candidate(
             ));
         }
         let mut dependencies = client.dependencies;
-        dependencies.insert("rust:kengine".into(), env!("CARGO_PKG_VERSION").into());
+        dependencies.insert("rust:kengine".into(), KENGINE_VERSION.into());
         dependencies.insert("rust:swc_ecma_parser".into(), "47.0.0".into());
         dependencies.insert("rust:rquickjs".into(), "0.14.0".into());
         dependencies.insert("rust:rusqlite".into(), "0.41.1".into());
         dependencies.insert("sqlite".into(), rusqlite::version().into());
         dependencies.insert(
             "framework:cargo_lock_sha256".into(),
-            hash(include_bytes!("../../../../Cargo.lock")),
+            CARGO_LOCK_SHA256.into(),
         );
         let loaded = stage.seal(
             &application,
@@ -78,12 +83,4 @@ pub async fn candidate(
         });
     }
     Err(Error::InvalidConfig("构建未能获得一致快照".into()))
-}
-
-fn hash(bytes: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
 }

@@ -12,6 +12,18 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 内部代码已按 DDD 分层：领域模型与规则、应用用例与静态端口、基础设施、接口及宿主装配；前端同样分离纯规则、API 和展示。自有代码（含测试）每文件硬上限 500 行，目标 400 行内，由 `cargo xtask architecture/check` 检查。目录与依赖规则见[DDD 规范](docs/architecture/ddd-structure.md)，本次行为兼容验证见 [0016](docs/changes/0016-ddd-structure-and-module-split.md)。
 
+## 安装 0.2.0
+
+0.2.0 的发布状态以[版本日志](docs/changes/CHANGELOG.md)及[执行记录](docs/changes/0019-crates-and-binary-release.md)为准。发布完成后可安装 CLI，或在 Rust 项目中使用语言库：
+
+```text
+cargo binstall kenvoy --version 0.2.0
+cargo install kenvoy --version 0.2.0 --locked
+cargo add kengine@0.2.0
+```
+
+源包自带通用前端发行资产，安装 CLI 不需要在 Cargo 缓存目录手动运行 npm。预编译分发覆盖 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64；归档与 SHA256 来自 [GitHub Release](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.2.0)。发布工具、Zig 交叉编译及验收边界见[发布操作](docs/operations/releasing.md)，包级说明见 [Kenvoy](crates/kenvoy/README.md) / [KEngine](crates/kengine/README.md)。
+
 ## 从源码构建与验证
 
 需要 Rust 1.98 或以上、原生 C 构建环境及 Node 24.22.0 或以上/npm。Kenvoy 构建脚本嵌入真实前端产物，首次 Cargo 构建前先准备前端；不会在 Cargo 构建脚本里自动下载依赖。仓库保留 Rust/npm 锁文件：

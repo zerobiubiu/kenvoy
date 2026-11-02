@@ -1,4 +1,4 @@
-# CLI 与迁移操作文档
+# CLI、迁移与发布操作文档
 
 状态：参考；治理：现状文档。
 
@@ -6,7 +6,7 @@
 
 ## 目录职责
 
-集中说明 Kenvoy 的本机 CLI、开发与生产生命周期、数据库迁移及数据保护操作。这里记录现行操作行为和执行边界；配置与数据结构的契约归入 [contracts](../contracts/README.md)，实现机制归入 [architecture](../architecture/README.md)，不因文件名含有 design 就将已实现行为当成未来计划。
+集中说明 Kenvoy 的本机 CLI、开发与生产生命周期、数据库迁移、产品发布及数据保护操作。这里记录现行操作行为和执行边界；配置与数据结构的契约归入 [contracts](../contracts/README.md)，实现机制归入 [architecture](../architecture/README.md)，不因文件名含有 design 就将已实现行为当作未来计划。
 
 ## 文档清单
 
@@ -14,6 +14,7 @@
 |---|---|---|
 | [CLI 当前行为](cli-design.md) | 参考 | 项目创建、检查与解析结果、迁移、账号管理、dev/build/run、依赖安装、产物部署、退出和日志 |
 | [迁移执行协议](migration-design.md) | 参考 | Schema Diff、只读预览、漂移检查、安全应用、checksum 确认、一致性备份、事务与恢复边界 |
+| [crates.io 与二进制发布](releasing.md) | 参考 | 产品版本、包内容、六目标 Zig 交叉编译、源码/registry 构建、GitHub Release 与 cargo-binstall 安装边界 |
 
 ## 推荐阅读顺序
 
@@ -21,6 +22,7 @@
 2. 启动或部署前核对[项目配置契约](../contracts/project-configuration.md)，尤其是持久化路径、监听地址、对外 Origin 与运行信任设置。
 3. 变更数据模型前先读[迁移执行协议](migration-design.md)，再按 CLI 文档进行只读预览；破坏性操作的确认与备份不能替代数据有效性检查。
 4. 排查实现问题时进入[Runtime 设计](../architecture/runtime-design.md)、[数据库设计](../architecture/database-design.md)和[安全设计](../architecture/security-design.md)；复现验证的方法与工具前置条件见[工程流程](../development/engineering-workflow.md)。
+5. 发布操作者阅读[发布操作](releasing.md)及[版本日志](../changes/CHANGELOG.md)，各次对外操作的事实与限制从编号变更记录进入。
 
 ## 关联契约、代码与配置
 
@@ -38,6 +40,6 @@
 
 ## 维护、废弃与替代关系
 
-本目录两个主题均为可持续维护的现状参考，当前无废弃主题。CLI 参数、配置、默认行为、迁移或恢复边界变化时，同步维护操作正文、相应契约与实现设计，并在[变更记录](../changes/README.md)保存当次事实；设计或待验证内容不得写作已验收能力。
+本目录三个主题均为可持续维护的现状参考，当前无废弃主题。CLI 参数、配置、默认行为、迁移、恢复或发布边界变化时，同步维护操作正文、相应契约与实现设计，并在[变更记录](../changes/README.md)保存当次事实；设计或待验证内容不得写作已验收能力。
 
 定稿 ADR、变更和验证正文不合并、不删除、不重编号，后续变化或勘误另建记录并更新索引。原 tools 已退役，历史记录中的旧路径与命令仅保留历史事实；当前工程操作使用 Rust xtask，测试与进程夹具使用 kenvoy-tests，不恢复旧工具链作为现行依赖。

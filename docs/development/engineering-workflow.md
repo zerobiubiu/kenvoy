@@ -26,10 +26,11 @@ xtask/                     # 不发布的 Rust 工程编排
 | `cargo xtask build` | 构建默认前端，再构建 Kenvoy CLI |
 | `cargo xtask test` | 先构建 CLI，再运行 Workspace 标准 Rust 测试 |
 | `cargo xtask browser` | 先构建 CLI，再显式运行测试成员的浏览器用例 |
+| `cargo xtask dist --binary PATH --target TRIPLE --version VERSION --output DIR` | 校验已有二进制的目标架构，生成 ZIP 与 SHA256；兼容 host 可做限时版本核验，不执行测试套件 |
 
 xtask 不自动安装工具或框架依赖。首次从源码构建仍需按[根 README](../../README.md)准备 npm 依赖；浏览器需要已有 Playwright/Chromium。内部 Cargo 命令使用 `--offline --locked`。CLI 路径从 Cargo 的 compiler-artifact 消息取得，并通过 `KENVOY_BINARY` 传给测试，支持不同 target 目录和构建 profile。
 
-没有新增代码生成或发布命令：当前只实现已有实际需要的检查、构建与测试编排。
+dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitHub；发布与交叉编译流程见[发布操作](../operations/releasing.md)。正式对外操作由发布操作者在对应门禁完成后执行。
 
 ## 代码层次与拆分
 

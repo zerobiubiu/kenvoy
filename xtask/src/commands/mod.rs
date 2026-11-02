@@ -1,6 +1,7 @@
-//! 构建、测试与仓库检查的命令编排。
+//! 构建、分发、测试与仓库检查的命令编排。
 
 mod build;
+mod distribution;
 mod options;
 mod process;
 
@@ -31,9 +32,12 @@ pub(crate) fn execute() -> Result<()> {
                  cargo xtask build          构建默认前端与 Kenvoy\n\
                  cargo xtask test           构建并执行 Workspace Rust 测试\n\
                  cargo xtask browser        构建并执行显式浏览器测试\n\
+                 cargo xtask dist           校验既有二进制并生成 ZIP 与 SHA256\n\
                  build/test/browser 支持 --release、--profile、--target-dir、--target；\n\
                  test 的其他参数传给 cargo test，browser 的其他参数传给浏览器测试。\n\
-                 Cargo 子命令固定使用 --offline --locked；不会安装依赖。"
+                 dist 必填 --binary、--target、--version、--output；可选 --readme、--license。\n\
+                 dist 只对 host 兼容产物限时执行 --version，不执行功能测试。\n\
+                 build/test/browser 的 Cargo 子命令固定使用 --offline --locked；不会安装依赖。"
             );
             Ok(())
         }
@@ -49,6 +53,7 @@ pub(crate) fn execute() -> Result<()> {
             }
             Ok(())
         }
+        Some("dist") => distribution::execute(root, &tail),
         Some("build" | "test" | "browser") => {
             let options = CargoOptions::parse(&tail)?;
             if command == "build" && !options.test_arguments.is_empty() {

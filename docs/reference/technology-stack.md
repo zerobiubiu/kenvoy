@@ -31,7 +31,7 @@
 | tower、tower-http | 0.5.3、0.7.1 | 分别启用 util；fs、limit |
 | rusqlite | 0.41.1 | bundled、backup |
 | notify | 8.2.1 | 正式开发文件监听；默认 |
-| clap、toml | 4.6.7、0.9.8 | clap 启用 derive；严格 CLI/配置 |
+| clap、toml | 4.6.7、0.9.8 | clap 启用 derive；CLI/配置，toml 同时解析发布包构建元数据 |
 | chrono | 0.4.45 | default-features=false；std |
 | sha2、hmac | 0.11.1、0.13.0 | 产物/Schema/Session 摘要与 CSRF |
 | argon2、getrandom、rpassword | 0.6.0、0.4.3、7.5.4 | 密码哈希、系统随机源、隐藏密码输入 |
@@ -42,8 +42,9 @@
 | futures-util | 0.3.34 | 默认 + sink；开发代理流处理 |
 | windows-sys | 0.61.2 | 仅测试成员 cfg(windows)：Foundation、Security、JobObjects、Threading；回收自有进程树 |
 | syn | 2.0.119 | 仅 xtask：full、visit；源码层依赖与 Rust AST 检查 |
+| zip | 2.4.2 | 仅 xtask；关闭默认 features，启用 deflate，生成二进制分发 ZIP |
 
-产品为 kengine Library 与 kenvoy Binary，Workspace 另有不发布的 kenvoy-tests 与 xtask。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2 同时用于资产嵌入构建脚本。测试成员的 Windows Job 依赖，以及 xtask 的 syn 和 KEngine 工程检查依赖，不进入产品正常依赖闭包。
+产品为 kengine Library 与 kenvoy Binary，Workspace 另有不发布的 kenvoy-tests 与 xtask。KEngine 正式依赖仅为通用 SWC、serde 和 thiserror，不引用 Web/数据库/React/认证。上述 Web、SQLite、QuickJS、notify 等已经是 Kenvoy 正式依赖；sha2/toml 同时用于资产与构建元数据。测试成员的 Windows Job 依赖，以及 xtask 的 syn、zip 和 KEngine 工程依赖，不进入产品正常依赖闭包。0.2.0 的 Zig、cargo-zigbuild 与分发流程见[发布操作](../operations/releasing.md)。
 
 | npm 直接依赖 | 精确版本 | 正式前端用途 |
 |---|---|---|

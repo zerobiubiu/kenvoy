@@ -18,7 +18,7 @@ React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的
 
 `/` 是内建 Runtime 入口：应用未声明根页时，宿主先提供页面壳，客户端按当前身份过滤后的描述进入首个可访问页面；没有可访问页面则进入 `/admin/login`。显式声明的根页仍优先执行其权限校验。该入口不把任意未知页面或 API 404 改成 SPA 成功响应。
 
-框架源码位于 crates/kenvoy/frontend，Vite/Rolldown 先生成 dist，再由 crates/kenvoy/build.rs 将公开 index/assets 嵌入 Rust Binary。基础 DSL 使用内置资产，应用启动不要求 Node、不安装 npm 依赖；开发框架源码时先在 frontend 执行 npm ci --ignore-scripts、npm run check、npm run build，再编译 Rust。当前依赖锁定于该目录 package-lock.json，缺少 dist 会明确阻止发行构建。
+框架源码位于 crates/kenvoy/frontend，Vite/Rolldown 先生成 dist，再由 crates/kenvoy/build.rs 将公开 index/assets 嵌入 Rust Binary。Git 仓库开发首次编译前需要在 frontend 准备 npm 依赖并构建；crates.io 发布包则已包含发行资产，不要求安装者再次运行 npm。构建脚本显式识别 Workspace 与独立包布局，使用相应真实锁文件和 KEngine 依赖版本；独立包不访问仓库上层或兄弟源码。基础 DSL 启动不要求 Node、不安装 npm 依赖；缺少 dist 仍明确阻止构建，不自动下载或伪造资产。
 
 `infrastructure::frontend::export` 将内置资产写入调用方独占创建的空 staging，检查文件内容、链接和目录边界，不覆盖已有文件。统一构建层将已验证产物保存到默认 `dist/versions/<build_id>/client`；`dist/manifest.json` 标识当前激活版本。加载时重新检查清单、文件大小和 SHA-256，篡改时保留现场并报错。当前流程不再使用 `.kenvoy/runtime`。业务 SQLite 仍位于独立持久化目录，构建不会清理数据库或已有版本；不按页面生成 React 业务源码。
 

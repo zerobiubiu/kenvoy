@@ -1,11 +1,16 @@
 [package]
 name = "kengine"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "通用 JavaScript、TypeScript、JSX、TSX 源码解析与模块分析引擎"
+readme = "README.md"
+keywords = ["parser", "typescript", "jsx", "static-analysis"]
+categories = ["parsing", "development-tools"]
+include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [dependencies]
 swc_common.workspace = true
