@@ -1,0 +1,46 @@
+[
+  {
+    "target": "x86_64-pc-windows-msvc",
+    "runner": "windows-2022",
+    "host": "x86_64-pc-windows-msvc",
+    "host_arch": "x86_64",
+    "msvc_arch": "x64",
+    "extension": ".exe"
+  },
+  {
+    "target": "aarch64-pc-windows-msvc",
+    "runner": "windows-2022",
+    "host": "x86_64-pc-windows-msvc",
+    "host_arch": "x86_64",
+    "msvc_arch": "amd64_arm64",
+    "extension": ".exe"
+  },
+  {
+    "target": "x86_64-unknown-linux-musl",
+    "runner": "ubuntu-24.04",
+    "host": "x86_64-unknown-linux-gnu",
+    "host_arch": "x86_64",
+    "extension": ""
+  },
+  {
+    "target": "aarch64-unknown-linux-musl",
+    "runner": "ubuntu-24.04",
+    "host": "x86_64-unknown-linux-gnu",
+    "host_arch": "x86_64",
+    "extension": ""
+  },
+  {
+    "target": "x86_64-apple-darwin",
+    "runner": "macos-15",
+    "host": "aarch64-apple-darwin",
+    "host_arch": "arm64",
+    "extension": ""
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "runner": "macos-15",
+    "host": "aarch64-apple-darwin",
+    "host_arch": "arm64",
+    "extension": ""
+  }
+]

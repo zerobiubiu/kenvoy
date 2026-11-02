@@ -16,6 +16,12 @@ on:
         type: choice
         default: '0.2.0'
         options: ['0.2.0']
+      platforms:
+        description: all 构建六目标；windows 仅补打包 Windows 两目标
+        required: true
+        type: choice
+        default: all
+        options: [all, windows]
 
 permissions:
   contents: read
@@ -37,47 +43,44 @@ env:
   CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
 
 jobs:
+  targets:
+    name: 选择本次打包目标
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - id: select
+        env:
+          DIST_PLATFORMS: ${{ inputs.platforms }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
+          selection = os.environ['DIST_PLATFORMS']
+          if selection == 'windows':
+              targets = [item for item in targets if item['target'].endswith('-pc-windows-msvc')]
+          elif selection != 'all':
+              raise SystemExit('不支持的打包平台选择')
+          expected = 2 if selection == 'windows' else 6
+          if len(targets) != expected:
+              raise SystemExit('打包目标清单数量不符')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '\n')
+          print('本次目标：' + ', '.join(item['target'] for item in targets))
+          PY
+
   distribution:
+    needs: targets
     name: ${{ inputs.mode }} · ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            runner: windows-2025
-            host: x86_64-pc-windows-msvc
-            host_arch: x86_64
-            msvc_arch: x64
-            extension: .exe
-          - target: aarch64-pc-windows-msvc
-            runner: windows-2025
-            host: x86_64-pc-windows-msvc
-            host_arch: x86_64
-            msvc_arch: amd64_arm64
-            extension: .exe
-          - target: x86_64-unknown-linux-musl
-            runner: ubuntu-24.04
-            host: x86_64-unknown-linux-gnu
-            host_arch: x86_64
-            extension: ''
-          - target: aarch64-unknown-linux-musl
-            runner: ubuntu-24.04
-            host: x86_64-unknown-linux-gnu
-            host_arch: x86_64
-            extension: ''
-          # macos-15 是 arm64 runner；x86_64 产物只能做交叉编译/格式核验。
-          - target: x86_64-apple-darwin
-            runner: macos-15
-            host: aarch64-apple-darwin
-            host_arch: arm64
-            extension: ''
-          - target: aarch64-apple-darwin
-            runner: macos-15
-            host: aarch64-apple-darwin
-            host_arch: arm64
-            extension: ''
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     defaults:
       run:
         shell: bash

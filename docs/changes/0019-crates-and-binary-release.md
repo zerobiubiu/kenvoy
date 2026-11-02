@@ -1,6 +1,6 @@
 # 0019：0.2.0 源包与跨平台二进制发布
 
-状态：待执行；治理：发布实施草稿；日期：2026-11-02。影响范围：kengine/kenvoy 发布包、构建元数据、分发工程与文档；前置：[0018](0018-runtime-root-entry.md)；现行流程：[发布操作](../operations/releasing.md)。
+状态：待执行；治理：发布实施草稿；日期：2026-11-02。当前进度：两个源包已发布，二进制分发构建中。影响范围：kengine/kenvoy 发布包、构建元数据、分发工程与文档；前置：[0018](0018-runtime-root-entry.md)；现行流程：[发布操作](../operations/releasing.md)。
 
 ## 背景与授权
 
@@ -38,6 +38,20 @@
 - 用户随后要求不做详细检验、以打包为准，因此取消额外 source 六目标预检门禁，保留 Cargo 自带源包编译和最终二进制打包。
 - 首次多包 dry-run 未上传；它拦下了未锚定 README/LICENSE 导致 node_modules 同名文件入选，以及工作区中未跟踪前端产物的 dirty 限制。白名单已改为包根锚定；正式打包改用精确提交的仓库外独占源码快照生成前端，不提交产物、不跳过编译检查。
 - 初始 source workflow `41462154639` 未生成发布资产：Windows 日志为 Python cp1252 UnicodeEncodeError，Linux/macOS 为 Zig host 包装器缺少 `--` 参数分隔；已分别设置 workflow UTF-8 与正确参数转发。该失败不记作任何目标构建通过。
+
+### 已执行的源包发布
+
+- 提交 `1d73b8d` 与白名单/包装器修正 `df2c17a` 已推送 main；`v0.2.0` tag 指向 `df2c17a` 并已推送。
+- 正式输入从 `df2c17a` 的 git archive 复制到仓库外独占快照，快照内执行 npm ci（忽略脚本）与构建。多包 dry-run 正常打包、解压并编译通过，未使用 allow-dirty/no-verify。
+- 第一次正式上传因未登录阻断，随后因 registry 403 authentication failed 阻断；用户在本机重新登录后重试，未读取或记录 Token。
+- `cargo publish -p kengine` 与 `cargo publish -p kenvoy` 分别成功，输出 `Published ... v0.2.0 at registry crates-io`；Kenvoy 验证时已从 registry 下载真实 KEngine 0.2.0。
+
+| 包 | registry 版本 | 文件数 / 压缩大小 | 官方 SHA256 |
+|---|---|---|---|
+| kengine | 0.2.0 | 58 / 66,341 字节 | `2d11cfbef3dd3ef967370222a6bbe5c7657872ae328cf77455d2290555e43ad7` |
+| kenvoy | 0.2.0 | 242 / 432,065 字节 | `e740c8404d759d127eacf1131b2e240a5abcb1600adb7cfb039abfee4393d243` |
+
+官方版本已通过 crates.io API 返回确认。registry workflow `41469164866` 已成功打包 Linux/macOS 四目标；Windows 两目标因 windows-2025 未找到所指定 Visual Studio 2022 而失败。已按官方镜像清单切换 windows-2022，并增加平台筛选只补打包 Windows，不重跑四份成功归档。该构建失败不记作 Windows 通过。
 
 ### 发布验收边界
 
