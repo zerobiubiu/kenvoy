@@ -13,7 +13,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   RUSTUP_TOOLCHAIN: '1.98.0'
@@ -282,8 +282,6 @@ jobs:
 
     name: 发布 GitHub Release
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - name: 下载六目标归档
         uses: actions/download-artifact@v4.3.0
