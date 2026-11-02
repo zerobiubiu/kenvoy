@@ -1,0 +1,9 @@
+name: CI Probe Minimal
+on:
+  push:
+    branches: [ci-probe]
+jobs:
+  noop-callee:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo hi

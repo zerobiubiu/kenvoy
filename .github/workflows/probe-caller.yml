@@ -4,8 +4,4 @@ on:
     branches: [ci-probe]
 jobs:
   call:
-    uses: ./.github/workflows/release-one-version.yml
-    with:
-      version: '0.0.0'
-    secrets:
-      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
+    uses: ./.github/workflows/probe-callee.yml
