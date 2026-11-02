@@ -1,0 +1,12 @@
+name: Probe2 Callee
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+jobs:
+  noop:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo '${{ inputs.version }}'
