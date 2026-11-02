@@ -134,7 +134,7 @@ jobs:
 
   noop:
     # 空跑
-    if: needs.detect.outputs.head == ""
+    if: needs.detect.outputs.head == ''
     needs: detect
     name: 无待发布版本
     runs-on: ubuntu-24.04
