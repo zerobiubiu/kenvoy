@@ -1,0 +1,15 @@
+name: Probe2 Callee
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+env:
+  RUSTUP_TOOLCHAIN: '1.98.0'
+  DIST_VERSION: ${{ inputs.version }}
+jobs:
+  noop:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo '${{ inputs.version }}'
