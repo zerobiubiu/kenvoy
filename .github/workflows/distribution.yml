@@ -132,86 +132,9 @@ jobs:
               output.write(f'versions={json.dumps(versions)}\n')
               output.write(f"head={versions[0] if versions else ''}\n")
 
-  publish_crates:
-    # crates.io 发布留在主工作流执行：本仓库实测 reusable workflow 无法传递 secrets
-    # （caller 映射/inherit、被调方声明/引用任一存在都 startup_failure）。
-    if: needs.detect.outputs.head != ''
-    needs: detect
-    name: 发布 crates.io ${{ needs.detect.outputs.head }}
-    runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ needs.detect.outputs.head }}
-    steps:
-      - uses: actions/checkout@v4.2.2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v5.6.0
-        with:
-          python-version: '3.12.10'
-      - name: 准备固定 Rust
-        run: |
-          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
-          rustup default "$RUSTUP_TOOLCHAIN"
-      - name: 校验版本并逐 crate 发布（kengine → kenvoy）
-        run: |
-          python - <<'PY'
-          import os, pathlib, subprocess, tomllib, urllib.request
-
-          version = os.environ['DIST_VERSION']
-          if version.split('.')[-1] != '0':
-              raise SystemExit(f'发布规则仅允许 MAJOR.MINOR.0，实际 {version}')
-
-          def exists(crate, ver):
-              try:
-                  urllib.request.urlopen(
-                      urllib.request.Request(
-                          f'https://crates.io/api/v1/crates/{crate}/{ver}',
-                          headers={'User-Agent': 'kenvoy-distribution (https://github.com/zerobiubiu/kenvoy)'},
-                      ), timeout=60)
-                  return True
-              except urllib.error.HTTPError as error:
-                  if error.code == 404:
-                      return False
-                  raise
-
-          token = os.environ.get('CARGO_TOKEN', '').strip()
-          if not token:
-              raise SystemExit('Secret CARGO_TOKEN 未配置，无法发布 crates.io')
-          for crate in ('kengine', 'kenvoy'):
-              manifest = tomllib.loads(pathlib.Path(f'crates/{crate}/Cargo.toml').read_text(encoding='utf-8'))
-              declared = manifest['package']['version']
-              if crate == 'kenvoy' and declared != version:
-                  raise SystemExit(f'kenvoy Cargo.toml 版本 {declared} 与发布版本 {version} 不一致')
-              if exists(crate, declared):
-                  print(f'{crate} {declared} 已在 crates.io，跳过')
-                  continue
-              print(f'发布 {crate} {declared} …')
-              subprocess.run(
-                  ['cargo', 'publish', '--package', crate, '--locked'],
-                  check=True,
-                  env={**os.environ, 'CARGO_REGISTRIES_CRATES_IO_TOKEN': token},
-              )
-          print('crates.io 发布完成')
-          PY
-        env:
-          DIST_VERSION: ${{ needs.detect.outputs.head }}
-          CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
-
-  build_and_release:
-    # 六目标构建 + GitHub Release（可复用工作流，不涉及 secrets）。
-    if: needs.detect.outputs.head != ''
-    needs: [detect, publish_crates]
-    name: 发布 ${{ needs.detect.outputs.head }}
-    uses: ./.github/workflows/release-one-version.yml
-    with:
-      version: ${{ needs.detect.outputs.head }}
-
   noop:
-    # 空跑：没有待发布版本时给出明确结果，运行成功结束。
-    if: needs.detect.outputs.head == ''
     needs: detect
-    name: 无待发布版本
+    name: 探针空跑
     runs-on: ubuntu-24.04
     steps:
-      - name: 说明
-        run: echo 'main 版本与全部历史 x.y.0 的 crate/Release 均已存在，本次无需发布。'
+      - run: echo ok
