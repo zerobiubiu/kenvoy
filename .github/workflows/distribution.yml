@@ -1,7 +1,11 @@
 name: Kenvoy 六目标分发构建
 
-# 只构建和上传 Actions artifacts；不发布 crate、tag 或 GitHub Release。
+# tag 推送（v*.*.*）以 source 模式构建并发布 GitHub Release；不发布 crate、不创建 tag。
+# 手动 dispatch 只构建和上传 Actions artifacts，不发布 Release。
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       mode:
@@ -27,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: distribution-${{ inputs.mode }}-${{ inputs.version }}-${{ github.ref }}
+  group: distribution-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -35,10 +39,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: '2'
   PYTHONUTF8: '1'
-  PYTHONIOENCODING: utf-8
-  DIST_MODE: ${{ inputs.mode }}
-  DIST_VERSION: ${{ inputs.version }}
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  DIST_MODE: ${{ inputs.mode || 'source' }}
+  DIST_VERSION: ${{ inputs.version || github.ref_name }}
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
   CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
 
@@ -75,7 +77,7 @@ jobs:
 
   distribution:
     needs: targets
-    name: ${{ inputs.mode }} · ${{ matrix.target }}
+    name: ${{ inputs.mode || 'source' }} · ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     strategy:
@@ -104,11 +106,21 @@ jobs:
       - name: 核对 runner 并准备独占构建目录
         run: |
           python - <<'PY'
-          import os, pathlib, platform, tempfile
-          if os.environ['DIST_VERSION'] != '0.2.0':
-              raise SystemExit('本工作流只接受精确版本 0.2.0')
-          if os.environ['DIST_MODE'] not in ('source', 'registry'):
-              raise SystemExit('分发模式必须是 source 或 registry')
+          import os, pathlib, platform, re, tempfile
+          event = os.environ['GITHUB_EVENT_NAME']
+          # 手动 dispatch 用输入版本与模式；tag 推送强制 source 模式并从 tag 名（vX.Y.Z）派生版本。
+          if event == 'push':
+              tag = os.environ['GITHUB_REF_NAME']
+              if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag):
+                  raise SystemExit(f'仅接受 vX.Y.Z 版本 tag，实际 {tag}')
+              version, mode = tag[1:], 'source'
+          else:
+              version = os.environ['DIST_VERSION']
+              mode = os.environ['DIST_MODE']
+              if mode not in ('source', 'registry'):
+                  raise SystemExit('分发模式必须是 source 或 registry')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'DIST_VERSION={version}\nDIST_MODE={mode}\n')
           arch = platform.machine().lower()
           arch = {'amd64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
           expected = {'aarch64': 'arm64'}.get(os.environ['DIST_HOST_ARCH'], os.environ['DIST_HOST_ARCH'])
@@ -134,7 +146,7 @@ jobs:
           registry = os.environ['DIST_MODE'] == 'registry'
           def fetch(url):
               request = urllib.request.Request(url, headers={
-                  'User-Agent': 'kenvoy-distribution/0.2.0 (https://github.com/zerobiubiu/kenvoy)',
+                  'User-Agent': 'kenvoy-distribution (https://github.com/zerobiubiu/kenvoy)',
               })
               with urllib.request.urlopen(request, timeout=60) as response:
                   return response.read()
@@ -182,7 +194,7 @@ jobs:
               if (len(engines) != 1 or engines[0]['version'] != version
                   or engines[0].get('source') != 'registry+https://github.com/rust-lang/crates.io-index'
                   or engines[0].get('checksum') != engine['checksum']):
-                  raise SystemExit('发布包锁文件必须引用 crates.io 的精确 kengine 0.2.0 与官方校验和')
+                  raise SystemExit('发布包锁文件必须引用 crates.io 的精确 kengine 版本与官方校验和')
               if 'patch' in package or 'replace' in package:
                   raise SystemExit('registry 分发不接受 patch/replace 覆盖')
               print(f'crates.io kengine {version} 锁文件 SHA256：{engine["checksum"]}')
@@ -283,7 +295,7 @@ jobs:
             --target "$DIST_HOST" --target-dir "$DIST_BUILD_DIR"
 
       - name: 准备固定 Node（仅 checkout 源码模式）
-        if: inputs.mode == 'source'
+        if: env.DIST_MODE == 'source'
         uses: actions/setup-node@v4.4.0
         with:
           node-version: '24.22.0'
@@ -291,7 +303,7 @@ jobs:
           cache-dependency-path: crates/kenvoy/frontend/package-lock.json
 
       - name: 准备源码模式的内置前端
-        if: inputs.mode == 'source'
+        if: env.DIST_MODE == 'source'
         working-directory: crates/kenvoy/frontend
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
@@ -334,10 +346,10 @@ jobs:
       - name: 上传 ZIP 与 SHA256（不创建 Release）
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: kenvoy-${{ inputs.version }}-${{ inputs.mode }}-${{ matrix.target }}
+          name: kenvoy-${{ env.DIST_VERSION }}-${{ env.DIST_MODE }}-${{ matrix.target }}
           path: |
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ inputs.version }}-${{ matrix.target }}.zip
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ inputs.version }}-${{ matrix.target }}.zip.sha256
+            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip
+            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -360,3 +372,36 @@ jobs:
               if path.exists():
                   shutil.rmtree(path)
           PY
+
+  release:
+    # 仅 tag 推送在六目标全部成功后发布；手动 dispatch 不创建 Release。
+    if: github.event_name == 'push'
+    needs: distribution
+    name: 发布 GitHub Release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: 下载六目标归档
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: dist
+          pattern: kenvoy-*-source-*
+          merge-multiple: true
+      - name: 核对归档与校验和数量
+        run: |
+          set -euo pipefail
+          count=$(find dist -maxdepth 1 -name '*.zip' | wc -l)
+          sums=$(find dist -maxdepth 1 -name '*.zip.sha256' | wc -l)
+          if [ "$count" -ne 6 ] || [ "$sums" -ne 6 ]; then
+            echo "归档或校验和数量不符：ZIP=$count SHA256=$sums" >&2
+            exit 1
+          fi
+          cd dist && sha256sum --check --strict ./*.zip.sha256
+      - name: 创建 GitHub Release
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.zip.sha256 \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Kenvoy / KEngine ${{ env.DIST_VERSION }}" \
+            --notes "六目标预编译分发（Windows MSVC、Linux musl、macOS，各 x86_64/aarch64）。每个 ZIP 附 .sha256；安装方式见仓库 README。"

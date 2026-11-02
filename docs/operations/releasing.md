@@ -42,10 +42,12 @@ gh workflow run distribution.yml --ref main -f mode=registry -f version=0.2.0
 
 分发文件名为 `kenvoy-{version}-{target}.zip`，归档根仅含 `kenvoy.exe` 或 `kenvoy`、README.md、LICENSE，旁附 `.sha256` 校验文件。`cargo xtask dist` 负责归档及机器架构检查，不管理用户项目数据。
 
-工作流只手动触发，不自行上传 crate、创建 tag 或发布 GitHub Release：
+工作流支持两种触发方式：
 
-- `source`：可选的源码交叉构建入口。0.2.0 根据用户最后要求不把额外 source 全平台预检作为发布门禁。
-- `registry`：下载精确发布版本的 `.crate`、核对 crates.io checksum、独占解压后交叉编译，作为最终分发来源；不回用本地 path 依赖或要求用户再次 npm 构建。
+- **tag 推送（推荐）**：推送 `vX.Y.Z` 形式的版本 tag 自动触发六目标 source 构建；全部成功后自动创建对应 GitHub Release 并附六份 ZIP/SHA256。版本号从 tag 名派生，不用手动输入。crates.io 仍需手动发布，工作流不发布 crate、不创建 tag。
+- **手动 dispatch**：按需指定 mode/version/platforms，只构建并上传 Actions artifacts（保留 14 天），不创建 Release。用于补打包特定平台（`platforms=windows`）或 registry 模式的最终分发核验。
+
+普通分支推送不触发任何 CI/CD。
 
 ## 身份与安装
 
