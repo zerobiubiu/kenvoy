@@ -11,10 +11,6 @@ on:
         description: 精确版本（x.y.0）
         required: true
         type: string
-    secrets:
-      CARGO_TOKEN:
-        description: crates.io 发布 Token；缺失时发布 job 运行时报错
-        required: false
 
 permissions:
   contents: read
@@ -51,65 +47,9 @@ jobs:
           print('本次目标：' + ', '.join(item['target'] for item in targets))
           PY
 
-  crates:
-    # crates.io 发布门禁与串行发布：先确认远端无该版本，再按依赖顺序 kengine → kenvoy。
-    # Token 经 Secret 传入，不在日志中输出。
-    name: 发布 crates.io
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4.2.2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v5.6.0
-        with:
-          python-version: '3.12.10'
-      - name: 准备固定 Rust
-        run: |
-          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
-          rustup default "$RUSTUP_TOOLCHAIN"
-      - name: 校验版本并核对 registry 状态
-        run: |
-          python - <<'PY'
-          import json, os, pathlib, tomllib, urllib.request
-          version = os.environ['DIST_VERSION']
-          if version.split('.')[-1] != '0':
-              raise SystemExit(f'发布规则仅允许 MAJOR.MINOR.0，实际 {version}')
-          for crate in ('kengine', 'kenvoy'):
-              manifest = tomllib.loads(pathlib.Path(f'crates/{crate}/Cargo.toml').read_text(encoding='utf-8'))
-              if manifest['package']['version'] != version:
-                  raise SystemExit(f'{crate} Cargo.toml 版本 {manifest["package"]["version"]} 与发布版本 {version} 不一致')
-          def exists(crate):
-              try:
-                  urllib.request.urlopen(
-                      urllib.request.Request(
-                          f'https://crates.io/api/v1/crates/{crate}/{version}',
-                          headers={'User-Agent': 'kenvoy-distribution (https://github.com/zerobiubiu/kenvoy)'},
-                      ), timeout=60)
-                  return True
-              except urllib.error.HTTPError as error:
-                  if error.code == 404:
-                      return False
-                  raise
-          for crate in ('kengine', 'kenvoy'):
-              if exists(crate):
-                  print(f'{crate} {version} 已在 crates.io，跳过发布')
-              else:
-                  with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-                      env.write(f'PUBLISH_{crate.upper()}=1\n')
-          PY
-      - name: 发布 kengine
-        if: env.PUBLISH_KENGINE == '1'
-        run: cargo publish --package kengine --locked
-        env:
-          CARGO_REGISTRIES_CRATES_IO_TOKEN: ${{ secrets.CARGO_TOKEN }}
-      - name: 发布 kenvoy
-        if: env.PUBLISH_KENVOY == '1'
-        run: cargo publish --package kenvoy --locked
-        env:
-          CARGO_REGISTRIES_CRATES_IO_TOKEN: ${{ secrets.CARGO_TOKEN }}
 
   distribution:
-    needs: [targets, crates]
+    needs: [targets]
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
@@ -338,7 +278,8 @@ jobs:
 
   release:
     # 六目标全部成功后创建 Release；标题为 "Kenvoy <version>"。
-    needs: [crates, distribution]
+    needs: [distribution]
+
     name: 发布 GitHub Release
     runs-on: ubuntu-24.04
     permissions:
