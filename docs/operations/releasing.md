@@ -49,6 +49,8 @@ gh workflow run distribution.yml --ref main -f mode=registry -f version=0.2.0
 
 普通分支推送不触发任何 CI/CD。
 
+tag 推送必须**逐个执行**（`git push origin v0.3.0`，一次一个）。GitHub 官方规定一次推送超过三个 tag 时不生成任何 push 事件；且一次推送 2—3 个 tag 存在未修复的触发不可靠问题（actions/runner#3644）。禁止用 `git push --tags` 或 `git push --follow-tags` 批量推版本 tag；若批量推送后未触发，用手动 dispatch 补打包。
+
 ## 身份与安装
 
 GitHub 与 crates.io 分别认证。GitHub CLI 使用本机现有登录；crates.io 在本机执行 `cargo login --registry crates-io`。不在聊天、源码、工作流或日志中传递 Token，不把 GitHub OAuth Token 冒充 registry Token。
