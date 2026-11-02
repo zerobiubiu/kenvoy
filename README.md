@@ -14,7 +14,7 @@ Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQ
 
 ## 安装 0.2.0
 
-0.2.0 的发布状态以[版本日志](docs/changes/CHANGELOG.md)及[执行记录](docs/changes/0019-crates-and-binary-release.md)为准。发布完成后可安装 CLI，或在 Rust 项目中使用语言库：
+0.2.0 已发布至 crates.io 和 GitHub Release；详见[版本日志](docs/changes/CHANGELOG.md)及[执行记录](docs/changes/0019-crates-and-binary-release.md)。安装 CLI，或在 Rust 项目中使用语言库：
 
 ```text
 cargo binstall kenvoy --version 0.2.0

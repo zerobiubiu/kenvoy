@@ -22,7 +22,7 @@
 | [changes/0016：DDD 分层与模块拆分](../changes/0016-ddd-structure-and-module-split.md#执行验证记录) | 已执行；AST 层依赖/规模门禁、Rust/前端/七套浏览器、CLI 逐字基线与旧库/旧附件读回 | [DDD 目录规范](../architecture/ddd-structure.md)、[工程流程](../development/engineering-workflow.md)、[ADR 0012](../decisions/0012-ddd-layers-and-module-boundaries.md) |
 | [changes/0017：Windows 密码提示乱码修复](../changes/0017-windows-password-prompt-encoding.md#执行验证记录) | 已执行；代码页 936/65001 原生控制台、中文提示、不回显、输入模式恢复及错误拒绝 | [CLI 账号管理](../operations/cli-design.md#账号管理)、[密码约束](../architecture/security-design.md#账户初始化与密码) |
 | [changes/0018：Runtime 根入口修复](../changes/0018-runtime-root-entry.md#执行验证记录) | 已执行；19 项 HTTP 回归、真实 dev/run 根入口、登录/图库及已授权的隔离浏览器验证 | [前端 Runtime](../architecture/frontend-runtime.md)、[CLI](../operations/cli-design.md)、[上传示例](../../examples/uploads-app/README.md) |
-| [changes/0019：0.2.0 源包与跨平台二进制发布](../changes/0019-crates-and-binary-release.md#执行验证记录) | 待执行；独立包编译、六目标 Zig 交叉构建、归档/校验和及安装核验，不运行测试套件 | [发布操作](../operations/releasing.md)、[版本日志](../changes/CHANGELOG.md) |
+| [changes/0019：0.2.0 源包与跨平台二进制发布](../changes/0019-crates-and-binary-release.md#执行验证记录) | 已执行；独立包编译、六目标打包、归档/校验和及 cargo-binstall 安装版本核验，未运行测试套件 | [发布操作](../operations/releasing.md)、[版本日志](../changes/CHANGELOG.md) |
 
 ## 初始审查与准备计划
 

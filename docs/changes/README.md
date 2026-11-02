@@ -4,7 +4,7 @@
 
 ## 从哪里开始
 
-- 了解本轮发布准备与执行：先读[0019：0.2.0 源包与跨平台二进制发布](0019-crates-and-binary-release.md)和[版本日志](CHANGELOG.md)；最近功能修复见[0018](0018-runtime-root-entry.md)，其他实施按下表追溯。
+- 了解 0.2.0 发布结果：先读[0019：源包与跨平台二进制发布](0019-crates-and-binary-release.md)和[版本日志](CHANGELOG.md)；最近功能修复见[0018](0018-runtime-root-entry.md)，其他实施按下表追溯。
 - 核对执行证据：进入[验证记录索引](../verification/README.md)，其中同时索引独立验收报告和变更记录内的专项验证；当前有效行为从[整体架构](../architecture/architecture.md)及对应主题文档查询。
 - 追溯实现过程：按下表编号顺序阅读，不把早期阶段的进度或告警当作当前状态。
 
@@ -32,7 +32,7 @@
 | 0016 | [DDD 分层与模块拆分](0016-ddd-structure-and-module-split.md) | 已执行；内部结构重组，不变更产品协议 | 领域规则、应用端口/用例、SQLite/JS/文件适配器、HTTP/装配、前端职责拆分与 AST/规模门禁 |
 | 0017 | [Windows 密码提示乱码修复](0017-windows-password-prompt-encoding.md) | 已执行；交互终端输出兼容修复 | 中文提示使用 Unicode 终端输出，保留隐藏读取、二次确认及密码策略 |
 | 0018 | [Runtime 根入口修复](0018-runtime-root-entry.md) | 已执行；通用页面入口修复 | 未声明根页时加载既有 Runtime，保持显式根页权限及未知请求 404；真实 dev/run 和浏览器验证 |
-| 0019 | [0.2.0 源包与跨平台二进制发布](0019-crates-and-binary-release.md) | 待执行；发布准备与执行跟踪 | 独立包构建、真实锁定元数据、六目标 Zig 交叉编译、crates.io 与 cargo-binstall 分发 |
+| 0019 | [0.2.0 源包与跨平台二进制发布](0019-crates-and-binary-release.md) | 已执行；两源包、六目标二进制与安装核验 | 独立包构建、真实锁定元数据、Zig/MSVC 分发、crates.io 与 cargo-binstall |
 
 ## 关联代码与配置
 

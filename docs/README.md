@@ -32,7 +32,7 @@
 
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
 
-本轮发布准备与执行跟踪：[0.2.0 版本日志](changes/CHANGELOG.md)、[发布操作](operations/releasing.md)及[0019](changes/0019-crates-and-binary-release.md)；最终发布状态以实际记录为准。最近入口与 CLI 修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)及[文件与图片契约](contracts/file-uploads.md)。
+0.2.0 已完成源包与六目标二进制发布：[版本日志](changes/CHANGELOG.md)、[发布操作](operations/releasing.md)及[执行记录 0019](changes/0019-crates-and-binary-release.md)。最近入口与 CLI 修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)及[文件与图片契约](contracts/file-uploads.md)。
 
 ## 文档规范
 

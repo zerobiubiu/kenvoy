@@ -4,7 +4,7 @@
 
 ## 0.2.0
 
-发布状态：两个 crates.io 源包已发布，预编译二进制构建中；记录：[0019](0019-crates-and-binary-release.md)。
+发布状态：已发布，2026-11-02；两个 crates.io 源包及六目标预编译二进制均已上线，cargo-binstall 安装核验通过；记录：[0019](0019-crates-and-binary-release.md)。
 
 ### KEngine
 

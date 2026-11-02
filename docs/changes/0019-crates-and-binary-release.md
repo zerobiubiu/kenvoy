@@ -1,6 +1,6 @@
 # 0019：0.2.0 源包与跨平台二进制发布
 
-状态：待执行；治理：发布实施草稿；日期：2026-11-02。当前进度：两个源包已发布，二进制分发构建中。影响范围：kengine/kenvoy 发布包、构建元数据、分发工程与文档；前置：[0018](0018-runtime-root-entry.md)；现行流程：[发布操作](../operations/releasing.md)。
+状态：已执行；治理：不可变变更记录；日期：2026-11-02。结果：两个源包与六目标预编译二进制均已发布，cargo-binstall 基本安装核验通过。影响范围：kengine/kenvoy 发布包、构建元数据、分发工程与文档；前置：[0018](0018-runtime-root-entry.md)；现行流程：[发布操作](../operations/releasing.md)。
 
 ## 背景与授权
 
@@ -16,7 +16,7 @@
 - 两个 Crate 添加包级 README/LICENSE。Kenvoy 包含预构建前端发行资产及框架源码/构建脚本，不带 node_modules、用户数据库、凭据或运行缓存。
 - `crates/kenvoy/build.rs` 明确区分 Workspace 和独立包布局；后者只读取包内锁文件，前者继续跟踪 KEngine 源码及 Workspace 内容。构建时生成实际锁文件 SHA256 和真实 KEngine 版本。
 - `crates/kenvoy/src/bootstrap/build.rs` 使用构建期元数据，删除越包 Cargo.lock include 和将 Kenvoy 版本误记为 KEngine 版本的实现。
-- xtask 增加二进制架构检查、ZIP/SHA256 归档；手动触发的 CI 区分上传前 `source` 构建与来自实际 registry 发布包的最终 `registry` 构建，不偷偷上传 crate 或创建 Release。
+- `xtask/src/commands/distribution/` 增加二进制架构检查、ZIP/SHA256 归档；`.github/workflows/distribution.yml` 与 `.github/distribution-targets.json` 定义六目标及按平台补打包，区分 checkout `source` 和实际发布源包 `registry`，不偷偷上传 crate 或创建 Release。
 - 发布入口及版本概要见本次新增的 operations/releasing.md、changes/CHANGELOG.md；索引与包级说明同步更新。
 
 ## 执行验证记录
@@ -55,6 +55,38 @@
 
 Windows 补打包 workflow `41472155432` 已正确找到 VS 2022，但 Git Bash 将自身的 `link.exe` 放到 MSVC 前面，导致 host 工具链接失败。Windows 两处 Cargo 编译改为 PowerShell，保留开发者环境 PATH；Linux/macOS 仍用 Bash/Zig。四份已下载的 Unix ZIP 已通过独立字节级 SHA256 对比，与各自侧车一致。
 
+### 已执行的二进制发布与安装
+
+- registry workflow [41469164866](https://github.com/zerobiubiu/kenvoy/actions/runs/41469164866) 提供 Linux/macOS 四份最终归档；修正后的 [41473758114](https://github.com/zerobiubiu/kenvoy/actions/runs/41473758114) 两个 Windows 目标均成功。六份均来自实际 crates.io 0.2.0 源包，而非本机 Workspace 候选。
+- 六份 ZIP 的独立 SHA256 均与侧车一致；GitHub 草稿上传后，12 项资产全部为 uploaded，大小及官方 asset digest 与本地逐项一致。
+- `gh release edit v0.2.0 --draft=false --latest` 成功；随后查询为 isDraft=false、isPrerelease=false，发布时间 `2026-11-02T15:53:24Z`。公开 [GitHub Release](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.2.0) 包含六个 ZIP 与六个 SHA256 侧车。tag 仍指向 `df2c17a`，没有移动。
+
+| 最终目标 | ZIP SHA256 |
+|---|---|
+| x86_64-pc-windows-msvc | `93b3cb3c3d40848d5fd6756c2acf8a086cb9cc90bd9c099e82883ba4e6971f03` |
+| aarch64-pc-windows-msvc | `2a05cba66ad0f9fc31e9a0ec819a97aa11f919f83438bae590e3fe7ae27128e9` |
+| x86_64-unknown-linux-musl | `9e956d150e6f71bd3f10f8c3539c838bcaec73cdce64ece97cf9f550b41d95a6` |
+| aarch64-unknown-linux-musl | `13fbc5f82f23903f31c1927388311cc58f5e05bb2f90f4b3b3406e3c0d0d2160` |
+| x86_64-apple-darwin | `f6d5aca8693755afd496c44e1bc1474c48537a4587ffb6c06b656eedc51ce2f9` |
+| aarch64-apple-darwin | `110122b12d92a2fe21c637ac66c5a453d4e63cf21f9657dd469c39ccb4565493` |
+
+Windows x64 的实际安装使用官方 cargo-binstall 1.26.2，仅允许 crate-meta-data 策略，禁用源码编译和 QuickInstall 回退，不覆盖现有安装：
+
+```text
+D:/kenvoy/artifacts/release-tools-6eafc306/cargo-binstall.exe kenvoy@0.2.0 --no-confirm --strategies crate-meta-data --disable-telemetry --dns system --install-path D:/kenvoy/artifacts/binstall-020-099d85f1
+D:/kenvoy/artifacts/binstall-020-099d85f1/kenvoy.exe --version
+```
+
+关键实际输出为 `has been downloaded from github.com`、`Done in 5.1584815s`、`kenvoy 0.2.0`，组合命令退出 0。首次刻意关闭 GitHub 认证发现的安装请求收到 API 403，已停止；改用默认的既有 GitHub CLI 认证发现后成功，没有读取或输出 Token。跨盘安装出现原子重命名/ReplaceFileW 警告，安装器随后以临时文件复制并重命名完成；这不是源码构建回退。
+
+文档收尾执行 `cargo run --package xtask --offline --locked -- docs`，退出 0；实际输出 `markdown_files: 87`、`local_links: 880`、`status: 通过`。本项仅检查文档编码、链接及索引，没有执行测试套件。
+
 ### 发布验收边界
 
-本次按用户要求不新增/运行测试套件。后续只执行发布必需编译、独立包验证、架构/归档/SHA256 和基本安装版本核验；不能把交叉编译声称为对应架构的运行测试。最终 registry、CI、Release 和安装结果以本记录实际执行输出为准，不由工作流存在推定已经发布。
+本次按用户要求不新增/运行测试套件，只执行发布必需编译、独立包验证、架构/归档/SHA256 和基本安装版本核验。交叉编译不能声称为对应架构的完整运行测试；安装场景仅为 Windows x64，不外推到其他平台。发布、CI、Release 和安装结论均来自实际输出，不由工作流存在推定成功。
+
+## 后续验证建议
+
+- 后续功能迭代再按[工程流程](../development/engineering-workflow.md)选择必要回归；本次不补跑用户明确排除的功能测试。
+- 若承诺最低系统版本或各平台完整运行支持，单独补齐[平台矩阵 V05](../development/implementation-backlog.md#v05目标平台浏览器与最低版本运行矩阵)，不把六目标编译等同运行验收。
+- 签名、完整供应链审计、历史产物保留和恢复工具仍按 [E06](../development/implementation-backlog.md#e06发行产物保留与恢复工具) 的剩余范围处理，未因本次发布自动获得实施授权。
