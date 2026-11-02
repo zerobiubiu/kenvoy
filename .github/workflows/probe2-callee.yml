@@ -14,4 +14,16 @@ jobs:
   noop:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo '${{ inputs.version }}'
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12.10'
+      - name: 读取目标清单
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
+          print(len(targets))
+          PY
