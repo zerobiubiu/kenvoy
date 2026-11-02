@@ -12,7 +12,7 @@ use zip::{CompressionMethod, DateTime, ZipWriter, write::SimpleFileOptions};
 
 pub(super) fn create(options: &Options) -> Result<()> {
     fs::create_dir_all(&options.output)?;
-    let name = format!("kenvoy-{}-{}.zip", options.version, options.target.triple);
+    let name = options.target.archive_name(&options.version);
     let archive = options.output.join(&name);
     let checksum = options.output.join(format!("{name}.sha256"));
     if checksum.try_exists()? {

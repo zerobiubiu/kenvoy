@@ -310,8 +310,8 @@ jobs:
         with:
           name: kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}
           path: |
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip
-            ${{ env.DIST_ARTIFACT_DIR }}/kenvoy-${{ env.DIST_VERSION }}-${{ matrix.target }}.zip.sha256
+            ${{ env.DIST_ARTIFACT_DIR }}/*.zip
+            ${{ env.DIST_ARTIFACT_DIR }}/*.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

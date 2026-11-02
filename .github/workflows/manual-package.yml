@@ -1,0 +1,251 @@
+name: 手动单平台打包
+
+# 任意分支手动触发；一次只打包一个平台的一个架构，产物仅上传 Actions artifacts
+# （保留 14 天），不发布 crate、不创建 Release。
+# ARM64 架构的归档文件名使用 ARM64（不用 aarch64），x86_64 不变。
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 目标平台
+        required: true
+        type: choice
+        options: [windows, linux, macos]
+      arch:
+        description: 目标架构
+        required: true
+        type: choice
+        options: [x86_64, ARM64]
+
+permissions:
+  contents: read
+
+env:
+  RUSTUP_TOOLCHAIN: '1.98.0'
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: '2'
+  PYTHONUTF8: '1'
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+  CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+
+jobs:
+  build:
+    name: ${{ inputs.platform }} · ${{ inputs.arch }}
+    runs-on: >-
+      ${{
+        inputs.platform == 'windows' && 'windows-2022' ||
+        inputs.platform == 'macos' && 'macos-15' || 'ubuntu-24.04'
+      }}
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      DIST_TARGET: >-
+        ${{
+          inputs.platform == 'windows' && (inputs.arch == 'ARM64' && 'aarch64-pc-windows-msvc' || 'x86_64-pc-windows-msvc') ||
+          inputs.platform == 'linux' && (inputs.arch == 'ARM64' && 'aarch64-unknown-linux-musl' || 'x86_64-unknown-linux-musl') ||
+          inputs.arch == 'ARM64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin'
+        }}
+      DIST_ARCH: ${{ inputs.arch }}
+
+    steps:
+      - name: 取得工程编排代码
+        uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: 准备固定 Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12.10'
+
+      - name: 准备独占构建目录
+        run: |
+          python - <<'PY'
+          import os, pathlib, tempfile
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              for name, prefix in (
+                  ('DIST_BUILD_DIR', 'kenvoy-product-build-'),
+                  ('DIST_ARTIFACT_DIR', 'kenvoy-artifacts-'),
+                  ('DIST_ZIG_TOOLS', 'kenvoy-zig-tools-'),
+                  ('DIST_ZIGBUILD_ROOT', 'kenvoy-cargo-zigbuild-'),
+              ):
+                  path = pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=os.environ['RUNNER_TEMP']))
+                  env.write(f'{name}={path.as_posix()}\n')
+          PY
+
+      - name: 读取版本号
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+          manifest = pathlib.Path('crates/kenvoy/Cargo.toml')
+          package = tomllib.loads(manifest.read_text(encoding='utf-8'))
+          version = package['package']['version']
+          print(f'当前分支版本：{version}')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'DIST_VERSION={version}\n')
+              env.write(f'DIST_PACKAGE_DIR={(pathlib.Path.cwd() / "crates" / "kenvoy").as_posix()}\n')
+              env.write(f'DIST_MANIFEST={(pathlib.Path.cwd() / "crates" / "kenvoy" / "Cargo.toml").as_posix()}\n')
+          PY
+
+      - name: 安装固定 Rust 并添加真实目标
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          rustup target add --toolchain "$RUSTUP_TOOLCHAIN" "$DIST_TARGET"
+
+      - name: 选择固定 Apple SDK
+        if: runner.os == 'macOS'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          sdk="$(xcrun --sdk macosx15.5 --show-sdk-path)"
+          test -d "$sdk"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
+          echo 'MACOSX_DEPLOYMENT_TARGET=13.0' >> "$GITHUB_ENV"
+          xcodebuild -version
+
+      # cargo-zigbuild v0.24.0 的官方 CI 使用 Zig 0.17.0；Zig 不替代 Apple SDK。
+      - name: 准备固定 Zig
+        if: runner.os != 'Windows'
+        uses: mlugg/setup-zig@v2.0.5
+        with:
+          version: '0.17.0'
+          use-cache: false
+
+      - name: 准备固定 cargo-zigbuild 与 Zig host 编译入口
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: \
+            --ignore-installed --prefix "$DIST_ZIGBUILD_ROOT" 'cargo-zigbuild==0.24.0'
+          case "$RUNNER_OS" in
+            Linux) export DIST_ZIG_HOST=x86_64-linux-gnu ;;
+            macOS) export DIST_ZIG_HOST=aarch64-macos ;;
+            *) echo '不支持的 Zig host' >&2; exit 1 ;;
+          esac
+          tools="$DIST_ZIG_TOOLS"
+          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig cc -- -target "$DIST_ZIG_HOST" "$@"\n' > "$tools/cc"
+          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig c++ -- -target "$DIST_ZIG_HOST" "$@"\n' > "$tools/c++"
+          printf '#!/bin/sh\nexec "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" zig ar -- "$@"\n' > "$tools/ar"
+          chmod +x "$tools/cc" "$tools/c++" "$tools/ar"
+          export PATH="$tools:$PATH" CC="$tools/cc" CXX="$tools/c++" AR="$tools/ar"
+          export CARGO_ZIGBUILD_ZIG_PATH="$(command -v zig)"
+          echo "$DIST_ZIGBUILD_ROOT/bin" >> "$GITHUB_PATH"
+          echo "$tools" >> "$GITHUB_PATH"
+          echo "CC=$CC" >> "$GITHUB_ENV"
+          echo "CXX=$CXX" >> "$GITHUB_ENV"
+          echo "AR=$AR" >> "$GITHUB_ENV"
+          echo "HOST_CC=$CC" >> "$GITHUB_ENV"
+          echo "HOST_CXX=$CXX" >> "$GITHUB_ENV"
+          echo "HOST_AR=$AR" >> "$GITHUB_ENV"
+          echo "CARGO_ZIGBUILD_CACHE_DIR=$tools/cache" >> "$GITHUB_ENV"
+          echo "CARGO_ZIGBUILD_ZIG_PATH=$CARGO_ZIGBUILD_ZIG_PATH" >> "$GITHUB_ENV"
+          zig version
+          "$DIST_ZIGBUILD_ROOT/bin/cargo-zigbuild" --version
+
+      - name: 准备 Windows 原生工程编译器
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: ${{ inputs.arch == 'ARM64' && 'amd64_arm64' || 'x64' }}
+          sdk: '10.0.26100.0'
+          toolset: '14.44'
+          vsversion: '2022'
+
+      - name: 构建 Windows host 的 Rust 分发工具
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --locked --release --package xtask --bin xtask `
+            --target x86_64-pc-windows-msvc --target-dir $env:DIST_BUILD_DIR
+
+      - name: 构建 Linux/macOS host 的 Rust 分发工具
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          cargo zigbuild --locked --release --package xtask --bin xtask \
+            --target "$(rustc -vV | sed -n 's/host: //p')" --target-dir "$DIST_BUILD_DIR"
+
+      - name: 准备固定 Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24.22.0'
+          cache: npm
+          cache-dependency-path: crates/kenvoy/frontend/package-lock.json
+
+      - name: 准备内置前端
+        working-directory: crates/kenvoy/frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - name: 准备 Windows 目标交叉编译器（MSVC，不是 GCC）
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: ${{ inputs.arch == 'ARM64' && 'amd64_arm64' || 'x64' }}
+          sdk: '10.0.26100.0'
+          toolset: '14.44'
+          vsversion: '2022'
+
+      - name: 从真实源码构建 Windows release CLI
+        # PowerShell 保留开发者环境 PATH，避免 Git Bash 的 link.exe 抢占 MSVC。
+        if: runner.os == 'Windows'
+        working-directory: ${{ env.DIST_PACKAGE_DIR }}
+        shell: pwsh
+        run: |
+          cargo build --locked --release --bin kenvoy --manifest-path $env:DIST_MANIFEST `
+            --target $env:DIST_TARGET --target-dir $env:DIST_BUILD_DIR
+
+      - name: 从真实源码构建 Linux/macOS release CLI
+        if: runner.os != 'Windows'
+        working-directory: ${{ env.DIST_PACKAGE_DIR }}
+        run: |
+          set -euo pipefail
+          cargo zigbuild --locked --release --bin kenvoy --manifest-path "$DIST_MANIFEST" \
+            --target "$DIST_TARGET" --target-dir "$DIST_BUILD_DIR"
+
+      - name: 校验格式/架构并归档
+        run: |
+          host_triple="$(rustc -vV | sed -n 's/host: //p')"
+          case "$host_triple" in
+            *windows*) extension=".exe" ;;
+            *) extension="" ;;
+          esac
+          "$DIST_BUILD_DIR/$host_triple/release/xtask$extension" dist \
+            --binary "$DIST_BUILD_DIR/$DIST_TARGET/release/kenvoy$extension" \
+            --target "$DIST_TARGET" --version "$DIST_VERSION" --output "$DIST_ARTIFACT_DIR" \
+            --readme "$DIST_PACKAGE_DIR/README.md" --license "$DIST_PACKAGE_DIR/LICENSE"
+
+      - name: 上传 ZIP 与 SHA256（仅 artifact，不发布）
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: kenvoy-${{ env.DIST_VERSION }}-${{ inputs.platform }}-${{ inputs.arch }}
+          path: |
+            ${{ env.DIST_ARTIFACT_DIR }}/*.zip
+            ${{ env.DIST_ARTIFACT_DIR }}/*.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: 清理本次独占临时目录
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, pathlib, shutil
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          names = [
+              'DIST_BUILD_DIR', 'DIST_ARTIFACT_DIR',
+              'DIST_ZIG_TOOLS', 'DIST_ZIGBUILD_ROOT',
+          ]
+          paths = [os.environ[name] for name in names if os.environ.get(name)]
+          for value in paths:
+              path = pathlib.Path(value).resolve()
+              if path.parent != root or not path.name.startswith('kenvoy-'):
+                  raise SystemExit(f'拒绝清理非本次独占路径：{path}')
+              if path.exists():
+                  shutil.rmtree(path)
+          PY
