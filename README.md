@@ -66,6 +66,82 @@ kenvoy/
 
 构建产物、依赖目录与运行数据不入库：`target/`、`node_modules/`、`dist/`、`.kenvoy/`、`artifacts/`、`*.sqlite*` 由 `.gitignore` 排除。
 
+## 核心设计
+
+### JSX/TSX 业务声明
+
+业务描述使用 **JSX/TSX**，入口文件默认为 `src/app.tsx`，默认导出一个 `<app>` 或单个 `<page>`。声明是纯文本、结构化、可被 AI 生成与修改，最终编译为 Application IR，而不是运行期解释坐标或配置：
+
+```tsx
+// src/app.tsx
+export default (
+  <app name="客户管理系统">
+    <resource name="customers">
+      <text name="name" label="客户姓名" required maxLength={100} />
+      <text name="phone" label="联系电话" />
+      <number name="age" label="年龄" integer min={0} />
+    </resource>
+
+    <page path="/customers" title="客户登记">
+      <form resource="customers" mode="create" />
+    </page>
+
+    <page path="/customers/list" title="客户查询" permission="admin">
+      <table resource="customers" />
+    </page>
+  </app>
+);
+```
+
+支持的元素：`app`、`page`、`resource`，八种字段（text/textarea/number/boolean/date/datetime/select/file）、`option`、`form`、`table`、`image`、`action`、`navigation`/`item`/`group`、`override`。属性、父子关系、引用与冲突在 `kenvoy check` 阶段严格校验。页面路径须为规范静态绝对路径，并避开保留命名空间 `/api`、`/admin`、`/_kenvoy`；上例用 `kenvoy check` 实测通过。
+
+模块按职责分文件，静态可分析：
+
+| 文件形态 | 作用 | 边界 |
+|---|---|---|
+| `*.diu.tsx` | 静态 Schema 组件，默认导出可跨文件组合的声明 | 不接受动态 Props/children，静态求值有深度与步数限额 |
+| `*.server.ts` | 服务端函数，供 `action runtime="server"` 使用 | 默认私有，不进入客户端可达图 |
+| shared 注册 | 显式共享模块 | 不能借共享标记把私有实现放进浏览器 |
+| 普通 `.tsx` | 自定义 React 组件、Hooks、第三方组件库 | 只把实际使用的切片送入客户端 |
+
+### 路由与页面
+
+路由由 `page path` **显式声明**，不是文件系统路由：一个应用可以在同一入口或多文件组合中声明多个页面，导航通过 `navigation`/`item` 描述，`permission` 控制可访问角色。没有 `layout.kenvoy.xml`、`flow.kenvoy.xml`、`publish.kenvoy.xml` 这类文件约定——公共结构由 `group`/`navigation` 与组件复用表达，权限写在声明属性上，审批流不在当前能力范围。
+
+### 目标项目结构
+
+```text
+kenvoy 项目根目录/
+├── src/
+│   ├── app.tsx            # 入口：默认导出 app 或 page
+│   ├── *.diu.tsx          # 静态 Schema 组件（可选）
+│   ├── *.server.ts        # 服务端函数（可选）
+│   └── components.tsx     # 自定义 React 组件（可选）
+├── data/app.sqlite        # SQLite 业务库（运行/迁移自动创建，dev 与 run 共用）
+├── dist/                  # 构建产物（自动生成，不手工编辑）
+├── .kenvoy/               # 客户端工具链缓存与元数据（自动生成）
+├── package.json           # 可选：自定义组件依赖，显式 --install-deps 才安装
+├── kenvoy.toml            # 项目配置：入口、服务、数据库、前端、运行时、构建
+├── .gitignore             # 忽略 dist/、.kenvoy/、node_modules/、*.sqlite*
+└── .env                   # 环境变量（可选）
+```
+
+配置集中在 `kenvoy.toml`（默认入口 `src/app.tsx`、监听 `127.0.0.1:3000`、SQLite `data/app.sqlite`、输出 `dist`），字段与校验规则见[项目配置](docs/contracts/project-configuration.md)。基础 DSL 运行不需要 Node/npm；只有使用自定义组件库时才需要用户自己的 `package.json` 与显式依赖安装。
+
+### 设计原则
+
+| 原则 | 现状 |
+|---|---|
+| 语义优先 | 只声明资源、页面、字段、权限与动作；布局、交互、数据联动由 Runtime 与 Application IR 推导 |
+| AI 友好 | 纯文本声明 + 严格静态校验，错误在 `kenvoy check` 定位到元素与字段，AI 可稳定生成与修改 |
+| 全端自适应 | 同一份声明同时服务桌面与移动宽度，界面由统一 Runtime 渲染，不维护两套页面 |
+| 约定集中 | 配置集中在 `kenvoy.toml`，路由由声明给出，不依赖目录命名推断 |
+| 关注点分离 | resource/page/action 各司其职；server、shared、client 模块边界在编译期强制 |
+
+### 已放弃的 0.1 设计
+
+早期方案使用 XML（`.kenvoy.xml`）、`apps/` 目录即路由、`layout`/`flow`/`publish` 分文件约定与内置审批流。这些**不属于当前能力**：现行载体是 JSX/TSX，路由由 `page path` 声明，权限是声明属性，审批流未实现。历史方案仅在变更记录中作为当时事实保留，不得据此实现或承诺。
+
 ## 当前进度
 
 当前默认 UI 使用 React + TypeScript + 原生 CSS，框架不再依赖 MUI/Emotion。select 支持静态联动和受控跨资源选项查询；系统组件可通过 override 声明替换显示层，自定义组件通过 SDK 继续使用原生资源、字段校验和 API。另支持 SQLite 持久化的多文件字段、附件下载及可显示上传图片/图片 URL 的 Image 组件。用法见[组件与选项契约](docs/contracts/component-bindings.md)、[文件与图片契约](docs/contracts/file-uploads.md)、[联动选项示例](examples/options-app/README.md)和[上传与图片示例](examples/uploads-app/README.md)。
