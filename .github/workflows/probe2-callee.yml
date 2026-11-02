@@ -5,12 +5,12 @@ on:
       version:
         required: true
         type: string
-    secrets:
-      CARGO_TOKEN:
-        description: test
-        required: false
 jobs:
   noop:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo '${{ inputs.version }}'
+      - name: 测试 secret 可见性
+        env:
+          T: ${{ secrets.CARGO_TOKEN }}
+        run: |
+          if [ -n "$T" ]; then echo 'CARGO_TOKEN 可见'; else echo 'CARGO_TOKEN 不可见' >&2; exit 1; fi
