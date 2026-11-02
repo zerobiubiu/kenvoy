@@ -4,6 +4,7 @@ mod build;
 mod distribution;
 mod options;
 mod process;
+mod version_tags;
 
 use crate::{
     Result,
@@ -33,10 +34,12 @@ pub(crate) fn execute() -> Result<()> {
                  cargo xtask test           构建并执行 Workspace Rust 测试\n\
                  cargo xtask browser        构建并执行显式浏览器测试\n\
                  cargo xtask dist           校验既有二进制并生成 ZIP 与 SHA256\n\
+                 cargo xtask version-tags   只读预览本地版本标签；--apply 创建缺失标签\n\
                  build/test/browser 支持 --release、--profile、--target-dir、--target；\n\
                  test 的其他参数传给 cargo test，browser 的其他参数传给浏览器测试。\n\
-                 dist 必填 --binary、--target、--version、--output；可选 --readme、--license。\n\
+                 dist 必填 --binary、--target、--version、--output；可选 --readme、--license、--archive-name NAME.zip。\n\
                  dist 只对 host 兼容产物限时执行 --version，不执行功能测试。\n\
+                 --archive-name 只接受普通 ZIP basename；version-tags 支持 --repo PATH 选择隔离仓库。\n\
                  build/test/browser 的 Cargo 子命令固定使用 --offline --locked；不会安装依赖。"
             );
             Ok(())
@@ -54,6 +57,7 @@ pub(crate) fn execute() -> Result<()> {
             Ok(())
         }
         Some("dist") => distribution::execute(root, &tail),
+        Some("version-tags") => version_tags::execute(root, &tail),
         Some("build" | "test" | "browser") => {
             let options = CargoOptions::parse(&tail)?;
             if command == "build" && !options.test_arguments.is_empty() {

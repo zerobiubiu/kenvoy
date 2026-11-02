@@ -66,6 +66,8 @@ kenvoy/
 
 构建产物、依赖目录与运行数据不入库：`target/`、`node_modules/`、`dist/`、`.kenvoy/`、`artifacts/`、`*.sqlite*` 由 `.gitignore` 排除。
 
+开发统一在 `dev`，版本变更提交后自动补本地 `vMAJOR.MINOR.PATCH` 标签；用户批准发布时先逐个推送标签，再合并并推送 `main`。只发布 main 当前版本（包括 PATCH），不补发历史版本；dev 可手动单平台、单架构打包而不发布。规则、钩子启用与 main 手动兜底见[Git 与发布操作](docs/operations/releasing.md)。
+
 ## 核心设计
 
 ### JSX/TSX 业务声明

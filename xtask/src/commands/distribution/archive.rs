@@ -12,8 +12,8 @@ use zip::{CompressionMethod, DateTime, ZipWriter, write::SimpleFileOptions};
 
 pub(super) fn create(options: &Options) -> Result<()> {
     fs::create_dir_all(&options.output)?;
-    let name = options.target.archive_name(&options.version);
-    let archive = options.output.join(&name);
+    let name = &options.archive_name;
+    let archive = options.output.join(name);
     let checksum = options.output.join(format!("{name}.sha256"));
     if checksum.try_exists()? {
         return Err(format!("拒绝覆盖已有校验文件：{}", checksum.display()).into());
@@ -105,5 +105,57 @@ impl Drop for Pending<'_> {
                 eprintln!("无法清理本次分发半成品 {}：{error}", path.display());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::temporary::TemporaryDirectory;
+    use super::{Options, create, sha256};
+    use crate::Result;
+    use std::fs::{self, File};
+
+    #[test]
+    fn selected_archive_name_drives_sidecar_without_overwriting() -> Result<()> {
+        let temporary = TemporaryDirectory::create()?;
+        let root = temporary.path();
+        let options = Options::parse(
+            root,
+            &[
+                "--binary".into(),
+                root.join("kenvoy").into_os_string(),
+                "--target".into(),
+                "x86_64-unknown-linux-musl".into(),
+                "--version".into(),
+                "1.2.3".into(),
+                "--output".into(),
+                root.join("artifacts").into_os_string(),
+                "--archive-name".into(),
+                "selected-name.zip".into(),
+            ],
+        )?;
+        fs::create_dir_all(root.join("crates/kenvoy"))?;
+        fs::write(&options.binary, b"binary")?;
+        fs::write(&options.readme, b"readme")?;
+        fs::write(&options.license, b"license")?;
+        create(&options)?;
+        let archive = options.output.join("selected-name.zip");
+        let checksum = options.output.join("selected-name.zip.sha256");
+        let contents = fs::read(&archive)?;
+        let expected = format!("{}  selected-name.zip\n", sha256(&archive)?);
+        assert_eq!(fs::read_to_string(&checksum)?, expected);
+        let zip = zip::ZipArchive::new(File::open(&archive)?)?;
+        let mut names = zip.file_names().collect::<Vec<_>>();
+        names.sort_unstable();
+        assert_eq!(names, ["LICENSE", "README.md", "kenvoy"]);
+        drop(zip);
+        assert!(create(&options).is_err());
+        assert_eq!(fs::read(&archive)?, contents);
+        assert_eq!(fs::read_to_string(&checksum)?, expected);
+        fs::remove_file(&checksum)?;
+        assert!(create(&options).is_err());
+        assert_eq!(fs::read(&archive)?, contents);
+        assert!(!checksum.exists());
+        Ok(())
     }
 }

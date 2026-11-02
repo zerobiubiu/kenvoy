@@ -1,6 +1,8 @@
 [
   {
     "target": "x86_64-pc-windows-msvc",
+    "platform": "windows",
+    "arch": "x86_64",
     "runner": "windows-2022",
     "host": "x86_64-pc-windows-msvc",
     "host_arch": "x86_64",
@@ -9,6 +11,8 @@
   },
   {
     "target": "aarch64-pc-windows-msvc",
+    "platform": "windows",
+    "arch": "ARM64",
     "runner": "windows-2022",
     "host": "x86_64-pc-windows-msvc",
     "host_arch": "x86_64",
@@ -17,6 +21,8 @@
   },
   {
     "target": "x86_64-unknown-linux-musl",
+    "platform": "linux",
+    "arch": "x86_64",
     "runner": "ubuntu-24.04",
     "host": "x86_64-unknown-linux-gnu",
     "host_arch": "x86_64",
@@ -24,6 +30,8 @@
   },
   {
     "target": "aarch64-unknown-linux-musl",
+    "platform": "linux",
+    "arch": "ARM64",
     "runner": "ubuntu-24.04",
     "host": "x86_64-unknown-linux-gnu",
     "host_arch": "x86_64",
@@ -31,6 +39,8 @@
   },
   {
     "target": "x86_64-apple-darwin",
+    "platform": "macos",
+    "arch": "x86_64",
     "runner": "macos-15",
     "host": "aarch64-apple-darwin",
     "host_arch": "arm64",
@@ -38,6 +48,8 @@
   },
   {
     "target": "aarch64-apple-darwin",
+    "platform": "macos",
+    "arch": "ARM64",
     "runner": "macos-15",
     "host": "aarch64-apple-darwin",
     "host_arch": "arm64",

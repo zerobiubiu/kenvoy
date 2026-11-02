@@ -31,9 +31,18 @@ include = [
 ]
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }.zip"
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ os-name }-{ target-arch }.zip"
 bin-dir = "{ bin }{ binary-ext }"
 pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-windows-ARM64.zip"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-linux-ARM64.zip"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-macos-ARM64.zip"
 
 [dependencies]
 kengine = { path = "../kengine", version = "0.2.0" }

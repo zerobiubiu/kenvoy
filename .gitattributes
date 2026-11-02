@@ -1,0 +1,2 @@
+# Git 钩子在 Windows checkout 时也必须保留 LF。
+/.githooks/* text eol=lf

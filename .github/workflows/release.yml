@@ -1,0 +1,22 @@
+name: main 最新版本自动发布
+
+# dev 和 tag 推送均不触发；只在用户合并并推送 main 后执行。
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kenvoy-release-main
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-one-version.yml
+    secrets:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}

@@ -1,89 +1,121 @@
-# crates.io 与预编译二进制发布
+# Git 分支、版本标签与发布操作
 
-状态：参考；治理：现状文档。适用：KEngine Library 与 Kenvoy CLI；执行事实见[0.2.0 发布记录](../changes/0019-crates-and-binary-release.md)，版本概要见[版本日志](../changes/CHANGELOG.md)。
+状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI 与 KEngine，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，本轮变更见 [0021](../changes/0021-dev-main-release-rules.md)；已发布 0.2.0 的历史证据见 [0019](../changes/0019-crates-and-binary-release.md)。
 
-## 发布边界
+## 分支与授权
 
-Workspace 保留四成员，仅发布 `kengine` 和 `kenvoy`。`kenvoy-tests`、`xtask` 的 `publish = false` 不变。产品版本分别定义在各自 Cargo.toml，Kenvoy 的 KEngine 依赖同时声明本地 path 和 registry version；两个版本可以独立演进，不把应用 IR/数据库格式版本当成程序版本。
+| 分支 | 用途 | 自动触发 |
+|---|---|---|
+| `dev` | 所有开发、验证与版本演进，常驻分支 | 推送和 tag 均不触发 CI/CD；可显式手动打包 |
+| `main` | 用户决定发布后合入的最新版本代码 | 推送触发当前版本发布检测；无缺项则跳过 |
 
-发布包必须独立构建：Kenvoy 的包白名单包含通用 `frontend/dist/index.html`、`assets`、框架源码/构建脚本/锁文件及 Rust 代码，不包含 node_modules、用户数据、凭据或工程运行缓存。构建脚本显式识别本地 Workspace 和独立包布局；独立包只依赖包内锁文件和实际锁定依赖信息，不寻找兄弟 Crate 或上层仓库文件。
+不再创建 `dev.MAJOR.MINOR.PATCH` 分支。PATCH 与其他版本一样在 dev 完成，经用户授权合并 main 后发布；不存在从开发分支紧急发布的旁路。
 
-## 发布顺序
+一波完整逻辑修改验证通过后自动本地提交，使用中文信息。只暂存本次授权文件，不夹带用户改动、凭据、依赖目录、构建产物或业务数据。自动提交和自动本地打 tag **不授权推送、切分支、合并、变基或改写历史**；这些操作仍须用户明确要求。
+
+工作流文件在 dev/main 共享，防止普通合并删除 main 的发布配置。发布入口、共享发布实现及实际写操作都检查 main；文件出现在 dev 不表示 dev 可以发布。
+
+## 根节点与版本标签
+
+共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，附注标签 `v0.0.0` 的说明为 `0.0.0 init`。它只是初始化标记，不改原始提交消息、文件内容或 SHA，也不发布到 crates.io/Release。根中原有的 manifest 版本仅作为历史比较基线，不伪造新的版本变更提交。
+
+- 产品版本来自各产品 `Cargo.toml`，不是 kenvoy 项目的配置版本或 IR 版本；Kenvoy CLI 的版本用于仓库 `vMAJOR.MINOR.PATCH` 标签与 Release 名称。
+- KEngine 保留自身 manifest 版本；Kenvoy 的依赖约束和 Cargo.lock 必须同步。仅工作流、文档、工程工具变更不机械递增产品版本。
+- dev 中已提交的 Kenvoy CLI 版本变化时，创建对应附注标签；补齐历史中明确发生过版本变化而遗漏的标签。工作区、暂存区尚未提交的版本不参与判断。
+- 既有合法标签保持原目标；不会自动移动、覆盖、删除或推送。轻量标签、指错版本、目标不在 dev 历史等冲突会阻断维护，不能强行改写。
+- **补标签不等于补发布**：缺失历史标签可补，历史 crate/Release 不自动补发。
+
+### 本地自动标签
+
+[version-tags 命令](../../xtask/src/commands/version_tags/)使用 Git 对象与 TOML 解析，默认只读预览；`--apply` 只在 dev 的完整非浅仓库执行引用事务。Git 需要 2.36 或更新版本，并配置有效身份。
+
+```text
+cargo xtask version-tags
+cargo xtask version-tags --apply
+```
+
+[post-commit 钩子](../../.githooks/post-commit)在 dev 成功提交后执行 `version-tags --apply`，其他分支不执行。启用仅影响本仓库；先检查既有 hooksPath，存在自定义钩子时先协调，不能覆盖用户配置：
+
+```text
+git config --local --get core.hooksPath
+git config --local core.hooksPath .githooks
+```
+
+克隆仓库后需单独启用该本地配置，先准备 xtask 的 Rust 依赖缓存。钩子采用 `--offline --locked`，失败会明确提示“提交已完成、标签维护失败”，不会伪称提交回滚或自动上传；修复原因后按上方命令补齐标签。
+
+## 正式发布顺序
 
 ```mermaid
 flowchart TD
-  A[提交版本与包内容准备] --> B[仓库外独占源码快照生成前端并打包]
-  B --> C[推送源码与工作流]
-  C --> D[发布 kengine]
-  D --> E[发布 kenvoy]
-  E --> F[registry 模式六目标交叉编译]
-  F --> G[核对归档与 SHA256 后发布 GitHub Release]
-  G --> H[cargo-binstall 基本安装核验]
+  A[dev 完成修改与版本更新] --> B[验证并本地提交 自动补版本 tag]
+  B --> C[用户批准发布 逐个推送所需 tag]
+  C --> D[用户合并 dev 到 main 并推送 main]
+  D --> E[只检查当前 main 提交和当前版本]
+  E -->|已被新 main 替代 或源包及资产已齐| F[跳过 不发布历史版本]
+  E -->|当前版本缺项| G[先校验远端 tag 再验证并串行发布缺失源包]
+  G --> H[各系统原生 Runner 构建缺失二进制]
+  H --> I[核验 ZIP 与 SHA256 补齐当前 Release]
 ```
 
-每次发布确认版本、授权、干净提交、包内容和凭据。版本上传后不能覆盖；若客户端等待索引超时，先查询 registry，不能盲目重复上传。源码推送、crates.io 上传和 GitHub Release 是三个独立的对外操作，不把部分成功写成整次成功。
+必须**先推版本 tag，再合并/推送 main**，例如 `git push origin v0.3.1`；逐个推送仅限本次获授权的标签，不用 `--tags` / `--follow-tags` 批量上传未核对版本。tag 推送本身不会触发本仓库发布，因此此规则不是依赖 tag 事件数量限制。
 
-前端资产属于生成的发行输入，不提交进源码仓库。正式源包从已提交 Git SHA 的 `git archive` 快照组装：在仓库外独占目录重建前端，再运行 Cargo 打包/发布。包白名单均锚定包根，不能因 README/LICENSE 的同名匹配带入 node_modules；不以 `--allow-dirty` 或 `--no-verify` 代替受控输入和正常包编译。
+CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一致、已合入 main、版本相符。若有新源包待发布，main 源码树必须与版本标签一致；标签后继续修改源码应完成新版本并打新标签，不能让旧标签描述另一份代码。缺标签、标签冲突、源代码漂移都在上传前失败；工作流不自动创建或移动远端 tag。
 
-## 交叉编译与归档
+自动与手动兜底共用并发组，写入前再次核对远端 main。旧运行被新 main 取代时不继续发布；无缺项的当前版本不构建、不上传，也不扫描其他 tag 的发布状态。
 
-目标是 Windows MSVC、Linux musl、macOS 的 x86_64 与 aarch64。Linux/macOS 使用 Zig 和 cargo-zigbuild，替代 GCC；macOS 仍需要 Apple SDK。Windows MSVC 使用微软 SDK/交叉工具链，不使用 GCC，也不把 GNU 产物冒充 MSVC 目标。仅使用标准公开仓库 runner，不依赖付费大型 runner。
+## 工作流职责
 
-跨架构编译不代表运行测试。0.2.0 按用户要求不执行 cargo test、npm test 或浏览器测试；保留 Cargo 发布自带的编译校验、PE/ELF/Mach-O 架构检查、SHA256，以及兼容 host 上的基本版本/安装核验。不能执行的架构不声称已运行通过。
+| 文件 | 触发与职责 |
+|---|---|
+| [release.yml](../../.github/workflows/release.yml) | 仅 `push main` 自动进入当前版本发布流程 |
+| [patch-release.yml](../../.github/workflows/patch-release.yml) | main 手动兜底，必须 `confirm=yes`；无任意版本输入，不再表示 PATCH 开发分支发布 |
+| [release-one-version.yml](../../.github/workflows/release-one-version.yml) | 两入口共用：只读规划 → 缺失源包 → 缺失二进制 → 当前 Release；拒绝非 main |
+| [manual-package.yml](../../.github/workflows/manual-package.yml) | 任意选定分支手动打一个系统 × 一个架构，只上传 artifact，不发布 |
 
-工作流定义为 [.github/workflows/distribution.yml](../../.github/workflows/distribution.yml)，输入精确 `version=0.2.0` 与 `mode=source|registry`。当前固定 Rust 1.98.0、Zig 0.17.0、cargo-zigbuild 0.24.0；cargo-zigbuild 从官方二进制 wheel 安装且不带 ziglang，避免重复安装 Zig。macOS 产物的最低系统版本为 13.0。
+旧 `distribution.yml` 的历史扫描链路已删除，不保留另一套发布入口。CI 的 HTTP/状态协调位于 [.github/scripts](../../.github/scripts/)，使用标准库 Python，轻量检测不先编译产品；本地 Git/归档工程能力继续由 Rust xtask 提供。
 
-目标清单集中在 [.github/distribution-targets.json](../../.github/distribution-targets.json)。`platforms=all` 构建六目标；`platforms=windows` 只补打包 Windows 两目标，避免重跑已完成的 Linux/macOS 归档。Windows 固定在包含 Visual Studio 2022 的 windows-2022 runner，仍使用 SDK 10.0.26100.0 / 工具集 14.44；Windows 的 Cargo 编译步骤使用 PowerShell，保留开发者环境 PATH，避免 Git Bash 的同名 link.exe 抢占 MSVC 链接器。
+### crates.io 与失败恢复
 
+只有 `kengine` 和 `kenvoy` 对外发布，`kenvoy-tests`、`xtask` 保持 `publish=false`。先查询两个包各自的精确版本：仅 404 表示缺失；鉴权、限流或网络错误不能当作未发布。
 
-## 分支模型与自动发布
+新源包从 main 精确 Git SHA 的 `git archive` 创建仓库外独占快照，在快照生成 Kenvoy 内置前端并执行 Cargo dry-run/编译校验，再按 KEngine → Kenvoy CLI 上传缺失项。不使用 `--allow-dirty` 或 `--no-verify`；根 LICENSE 通过 workspace license-file 进入每个发布包。
 
-- `dev`：常驻开发分支；推送不触发发布。
-- `dev.MAJOR.MINOR.PATCH`：每个新版本从 `dev` 分出，一个版本一个分支，成熟后合并。
-- `main`：只承载最新 MAJOR.MINOR.0；PATCH（z>0）不进 main。
-- **只有 main 更新触发 CI/CD**：读取 main 上 `crates/kenvoy/Cargo.toml` 的版本，必须为 x.y.0（否则告警跳过）；crates.io 与 GitHub Release 均已存在则空跑结束，否则发布。
-- **发布规则**：仅发布 MAJOR.MINOR.0；PATCH 版本不发布 crate、不发布 Release。
-- **全历史补齐**：每次触发扫描全部 v*.*.* tag，缺失 crate/Release 的历史 x.y.0 按语义化顺序逐个补发。
-- **crates.io 自动发布**：`CARGO_TOKEN` 仓库 Secret 注入 `CARGO_REGISTRIES_CRATES_IO_TOKEN`，按 kengine → kenvoy 串行发布；先查 registry 已存在则跳过该 crate；任何一步失败即停，不发布坏包。发布不可逆：合并 main 前必须确认版本号正确。
+上传是不可逆操作；不覆盖既有版本，不盲目重试上传写请求。KEngine 成功、Kenvoy 失败时，手动兜底只处理仍缺失的当前版本步骤。已发布源包补二进制时，从实际 registry 源包核对官方 SHA256 后构建，使用包内前端，不拿后来修改的工作区冒充原发布源码。
 
-## 工作流结构
+GitHub Release 先以草稿收集缺失资产，齐全并验证后公开；标题固定为 `Kenvoy <version>`。既有 ZIP/侧车不使用 `--clobber`：已有 ZIP 缺侧车时按原 ZIP 计算校验值，不重新构建后替换；发现既有校验冲突即停，留给人工核查。历史已发布版本按其发布包的下载元数据识别资产，不因新命名规则重命名旧文件。
 
-- 主工作流 [distribution.yml](../../.github/workflows/distribution.yml)：main 推送触发；detect 派生待发布版本；publish_crates 直接在主工作流内执行 crates.io 串行发布（本仓库 reusable workflow 无法传递 Secret，见下）；build_and_release 调用单版本工作流完成六目标构建与 Release。
-- 单版本工作流 [release-one-version.yml](../../.github/workflows/release-one-version.yml)：六目标构建 + GitHub Release（标题 `Kenvoy <version>`，附六份 ZIP/SHA256）。不含 crates.io 发布，不声明 job 级 write 权限。
-- PATCH 紧急发布 [patch-release.yml](../../.github/workflows/patch-release.yml)：仅 `dev.MAJOR.MINOR.PATCH` 分支手动触发，输入 confirm=yes 后发布当前分支版本（crate + Release）。用于 main 已发布 x.y.0 后立即修 bug、不推进 MINOR 的场景；版本已存在于 crates.io 时拒绝。
-- 手动单平台打包 [manual-package.yml](../../.github/workflows/manual-package.yml)：任意分支手动触发；一次只打包一个平台的一个架构（windows/linux/macos × x86_64/ARM64），产物仅上传 artifacts（14 天），不发布。
+### 凭据与 GitHub 权限
 
-## 已验证的平台限制
+`CARGO_TOKEN` 是仓库 Secret，只交给需要上传源包的步骤；GitHub 使用 `github.token`。两个认证域分开，GitHub Token 不发送给 crates.io，也不读取或输出操作者本地 Cargo 凭据。
 
-本仓库（zerobiubiu/kenvoy，免费计划）实测 GitHub Actions 行为，编写工作流时必须遵守：
+[GitHub 官方可复用工作流规则](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)允许命名 Secret 传递和 `secrets: inherit`，但权限在调用链中只能保持或降低。两个入口的调用 job 明确授予 `contents: write`，被调用流程的构建/检查 job 保持只读，仅 Release job 使用写权限。
 
-- reusable workflow 被调方中**任何 job 声明 `permissions: contents: write`** 会导致整个调用 startup_failure（0 jobs、无日志）。需要写权限的 job 放在普通工作流（如 patch-release.yml），或把写权限提升到被调方顶级 `permissions`。
-- reusable workflow 的 secrets 透传不可用：caller 传 `secrets:`（逐个映射或 `inherit`）、被调方声明 `workflow_call.secrets`、被调方引用 `secrets.X`，任一存在都 startup_failure。Secret 依赖的步骤放在主工作流直接执行（如 publish_crates）。
-- caller `if` 表达式中空串比较必须用单引号（`== ''`）；双引号导致运行启动后 0 jobs 失败。
-- 顶层 `env` 引用 `inputs.*`、matrix strategy、checkout/setup 动作均正常。
+旧说明中“本仓库 reusable Secret 不可用”“被调用 job 不能声明 write”的结论没有充分证据，已撤销；不能用这些说法作为绕过权限配置的规则。表达式空字符串使用 `''`，Windows Cargo 编译仍用 PowerShell，避免 Git Bash 同名 `link.exe` 抢占 MSVC。
 
-## 归档命名
+## 平台与单目标打包
 
-分发文件名为 `kenvoy-{version}-{platform}-{arch}.zip`：platform 取 windows/linux/macos；arch 取 `x86_64` 或 `ARM64`（不用 aarch64），由 `cargo xtask dist` 按目标生成，旁附同名 `.sha256`。
+目标配置集中于 [.github/distribution-targets.json](../../.github/distribution-targets.json)，手动和正式发布共用[单目标 action](../../.github/actions/package/action.yml)。Windows 目标在 Windows runner 上使用 MSVC，Linux 在 Ubuntu runner，macOS 在 macOS runner；同系统内仍可交叉架构，不把 Linux runner 用于统一构建所有系统。
 
-## 手动触发
+正式 Release 覆盖 Linux、Windows、macOS 的 x86_64 与 ARM64。新归档名为 `kenvoy-{version}-{platform}-{arch}.zip`，platform 为 `windows/linux/macos`，arch 为 `x86_64/ARM64`，附同名 `.sha256`；包内可执行文件仍为 `kenvoy` 或 `kenvoy.exe`。Rust target triple 中的 `aarch64` 不改名。binstall 元数据与归档名称同步。
+
+手动打包例子（仅在获准触发远端任务后执行）：
 
 ```text
-gh workflow run distribution.yml --ref main -f version=0.2.0
+gh workflow run manual-package.yml --ref dev -f platform=windows -f arch=ARM64
 ```
 
-`version` 留空则按 main 与全历史扫描自动检测；指定则只处理该版本（仍要求 x.y.0）。
+它只选择一个目标，上传 ZIP 与侧车为 Actions artifact，保留 14 天，不需要发布 Token、不创建 tag、不上传 crates.io、不创建 Release。
 
-## 身份与安装
-
-GitHub 与 crates.io 分别认证。GitHub CLI 使用本机现有登录；crates.io 在本机执行 `cargo login --registry crates-io`。不在聊天、源码、工作流或日志中传递 Token，不把 GitHub OAuth Token 冒充 registry Token。
-
-发布成功后的用户命令：
+main 手动发布兜底：
 
 ```text
-cargo add kengine@0.2.0
-cargo install kenvoy --version 0.2.0 --locked
-cargo binstall kenvoy --version 0.2.0
+gh workflow run patch-release.yml --ref main -f confirm=yes
 ```
 
-验收 cargo-binstall 时只允许项目自身 Release 元数据策略，禁用编译与第三方 QuickInstall 回退，防止“实际从源码构建”被误记为二进制分发成功。版本核验使用独占安装目录，不覆盖操作者已有程序。
+只检查当时 main 当前版本；不得指定 dev、历史版本或用兜底发布未合并代码。
+
+## 验证边界
+
+工作流语法通过不等于发布完成；交叉编译通过不等于所有架构运行通过。最低充分核验包括：真实临时 Git 标签行为、只读发布计划（非 main 拒绝、已发布跳过、缺 tag 阻断、当前 PATCH 接受）、平台单选、实际 ZIP/侧车与包内 LICENSE、工作流静态检查。实际对外运行需另行获准推送后观察 Actions 和 Release 结果。
+
+cargo-binstall 安装核验使用独占安装目录，限制为 crate-meta-data 策略，禁用编译及 QuickInstall 回退；既有 0.2.0 安装与发布证据保留在 0019，不冒充本轮重新发布。
