@@ -141,8 +141,7 @@ jobs:
     uses: ./.github/workflows/release-one-version.yml
     with:
       version: ${{ needs.detect.outputs.head }}
-    secrets:
-      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
+    secrets: inherit
 
   noop:
     # 空跑：没有待发布版本时给出明确结果，运行成功结束。

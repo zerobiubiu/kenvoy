@@ -1,8 +1,0 @@
-name: Probe Callee
-on:
-  workflow_call:
-jobs:
-  noop:
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo callee-ok
