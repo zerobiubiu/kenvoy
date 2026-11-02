@@ -16,8 +16,26 @@ env:
   CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 jobs:
-  noop:
+  targets:
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - id: select
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          targets = json.loads(pathlib.Path('.github/distribution-targets.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('matrix=' + json.dumps({'include': targets}, separators=(',', ':')) + '
+')
+          PY
+  noop:
+    needs: targets
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4.2.2
         with:
