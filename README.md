@@ -152,6 +152,51 @@ kenvoy 项目根目录/
 
 内部代码已按 DDD 分层：领域模型与规则、应用用例与静态端口、基础设施、接口及宿主装配；前端同样分离纯规则、API 和展示。自有代码（含测试）每文件硬上限 500 行，目标 400 行内，由 `cargo xtask architecture/check` 检查。目录与依赖规则见[DDD 规范](docs/architecture/ddd-structure.md)，本次行为兼容验证见 [0016](docs/changes/0016-ddd-structure-and-module-split.md)。
 
+## 快速开始
+
+已发布版本（`kenvoy 0.2.0`）安装后即可创建并运行 kenvoy 项目：
+
+```powershell
+cargo binstall kenvoy            # 或 cargo install kenvoy --locked
+kenvoy create my-app             # 生成含客户登记示例的项目
+Set-Location my-app
+kenvoy admin init --username admin   # 隐藏输入密码，不提供默认密码
+kenvoy dev                       # 开发服务：http://127.0.0.1:3000
+```
+
+停止开发服务后启动生产模式，无需先手工 build（有源码且需要更新时会自动构建）：
+
+```powershell
+kenvoy check                     # 检查源码、模块、声明、权限与路由，不连接数据库
+kenvoy build                     # 生成版本化应用描述、客户端资产与服务端模块，不连接数据库
+kenvoy run                       # 加载生产产物并启动
+```
+
+`kenvoy --help` 当前提供的命令：
+
+| 命令 | 作用 |
+|---|---|
+| `create` | 创建包含客户登记示例的项目 |
+| `check` | 检查源码、模块、声明、权限与路由，不连接数据库 |
+| `inspect` | 查看应用模型或指定资源的注册规则 |
+| `migrate` | 预览、应用数据库迁移或读取迁移历史 |
+| `admin` | 初始化管理员，或由本机项目所有者创建账号 |
+| `build` | 构建版本化应用描述、客户端资产与服务端模块，不连接数据库 |
+| `run` | 加载生产产物并启动；有源码且需要更新时自动构建 |
+| `dev` | 启动开发服务 |
+
+全局选项：`--project <路径>` 指定项目位置（默认从当前目录向上查找 `kenvoy.toml`）、`--json-logs` 输出结构化日志（不记录密码、Cookie 或表单内容）。
+
+在仓库内开发时可直接运行 CLI 与测试：
+
+```powershell
+cargo build --workspace
+cargo run -p kenvoy -- --help
+cargo xtask test          # 构建正式 CLI 后运行 Workspace 测试
+```
+
+基础 DSL 不需要 Node/npm；只有使用自定义组件库时才需要 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`。
+
 ## 安装 0.2.0
 
 0.2.0 已发布至 crates.io 和 GitHub Release；详见[版本日志](docs/changes/CHANGELOG.md)及[执行记录](docs/changes/0019-crates-and-binary-release.md)。安装 CLI，或在 Rust 项目中使用语言库：
