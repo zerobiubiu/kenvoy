@@ -1,8 +1,8 @@
 [project]
 name = "uploads-app"
 version = "0.1.0"
-min_cli_version = "0.2.1"
-format_version = "0.2.0"
+min_cli_version = "0.4.0"
+format_version = "0.4.0"
 
 [application]
 entry = "src/app.tsx"
@@ -14,3 +14,9 @@ port = 3000
 [database]
 provider = "sqlite"
 path = "data/app.sqlite"
+
+[languages]
+fallback = "zh-CN"
+
+[languages.zh-CN]
+display = "简体中文"

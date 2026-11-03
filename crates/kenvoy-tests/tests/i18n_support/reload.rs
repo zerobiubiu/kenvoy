@@ -46,8 +46,12 @@ async fn dev_catalog_reload_publishes_generation_and_keeps_invalid_candidate_ina
     let before_schema = schema(&fixture)?;
     let before_history = applied(&fixture)?;
     let before_manifest = fs::read(fixture.project().join("dist/manifest.json"))?;
-    let path = fixture.project().join("locales/en-US.json");
-    fs::write(&path, r#"{"app.name":"First","app.name":"Duplicate"}"#)?;
+    let path = fixture.project().join("translations.json");
+    let original_translations = fs::read(&path)?;
+    fs::write(
+        &path,
+        r#"{"$schema":"./language.schema.json","app.name":{"cn":"初值","en":"First","ko":"처음"},"app.name":{"cn":"重复","en":"Duplicate","ko":"중복"}}"#,
+    )?;
     let rejected = development(&mut session, |value| value["state"] == "error").await?;
     assert_eq!(rejected["generation"], generation);
     assert_eq!(
@@ -59,12 +63,10 @@ async fn dev_catalog_reload_publishes_generation_and_keeps_invalid_candidate_ina
         before_manifest
     );
     // 修复同一份真实文件，而不是跳过被拒绝候选或重启服务。
-    fs::write(
-        &path,
-        serde_json::to_vec(
-            &json!({"app.name":"Live application","pages./customers.title":"Live customer registration"}),
-        )?,
-    )?;
+    let mut repaired: Value = serde_json::from_slice(&original_translations)?;
+    repaired["app.name"]["en"] = json!("Live application");
+    repaired["pages./customers.title"]["en"] = json!("Live customer registration");
+    fs::write(&path, serde_json::to_vec(&repaired)?)?;
     let ready = development(&mut session, |value| {
         value["state"] == "ready"
             && value["generation"]
@@ -88,6 +90,87 @@ async fn dev_catalog_reload_publishes_generation_and_keeps_invalid_candidate_ina
     assert_eq!(
         stored(&fixture, id)?,
         ("监听数据".into(), "13600000000".into(), 35)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn valid_language_configuration_refreshes_schema_before_rejecting_incomplete_translations()
+-> TestResult {
+    let fixture = project("i18n-config-reload")?;
+    let mut server = fixture.start("dev")?;
+    let mut session = Session::new(server.origin()).await?;
+    let initial = session.get("/_kenvoy/application", StatusCode::OK).await?;
+    let generation = initial["generation"].as_u64().ok_or("缺少代际")?;
+    let form = form(&initial)?;
+    let created = session
+        .post(
+            "/api/customers",
+            json!({"name":"配置更新保留","phone":"13500000000","age":36}),
+            Some(&form),
+            StatusCode::CREATED,
+        )
+        .await?;
+    let id = created["data"]["id"].as_i64().ok_or("缺少记录 ID")?;
+    let before_schema = schema(&fixture)?;
+    let before_history = applied(&fixture)?;
+    let before_manifest = fs::read(fixture.project().join("dist/manifest.json"))?;
+    let translations_path = fixture.project().join("translations.json");
+    let original_translations = fs::read(&translations_path)?;
+    let config_path = fixture.project().join("kenvoy.toml");
+    let config = fs::read_to_string(&config_path)?;
+    fs::write(
+        &config_path,
+        format!("{config}\n[languages.de-DE]\nalias='de'\ndisplay='Deutsch'\n"),
+    )?;
+    let rejected = development(&mut session, |value| value["state"] == "error").await?;
+    assert_eq!(rejected["generation"], generation);
+    assert_eq!(
+        session.get("/_kenvoy/application", StatusCode::OK).await?,
+        initial
+    );
+    assert_eq!(
+        fs::read(fixture.project().join("dist/manifest.json"))?,
+        before_manifest
+    );
+    assert_eq!(fs::read(&translations_path)?, original_translations);
+    let generated: Value =
+        serde_json::from_slice(&fs::read(fixture.project().join("language.schema.json"))?)?;
+    assert_eq!(
+        generated["additionalProperties"]["properties"]["de-DE"]["type"],
+        "string"
+    );
+    assert_eq!(
+        generated["additionalProperties"]["properties"]["de"]["type"],
+        "string"
+    );
+    let mut repaired: Value = serde_json::from_slice(&original_translations)?;
+    for (key, row) in repaired.as_object_mut().ok_or("译文不是对象")? {
+        if key != "$schema" {
+            row["de"] = json!(format!("Deutsch {key}"));
+        }
+    }
+    fs::write(&translations_path, serde_json::to_vec(&repaired)?)?;
+    let ready = development(&mut session, |value| {
+        value["state"] == "ready"
+            && value["generation"]
+                .as_u64()
+                .is_some_and(|value| value > generation)
+    })
+    .await?;
+    let updated = session.get("/_kenvoy/application", StatusCode::OK).await?;
+    assert_eq!(updated["generation"], ready["generation"]);
+    assert_eq!(
+        updated["i18n"]["messages"]["de-DE"]["pages./customers.title"],
+        "Deutsch pages./customers.title"
+    );
+    assert!(updated["i18n"]["messages"].get("de").is_none());
+    server.stop()?;
+    assert_eq!(schema(&fixture)?, before_schema);
+    assert_eq!(applied(&fixture)?, before_history);
+    assert_eq!(
+        stored(&fixture, id)?,
+        ("配置更新保留".into(), "13500000000".into(), 36)
     );
     Ok(())
 }

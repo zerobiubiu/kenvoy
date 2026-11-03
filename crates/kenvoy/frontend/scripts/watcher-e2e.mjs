@@ -5,9 +5,9 @@ import { chromium, expect } from '@playwright/test';
 import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture=await projectFixture();let browser;
 try {
-  const chinesePath=join(fixture.project,'locales/zh-CN.json');
-  const chinese=JSON.parse(await readFile(chinesePath,'utf8'));delete chinese['pages./customers.title'];
-  await writeFile(chinesePath,JSON.stringify(chinese));
+  const translationsPath=join(fixture.project,'translations.json');
+  const translations=JSON.parse(await readFile(translationsPath,'utf8'));delete translations['pages./customers.title'];
+  await writeFile(translationsPath,JSON.stringify(translations));
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'watcher-test-password-725\n');
   let server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'zh-CN'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));

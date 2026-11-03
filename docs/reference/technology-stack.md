@@ -25,6 +25,7 @@
 | swc_ecma_transforms_base | 51.0.0 | 通用 resolver 与 Kenvoy fixer；默认 |
 | swc_ecma_transforms_typescript | 57.0.0 | Kenvoy 消除类型；默认 |
 | serde、serde_json、thiserror | 1.0.229、1.0.154、2.0.21 | serde 启用 derive；其余默认 |
+| jsonschema | 0.33.0 | 仅 Kenvoy；default-features=false，实际校验 draft 2020-12；无 HTTP/文件引用解析，不强制 serde_json/float_roundtrip |
 | rquickjs | 0.14.0 | default-features=false；std、loader、futures |
 | axum | 0.8.9 | 默认 + ws；正式 HTTP 与开发 WebSocket |
 | tokio | 1.54.1 | macros、rt-multi-thread、net、io-util、sync、time、signal、process |
@@ -93,6 +94,11 @@ rquickjs/rquickjs-sys 0.14.0 发布包内核在阶段 00 核对为 QuickJS-NG 0.
 通用 Schema Diff、checksum、漂移、backup API、预检和事务机制由正式交付链复用；生成/固化与运行分开，同 Schema 数据操作有独立记录，空库执行完整链。改名/回填/转换通过显式冻结规则处理，危险候选与执行计划分别确认；旧库只显式基线接入。最低 CLI 与项目格式双重门禁、完整迁移产物及锁/快照契约见[配置](../contracts/project-configuration.md)、[数据库设计](../architecture/database-design.md)和[迁移操作](../operations/migration-design.md)。大表、磁盘耗尽和断电不因新增链而成为已验收能力。
 
 Axum 已正式提供注册表驱动 CRUD、Action、认证、授权与静态资源。Argon2id 初始化、服务端 Session、HttpOnly/SameSite Cookie、Origin/CSRF、表单字段范围、输入查重与分页/请求限额已经验证。只服务版本产物 client，API 错误不进入 SPA fallback，modules/server.json 不公开。详见[安全契约](../architecture/security-design.md)与[阶段 05](../verification/0007-http-auth.md)。[Axum](https://docs.rs/axum/latest/axum/)、[ServeDir](https://docs.rs/tower-http/latest/tower_http/services/struct.ServeDir.html)、[notify](https://docs.rs/notify/latest/notify/)
+
+### 语言 JSON Schema
+
+languages 生成的 language.schema.json 使用 draft 2020-12，集中译文通过固定 `jsonschema 0.33.0` 验证器验证。禁用默认 features，避免 HTTP/文件引用自动读取；只使用框架按有效配置生成的 Schema，不信任手改或远程 Schema。原始重复键另由严格解析器拦截。未采用 0.60.2：其传递依赖会强制合并 serde_json/float_roundtrip，语言功能不应附带业务浮点解析变化。已用 cargo tree 核对最终 serde_json 仅 default/raw_value/std。来源：[jsonschema 0.33.0](https://docs.rs/jsonschema/0.33.0/jsonschema/)及[其 manifest](https://docs.rs/crate/jsonschema/0.33.0/source/Cargo.toml)，证据见[0028](../changes/0028-mandatory-languages-and-schema.md)。
+
 
 ## 依赖管理与后续门禁
 

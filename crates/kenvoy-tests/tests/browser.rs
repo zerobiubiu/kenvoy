@@ -65,6 +65,7 @@ browser_tests! {
     options => "options",
     production => "production",
     watcher => "watcher",
+    i18n => "i18n",
 }
 
 #[test]

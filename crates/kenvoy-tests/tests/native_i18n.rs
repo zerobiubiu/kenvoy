@@ -6,5 +6,7 @@ mod catalog;
 mod http;
 #[path = "i18n_support/reload.rs"]
 mod reload;
+#[path = "i18n_support/startup.rs"]
+mod startup;
 #[path = "i18n_support/mod.rs"]
 mod support;

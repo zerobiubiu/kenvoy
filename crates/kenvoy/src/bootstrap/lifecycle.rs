@@ -117,6 +117,7 @@ impl Development {
                 let changed = async {
                     let mut current = Project::load(&project.root)?;
                     current.check_compatibility()?;
+                    crate::infrastructure::project::i18n::prepare(&current, false)?;
                     if project.snapshot {
                         if current.config.database.path != project.config.database.path {
                             return Err(Error::InvalidConfig(
@@ -306,6 +307,12 @@ fn relevant(path: &Path, root: &Path, output: &Path, data: &Path) -> bool {
     let Ok(relative) = path.strip_prefix(root) else {
         return false;
     };
+    if relative == Path::new("language.schema.json")
+        || (relative.components().count() == 1
+            && relative.to_string_lossy().starts_with(".language.schema."))
+    {
+        return false;
+    }
     !relative.components().any(|part| {
         part.as_os_str().to_str().is_some_and(|name| {
             matches!(name, ".git" | ".kenvoy" | "node_modules" | "target")

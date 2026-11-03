@@ -14,7 +14,7 @@ HttpRuntime 持有 Application IR、generation、client 目录、不可变 JavaS
 
 配置文件为 kenvoy.toml，按项目根解析入口、数据库和输出路径。默认入口 src/app.tsx、监听 127.0.0.1:3000、数据库 data/app.sqlite、构建 dist，React/CSR/SQLite 为首版支持实现。端口、provider、framework、render、javascript 等字段严格类型校验；未知字段或不支持值立即报错，解析错误不能退回默认配置继续启动。
 
-配置分 project、application、server、database、frontend、runtime、build 及可选 i18n；敏感值通过运行环境或受控输入提供，不能进入客户端描述和 manifest。生产与开发使用相同项目根和数据库路径规则；禁止用当前进程临时目录替代项目根。原生词典、兼容下限和旧项目行为见[国际化契约](../contracts/i18n.md)。
+配置分 project、application、server、database、frontend、runtime、build、languages；国际化无关闭开关，省略语言表采用固定默认配置，不能跳过根译文校验。敏感值不进入客户端描述和 manifest。生产与开发使用同一项目根和数据库路径规则，禁止用临时目录代替。语言、兼容及旧协议转换见[国际化契约](../contracts/i18n.md)。
 
 输出目录在任何写入前解析绝对路径并检查链接/重解析点：不能是项目根、源码根、数据库目录或它们的危险祖先，不能与持久化目录重叠。数据库不得置于 dist。当前 out_dir 必须是项目内独立目录，外部路径明确拒绝；不以字符串前缀判断目录包含关系。
 
@@ -29,7 +29,7 @@ HttpRuntime 持有 Application IR、generation、client 目录、不可变 JavaS
 | dev | 校验正式链并启动 SQLite/Auth/HTTP、notify、开发状态和可选 Vite 镜像 | 保留数据；链或物理 Schema 改动要求停服重启；一次性快照须显式隔离 |
 | run | 双重兼容/产物检查、必要时构建、顺序迁移和应用激活 | 未固化 Schema、历史异常、领先版本或锁冲突时停止对外服务 |
 | migrate | generate/seal/status/apply/history/baseline | 生成与固化不连接业务库；危险执行须精确确认；旧库只显式接入 |
-| i18n | 只读提取当前默认词条或校验词典/报告缺失键 | 不自动翻译、不覆盖文件、不连接数据库 |
+| i18n | 检查 languages、更新派生 Schema、仅在缺失时创建集中译文并校验 | 不伪造翻译、不覆盖已有译文、不连接数据库 |
 
 已实现 `kenvoy admin init --username <name>` 与 `admin add-user --username <name> --role user|admin`。本机终端隐藏密码并二次确认，自动化必须显式 `--password-stdin`；不提供密码命令参数，不写凭据日志。账号创建使用事务和已有管理员检查，重复初始化不能覆盖已有账号。详细输入限制见 [安全设计](security-design.md)。
 
@@ -61,7 +61,7 @@ React 默认转义文本；不允许从描述注入原始 HTML、危险 URL、�
 
 ## 通用 React Runtime 与 Admin
 
-客户端接收格式 2 的 ClientApplicationDescription：页面 ID、route/title、组件树、字段约束、资源/动作 ID、模块注册 ID、展示权限及已授权原生词典。宿主 Application IR 仍为 1；语言只影响显示副本，不参与 Schema 哈希、权限或 API generation。注册表选择 text/number/boolean/date/select/form/table 等通用组件，自定义 UI 以组件类型注册，并由 React 渲染以保留 Hooks 语义。事件引用通过明确 ID 与模块桥接，不把函数序列化成 JSON。
+客户端接收格式 3 的 ClientApplicationDescription：页面/路由/组件、字段约束、资源/动作 ID、模块注册、权限及词典 Bundle 2。词典包含 fallback、代码/别名/display 定义和规范代码映射；别名在装载时消歧，切换语言不改业务标识、权限或 generation。宿主 Application IR 仍为 1。注册表选择通用组件，自定义 UI 保留 React Hooks 语义，函数不序列化进 JSON。
 
 React Router Declarative Mode 负责客户端匹配，原生 CSS tokens 统一布局。表单有加载、字段错误、提交中、成功与失败状态；请求完成前防重复提交，服务端始终重验。number/日期/空值转换与 Resource 规则一致，不信任浏览器原生校验足够完备。
 
@@ -96,7 +96,7 @@ flowchart TD
   D -->|收尾失败| REC[保留已提交运行态并停用失败代理]
 ```
 
-监听项目内 TSX/TS/JS、mts/cts、CSS、配置、词典 JSON 和已支持静态资产，忽略独立数据/输出目录以及 .git/target/node_modules/.kenvoy/.env；词典配置及解析后的目录不得落入排除范围。事件以内容 hash 合并；当前使用 RecommendedWatcher，没有自动 PollWatcher 回退。源码、数据及输出必须彼此独立，不能把数据库直接配置在项目根。数据库路径、输出目录、host/port/public_origin 改动要求重启，其余合法配置按候选重新分析。
+监听项目内 TSX/TS/JS、mts/cts、CSS、配置、根 translations.json 和已支持资产，忽略独立数据/输出目录及 .git/target/node_modules/.kenvoy/.env。language.schema.json 及其原子更新临时文件不触发构建；重新读取 languages 后先刷新 Schema、验证译文，再形成有效候选。事件按内容 hash 合并，当前 RecommendedWatcher 没有 PollWatcher 回退。数据库/输出/host/port/public_origin 改动要求重启，其余合法配置按候选重新分析。
 
 标题/布局及普通 UI/CSS 修改保持原热更新流程，不重新初始化 SQLite。Schema 改变但未固化迁移时构建拒绝；已经固化新链也须停服后重启 dev，以免旧服务与新迁移位置混用。开发快照同样不隐式重建，结构变化须选择新的隔离空路径。
 
@@ -110,7 +110,7 @@ Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，�
 
 ## build 与 run
 
-产物保存为 dist/manifest.json 和 dist/versions/构建ID/，每个版本含 application.ir、client/index.html/assets、modules/server.json、完整 migrations.json 和私有 i18n.json。Manifest 格式为 3，独立核验框架版本/指纹、应用名称与版本、最低 CLI/项目格式、i18n_config_hash、开发快照标识、哈希协议及文件清单；配置身份必须匹配。宿主源码位置转换为相对路径，浏览器描述不包含这些位置。页面/API 来自 Application IR，不生成重复业务 Controller 或独立页面源码。旧产物协议明确拒绝，不能因源码格式兼容就直接运行。
+产物位于 dist/manifest.json 与 dist/versions/构建ID/，版本目录含 application.ir、client/index.html/assets、modules/server.json、migrations.json 和私有 i18n.json。Manifest 格式为 4，分别核验框架版本/指纹、项目身份/兼容、languages_config_hash、快照身份、哈希协议及文件清单；旧产物拒绝。i18n.json 保存 Bundle 2 的规范代码词典，不能代替部署根 translations.json 的必需检查。宿主源码位置转换为相对路径，浏览器描述不包含路径；不生成重复业务 Controller。
 
 构建使用 OS 文件锁与独占 staging，校验后只追加版本目录，再通过临时文件及 rename 激活清单；不清空活动产物、不清理业务数据。已有同 ID 文件内容不一致则拒绝覆盖，外来输出目录也拒绝接管。单文件最多 32 MiB、总计 256 MiB、最多 10000 文件；拒绝路径链接、越根和大小写别名冲突。旧版本不自动回收。
 
@@ -118,17 +118,17 @@ Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，�
 
 | 标识 | 算法与规范化范围 | 排除内容 |
 |---|---|---|
-| `sha256-input-v3` | 规范相对路径及排序输入文件哈希、受检配置、CLI/框架指纹、快照身份；包括正式迁移和词典文件 | 时间戳、数据库、数据目录、环境密钥、缓存、依赖安装目录、构建输出 |
-| `sha256-build-v3` | Manifest 固定字段（含 i18n 配置摘要）、输入指纹、排序的完整交付文件大小/哈希及依赖版本的确定性 JSON；不含自身 build_id | 构建时间、进程与机器临时路径 |
+| `sha256-input-v4` | 规范路径、排序输入文件哈希、CLI/框架指纹、快照身份；含 kenvoy.toml、正式迁移和 translations.json | 时间戳、数据库/数据目录、环境密钥、缓存/依赖安装、构建输出、派生 language.schema.json 及其更新临时文件 |
+| `sha256-build-v4` | Manifest 固定字段（含 languages 配置摘要）、输入指纹、排序交付文件大小/哈希及依赖版本的确定性 JSON；不含自身 build_id | 构建时间、机器临时路径 |
 | `sha256-schema-v1` | 排序的 SchemaModel JSON 的 SHA-256；类型/默认值/约束/索引进入结构，枚举排序、零值规范化 | 标签、词典、源码位置、应用版本和字段显示顺序；保持旧 Schema 哈希字节契约 |
 
 构建前后比较输入指纹；迁移链读取也位于该窗口内。Schema 哈希不代表数据迁移完成，迁移 ID/checksum 独立推进。
 
-`i18n_config_hash` 为固定协议标记 `kenvoy-i18n-config-v1` 与可选配置元组的确定性 JSON 的 SHA-256；语言顺序和配置内容保留，TOML 排版不作为语义。词典内容另由完整文件摘要和输入指纹覆盖。无源码部署仍须保持配置摘要一致；`i18n.json` 与模块包、迁移清单一样不是公开静态目录。
+`languages_config_hash` 为协议标记 `kenvoy-languages-config-v1` 与完整配置的确定性 JSON 的 SHA-256，语言按代码排序，保留 alias/display 与 fallback。根译文另进入输入摘要，产物规范化词典进入文件摘要；无源码加载再次校验根文件并与产物 Bundle 比较。i18n.json、模块包和迁移清单不在公开静态目录；自动生成的 Schema 不参与构建身份。
 
 源码存在时，run 校验输入指纹及产物完整性，缺失/过期才构建；构建失败不静默运行旧产物。无需事先 build。用户依赖缺失须显式 --install-deps，不能隐式补装或修改其声明。
 
-只有产物的部署保留匹配配置、完整 manifest/版本目录和独立 data 目录即可，不要求源码 migrations/ 存在。宿主先验证项目/CLI 与产物协议、链格式/执行器和目标 Schema，再由数据库线程取得跨进程锁、核验实际结构/历史并逐步执行待办。每步独立提交，空库执行完整链；现存未接入库必须先显式 baseline，领先版本拒绝自动降级。校验和备份/危险确认规则见[迁移执行协议](../operations/migration-design.md)。
+无源码部署保留匹配配置、translations.json、完整 manifest/版本目录和独立 data 目录，不要求源码 migrations/。宿主先检查语言配置、更新 language.schema.json 并校验根译文，缺文件/引用或内容无效都在应用代码和数据库访问前失败。之后验证项目/CLI、产物与链/目标，再取得生命周期锁核对数据库、逐步执行。每步独立提交，空库执行全链；现存未接入库须 baseline，领先版本拒绝自动降级。备份/确认见[迁移执行协议](../operations/migration-design.md)。
 
 迁移提交之后才绑定业务端口并初始化完整运行态；就绪条件为监听端口已取得、模型/认证/JavaScript/可选开发任务初始化成功。`<数据库>.kenvoy-startups.jsonl` 追加 `migrated`、`ready`、`startup_failed`、`runtime_failed`、`stopped` 或 `shutdown_failed`，包含应用版本、构建哈希、CLI 版本及当时真实迁移位置。迁移成功但应用失败明确报告“数据库已迁移，应用未就绪”；此前成功步骤不会自动回滚，也不会自动恢复备份。迁移恢复始终读取 SQLite 成功记录，而非启动日志。
 

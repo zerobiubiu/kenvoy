@@ -12,7 +12,7 @@
 
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
-| [CLI 当前行为](cli-design.md) | 参考 | 项目创建、检查与解析结果、原生 i18n 提取/检查、迁移、账号管理、dev/build/run、依赖安装、产物部署、退出和日志 |
+| [CLI 当前行为](cli-design.md) | 参考 | 项目创建/检查、i18n Schema 更新与译文初始化/校验、迁移、账号、dev/build/run、依赖与产物部署、退出/日志 |
 | [正式迁移与旧库接入](migration-design.md) | 参考 | 生成/固化、冻结规则、完整链交付、双重确认、逐步事务、备份、显式基线、快照与生命周期锁 |
 | [Git、版本标签与产品发布](releasing.md) | 参考 | dev/main 双分支、自动本地 tag、main 当前版本自动发布及手动兜底、单目标下载 artifact、六目标 registry 构建与安装边界 |
 | [多渠道软件包发布](distribution-channels.md) | 参考 | npm、Homebrew、Scoop、WinGet、Chocolatey、AUR、APT/RPM/Alpine/Arch Pages 仓库的产物流、Secret 与外部审核边界 |
@@ -21,7 +21,7 @@
 
 1. 首次使用先读[项目 README](../../README.md)准备环境，再读[CLI 当前行为](cli-design.md)选择源码运行或完整产物运行方式。
 2. 启动或部署前核对[项目配置契约](../contracts/project-configuration.md)，尤其是持久化路径、监听地址、对外 Origin 与运行信任设置。
-   多语言启用和词典维护联读[原生国际化契约](../contracts/i18n.md)，`i18n extract/check` 不访问数据库或自动覆盖翻译文件。
+   原生语言始终启用；配置与集中译文联读[语言契约](../contracts/i18n.md)。`kenvoy i18n` 更新 Schema，仅缺译文文件时初始化，不覆盖已有翻译或访问数据库。
 3. 变更数据模型前先读[迁移执行协议](migration-design.md)，再按 CLI 文档进行只读预览；破坏性操作的确认与备份不能替代数据有效性检查。
 4. 排查实现问题时进入[Runtime 设计](../architecture/runtime-design.md)、[数据库设计](../architecture/database-design.md)和[安全设计](../architecture/security-design.md)；复现验证的方法与工具前置条件见[工程流程](../development/engineering-workflow.md)。
 5. 发布操作者阅读[发布操作](releasing.md)及[版本日志](../changes/CHANGELOG.md)，各次对外操作的事实与限制从编号变更记录进入。

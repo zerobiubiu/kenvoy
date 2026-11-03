@@ -28,6 +28,7 @@
 | [changes/0025：dev/run 优雅退出](../changes/0025-graceful-shutdown.md#执行验证记录) | 已执行；Windows 基础/自定义 dev、生产 run 的真实 Ctrl+C，端口/子进程/临时目录清理与定向测试；Unix SIGTERM 与超时路径未实测 | [Runtime 设计](../architecture/runtime-design.md)、[CLI](../operations/cli-design.md)、[前端 Runtime](../architecture/frontend-runtime.md) |
 | [changes/0026：应用兼容与正式迁移](../changes/0026-application-migration-lifecycle.md#执行验证记录) | 已执行；SemVer/产物、真实临时 CLI/SQLite/HTTP、分步恢复、启动失败、进程互斥、无源码交付、旧库与快照边界；范围以正文命令为准 | [迁移操作](../operations/migration-design.md)、[配置契约](../contracts/project-configuration.md)、[测试策略](../development/testing-strategy.md) |
 | [changes/0027：项目原生国际化](../changes/0027-native-project-i18n.md#执行验证记录) | 已执行；真实 CLI/HTTP/SQLite、词典/产物边界、前端语言/格式化回归及隔离浏览器；具体命令与限制以正文为准 | [原生国际化](../contracts/i18n.md)、[客户端描述](../contracts/application-ir.md)、[前端 Runtime](../architecture/frontend-runtime.md) |
+| [changes/0028：强制语言与集中译文](../changes/0028-mandatory-languages-and-schema.md#执行验证记录) | 已执行；配置/别名、真实 Schema、初始化与启动阻断、文件保护、设备语言及集中词典交付；实际范围见正文 | [语言契约](../contracts/i18n.md)、[配置](../contracts/project-configuration.md)、[CLI](../operations/cli-design.md) |
 
 ## 初始审查与准备计划
 

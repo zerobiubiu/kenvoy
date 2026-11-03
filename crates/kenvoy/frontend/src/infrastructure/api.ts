@@ -51,7 +51,7 @@ function isNavigation(value: unknown, depth = 0): boolean {
   return value.type === 'group' && nullableString(value.label) && Array.isArray(value.items) && value.items.every(item => isNavigation(item, depth + 1));
 }
 function isApplication(value: unknown): value is ApplicationDescription {
-  return isObject(value) && value.format_version === 2 && isI18nBundle(value.i18n) && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
+  return isObject(value) && value.format_version === 3 && isI18nBundle(value.i18n) && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
     && (value.component_overrides === undefined || (isObject(value.component_overrides) && Object.entries(value.component_overrides).every(([key, id]) => ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'file', 'image', 'form', 'table', 'group', 'page'].includes(key) && typeof id === 'string')))
     && (!Object.hasOwn(value, 'development') || typeof value.development === 'boolean')
     && Array.isArray(value.pages) && value.pages.every(page => isObject(page) && typeof page.path === 'string' && typeof page.title === 'string' && role(page.permission) && Array.isArray(page.components) && page.components.every(node => isComponent(node)))

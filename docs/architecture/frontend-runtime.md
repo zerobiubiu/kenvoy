@@ -40,11 +40,11 @@ React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的
 
 ### 原生国际化
 
-Runtime 自动装配 I18nProvider，公共页面、后台、登录、字段帮助、错误、上传和辅助标签共用语言状态；自定义组件直接从 `@kenvoy/client` 使用 `useI18n()`，不接入另一套 Provider。多语言时顶部加入带可见标签的原生 select，单语言保持原布局；选择同步 lang/dir/title，只改变客户端偏好，不刷新 Session、应用 generation 或未提交字段。
+Runtime 自动装配 I18nProvider，公共页面、后台、错误及 SDK 共用强制语言状态。每次打开/刷新按 navigator.language 精确代码匹配，不支持或不可读时 fallback；不再让历史 localStorage 或基础语言猜测覆盖设备默认。原生 select 显示 languages 中明确的 display，代码与别名统一解析成代码；页内切换同步 lang/dir/title，不重载、刷新 Session、提升 generation 或重置草稿。
 
-显示层按[原生词条契约](../contracts/i18n.md)翻译授权描述，原始标识、约束和规范提交值不变。数字/日期使用缓存 Intl 格式器，日历日期与带时区时间分别处理，RTL 使用逻辑布局属性。业务词典与模型同代交付，源目录和私有 i18n.json 不作为公共静态资源。
+显示层按[原生词条契约](../contracts/i18n.md)消费 Bundle 2，根 translations.json 的每个词条必须完整覆盖配置语言；服务端根据代码/别名规范化，再按已授权原生键投影。HTTP 描述为 3，原始标识、约束和规范提交值不变。Intl 只格式化展示，RTL 用逻辑方向，语言不改变时区。
 
-中英文系统文案和机器错误默认词条以同一份框架 JSON 同时供前端与 CLI 提取消费。自定义开发代理只额外放行这四份固定内置 JSON，不开放用户任意 JSON、配置或私有缓存；生产仍只服务 client/。真实浏览器验收及首次开发代理 404 的修复见 [0027](../changes/0027-native-project-i18n.md)，不以打包成功代替开发页面可用证明。
+中英文系统及错误文案保留框架 JSON；旧 CLI 提取器已删除。开发代理只放行四份固定内置 JSON，不公开任意项目 JSON、translations.json 或配置；生产仅服务 client/。0.3.0 首次代理修复保留于 [0027](../changes/0027-native-project-i18n.md)，强制配置和集中译文的现行验证见 [0028](../changes/0028-mandatory-languages-and-schema.md)。
 
 
 ### 开发状态与恢复

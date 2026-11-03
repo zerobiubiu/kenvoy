@@ -2,6 +2,17 @@
 
 状态：参考；治理：持续维护的版本概要。详细执行事实保留在编号变更记录中，不以本页替代验证证据。
 
+## 0.4.0
+
+发布状态：待发布；仅 dev 本地实施，未合并 main、未推送或发布。Kenvoy CLI 为 0.4.0，KEngine 保持 0.2.0。
+
+- 国际化强制开启，使用 languages 的代码/可选唯一 alias/必填 display 与仅代码 fallback，移除旧可选 i18n 配置和分语言目录协议。
+- 根 translations.json 集中保存完整语言矩阵；生成 draft 2020-12 language.schema.json，明确必需的 `$schema` 引用与每语言代码/别名 oneOf，使用真实 Schema 引擎校验，不伪造译文。
+- `kenvoy i18n` 更新 Schema、仅缺失时初始化译文；dev/run 先检查并更新 Schema，缺少译文或无效内容时在业务启动前阻断。旧 extract/check 子命令移除。
+- 页面按设备默认语言精确匹配，不支持时 fallback；使用 configured display，不再优先历史偏好；页内切换仍保留状态。
+- 项目格式仅支持 `>=0.4.0, <0.5.0`，最低 CLI 为 0.4.0；产物 4、HTTP 描述 3、词典 Bundle 2；Application IR 1、Schema 哈希 v1 及已固化迁移不变。无源码部署也必须携带匹配的 translations.json。
+- 五个示例及回归同步迁移，详细实施与验证见 [0028](0028-mandatory-languages-and-schema.md)；0027 保留为旧方案实施事实，不再代表现行配置。
+
 ## 0.3.0
 
 发布状态：待发布；dev 本地实现，未合并 main、未推送或发布。Kenvoy CLI 递增至 0.3.0，KEngine 保持 0.2.0。

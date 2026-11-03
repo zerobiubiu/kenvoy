@@ -47,11 +47,8 @@ pub(crate) enum Command {
         #[command(subcommand)]
         action: Option<MigrationCommand>,
     },
-    /// 原生词条提取和语言词典检查；不写入数据库或覆盖词典。
-    I18n {
-        #[command(subcommand)]
-        action: Option<I18nCommand>,
-    },
+    /// 校验 languages、更新语言 Schema，缺失时创建集中译文文件；不覆盖已有译文。
+    I18n,
     /// 初始化管理员或由本机项目所有者创建账号。
     Admin {
         #[command(subcommand)]
@@ -145,17 +142,5 @@ pub(crate) enum MigrationCommand {
         rules: Option<PathBuf>,
         #[arg(long)]
         confirm: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
-pub(crate) enum I18nCommand {
-    /// 检查词典并报告各语言缺失条目；缺失单个词条将使用回退文案。
-    Check,
-    /// 输出当前 DSL 默认词条及框架文案的平面 JSON，不覆盖已有翻译文件。
-    Extract {
-        /// 选择已配置语言的框架内置文案，业务默认文案仍来自当前声明。
-        #[arg(long)]
-        locale: Option<String>,
     },
 }

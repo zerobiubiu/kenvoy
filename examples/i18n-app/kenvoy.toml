@@ -1,8 +1,8 @@
 [project]
 name = "i18n-app"
 version = "0.1.0"
-min_cli_version = "0.3.0"
-format_version = "0.3.0"
+min_cli_version = "0.4.0"
+format_version = "0.4.0"
 
 [application]
 entry = "src/app.tsx"
@@ -18,7 +18,13 @@ path = "data/app.sqlite"
 [build]
 out_dir = "dist"
 
-[i18n]
-default_locale = "zh-CN"
-locales = ["zh-CN", "en-US"]
-messages_dir = "locales"
+[languages]
+fallback = "zh-CN"
+
+[languages.zh-CN]
+alias = "cn"
+display = "简体中文"
+
+[languages.en-US]
+alias = "en"
+display = "English"

@@ -12,6 +12,18 @@ pub(super) const PASSWORD: &str = "isolated-i18n-password-5824";
 pub(super) fn project(label: &str) -> TestResult<Fixture> {
     let fixture = Fixture::new(label)?;
     fixture.create()?;
+    fs::write(
+        fixture.project().join("translations.json"),
+        serde_json::to_vec_pretty(&json!({
+            "$schema":"./language.schema.json",
+            "app.name":{"cn":"客户管理系统","en":"Customer management","ko":"고객 관리"},
+            "resources.customers.label":{"zh-CN":"客户","en-US":"Customers","ko-KR":"고객"},
+            "resources.customers.fields.name.label":{"cn":"客户姓名","en":"Customer name","ko":"고객 이름"},
+            "resources.customers.fields.phone.label":{"zh-CN":"联系电话","en-US":"Phone","ko-KR":"전화번호"},
+            "resources.customers.fields.age.label":{"cn":"年龄","en":"Age","ko":"나이"},
+            "pages./customers.title":{"cn":"客户登记","en":"Customer registration","ko":"고객 등록"}
+        }))?,
+    )?;
     Ok(fixture)
 }
 
@@ -40,7 +52,7 @@ pub(super) fn version(fixture: &Fixture, manifest: &Value) -> TestResult<PathBuf
 }
 
 pub(super) fn archive_sources(fixture: &Fixture) -> TestResult {
-    for name in ["src", "locales", "migrations", ".kenvoy"] {
+    for name in ["src", "migrations", ".kenvoy"] {
         let path = fixture.project().join(name);
         if path.exists() {
             fs::rename(path, fixture.root().join(format!("archive-{name}")))?;

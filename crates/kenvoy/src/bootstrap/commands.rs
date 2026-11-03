@@ -17,9 +17,7 @@ use crate::{
         persistence::sqlite as database,
         project::{self, Project},
     },
-    interfaces::cli::{
-        self, AccountRole, AdminCommand, Cli, Command, I18nCommand, MigrationCommand,
-    },
+    interfaces::cli::{self, AccountRole, AdminCommand, Cli, Command, MigrationCommand},
 };
 
 pub(crate) async fn execute(cli: Cli) -> Result<()> {
@@ -43,14 +41,15 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
     }
     project.check_compatibility()?;
     let mut session = AnalysisSession::new();
-    if let Command::I18n { action } = cli.command {
-        return i18n::execute(&project, &mut session, action.unwrap_or(I18nCommand::Check));
+    if let Command::I18n = cli.command {
+        return i18n::execute(&project);
     }
     if let Command::Run {
         install_deps,
         confirm,
     } = cli.command
     {
+        project::i18n::prepare(&project, false)?;
         database::snapshot::reject(&project.database)?;
         let shutdown = Shutdown::install();
         let output = if project.entry.is_file() {
@@ -85,6 +84,7 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
         confirm,
     } = cli.command
     {
+        project::i18n::prepare(&project, false)?;
         if let Some(path) = snapshot {
             project.use_snapshot(&path)?;
         }

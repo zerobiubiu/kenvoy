@@ -34,7 +34,7 @@ cargo xtask browser
 
 测试只创建唯一临时项目及数据库，清理限于本测试拥有的目录和进程。网络测试绑定 loopback/系统空闲端口。API mock 只测试客户端错误处理，不能证明真实数据闭环；浏览器验收必须连接真实 Kenvoy。Windows 子进程 SIGTERM 是强制终止，不能将其称为 Ctrl+C 优雅退出。
 
-所有阶段报告记录执行环境、命令、退出码、失败与修复、未覆盖项目。历史 `p01..p05` 是技术探针；其中依赖已退役 tools 前端的浏览器用例移除，由测试成员中的七套正式应用流程接替。其余 Rust 独立测试保留。显式忽略的跨工具测试必须单独调用，不能计入普通 cargo test 的通过数量。严格 Clippy 的剩余告警不能用 allow 或公开无意义接口掩盖。
+所有阶段报告记录执行环境、命令、退出码、失败与修复、未覆盖项目。历史 `p01..p05` 的旧前端浏览器探针已由测试成员的正式应用流程接替；当前有八套显式浏览器入口（含新增 i18n），不把存在入口等同于本轮已执行。其余 Rust 独立测试保留。忽略的跨工具测试必须单独调用，不能计入普通 cargo test 的通过数量；严格 Clippy 不能用 allow 或无意义公开接口掩盖。
 
 跨层重构另保留旧 CLI 基线，逐字比较示例 `inspect` 与 `--help`；用重构前真实程序创建独立 SQLite/会话/附件，再由新程序读取并比较记录与文件字节。结构门禁不能替代运行回归；本轮实际证据见 [0016](../changes/0016-ddd-structure-and-module-split.md)，不据此扩大平台或真实 Ctrl+C 验收范围。
 
@@ -62,10 +62,12 @@ cargo xtask browser
 
 ## 原生国际化验收
 
-词典配置和只读工具回归位于 `crates/kenvoy/tests/i18n_cli/`，跨层入口为 `crates/kenvoy-tests/tests/native_i18n.rs`，场景在 `i18n_support/`；前端纯规则位于 `frontend/tests/i18n*.test.mjs`。沿用上文工程入口和唯一临时项目，不操作用户词典或业务库。
+配置、Schema 与 CLI 回归在 `crates/kenvoy/tests/i18n_cli/`，跨层入口为 `crates/kenvoy-tests/tests/native_i18n.rs`，场景位于 `i18n_support/`；前端纯规则在 `frontend/tests/i18n*.test.mjs`。所有文件写入及数据库试验使用自有临时副本。
 
-必须分别核对：旧未启用配置保持单中文；显式格式/最低版本门禁；重复/损坏/缺失词典及排除目录拒绝；默认 DSL 提取不被旧翻译反向覆盖；授权词条不泄露；词典改动改变构建身份但不改变 Schema 或迁移；格式 3 产物在无源码和词典目录时仍能运行。
+必须分别核对：国际化无关闭路径；fallback 只接受代码，display 必填，alias 唯一且不与代码碰撞；生成的 draft 2020-12 Schema 用 oneOf 拒绝双键、漏语言、未知键和空值；解析器拒绝重复 JSON 键；顶层仅 `$schema` 合法；i18n 不覆盖已有译文，Schema 字节不变时不重写；dev/run 缺译文或引用时更新 Schema 后停止且不建库；派生 Schema 不改输入指纹或自激热更。
 
-浏览器覆盖自动语言与切换器、中文/英文/RTL、表单草稿和自定义 Hooks 保留、数字/日期样式、参数转义、内置错误与实际规范写入。仅打包成功不能证明自定义 dev 可用：真实浏览器必须成功加载内置 JSON 的 Vite 模块，并保持任意用户 JSON/私有文件拒绝。现有浏览器夹具明确设置 zh-CN，不能让系统语言漂移改变旧断言，也不把忽略的浏览器套件计入普通 Rust 通过数量。
+无源码部署必须保留 root translations 并与打包 Bundle 相同；HTTP 按授权投影，词典改变不改 Schema 或迁移。浏览器验证设备默认语言的精确匹配/不可用兜底、忽略历史 localStorage、配置 display、代码/别名译文、刷新重置与页内草稿/Hooks 保留。系统中文/英文、RTL、Intl 样式和规范值的旧回归继续保持；真实开发代理仍只放行内置 JSON，不公开任意项目文件。
 
-本次真实命令、失败修复、桌面/窄屏范围及未覆盖项见[实施记录 0027](../changes/0027-native-project-i18n.md)；不以历史阶段计数替代当前结果。
+集中语言的可重复浏览器入口为 `cargo test -p kenvoy-tests --test browser --locked -- i18n --ignored --exact`，需先按工程入口构建并指定真实 KENVOY_BINARY；受宿主浏览器配置限制时使用提供的浏览器能力验收，并如实记录该永久套件未执行。
+
+既有浏览器夹具明确 zh-CN，不把忽略套件计入普通 Rust 数量。当前执行命令、实际结果与未覆盖项见[0028](../changes/0028-mandatory-languages-and-schema.md)；[0027](../changes/0027-native-project-i18n.md)是旧可选配置方案的证据，不代表新契约已被历史验证覆盖。

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": {
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "oneOf": [
+          {
+            "required": [
+              "en-US"
+            ]
+          },
+          {
+            "required": [
+              "en"
+            ]
+          }
+        ]
+      },
+      {
+        "oneOf": [
+          {
+            "required": [
+              "zh-CN"
+            ]
+          },
+          {
+            "required": [
+              "cn"
+            ]
+          }
+        ]
+      }
+    ],
+    "properties": {
+      "cn": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "en": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "en-US": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "zh-CN": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "minProperties": 1,
+  "properties": {
+    "$schema": {
+      "const": "./language.schema.json",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema"
+  ],
+  "type": "object"
+}

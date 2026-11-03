@@ -2,7 +2,7 @@
 
 将 TypeScript/JSX 声明解释为 React 页面、受控 API、管理后台和 SQLite 持久化应用的 Rust 原生 CLI。
 
-当前源码版本为 **0.3.0**，原生国际化与正式迁移契约已在 dev 实施，尚未合并 main 或发布。下列默认安装命令获取已发布版本；需要本次功能时按仓库说明构建 dev 源码，不将本地版本标签当作线上可安装证据。
+当前源码版本为 **0.4.0**，强制原生语言与集中译文契约已在 dev 实施，尚未合并 main 或发布。下列默认安装命令获取已发布版本；需要本次功能时按仓库说明构建 dev 源码，不将本地版本标签当作线上可安装证据。
 
 ## 安装
 
@@ -20,7 +20,7 @@ cargo install kenvoy --locked
 cargo binstall kenvoy
 ```
 
-预编译归档来自 [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)，正式发布提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。0.3.0 尚未发布；交叉编译产物不代表在全部架构完成运行测试。
+预编译归档来自 [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)，正式发布提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。0.4.0 尚未发布；交叉编译产物不代表在全部架构完成运行测试。
 
 ## 创建并运行
 
@@ -35,7 +35,7 @@ kenvoy dev
 
 访问启动日志中的应用地址；未显式声明根页时自动进入当前身份首个可访问页面。默认客户示例的登记页为 `/customers`，后台为 `/admin/customers`。
 
-0.3.0 的 create 同时生成原生 i18n 配置和中英文业务词典。DSL 的标签/标题自动绑定词条，框架提供内置界面翻译、语言选择、数字/日期显示和 `@kenvoy/client` 的 `useI18n()`，不要求应用安装翻译库或编写 Provider。`kenvoy i18n extract/check` 只读提取和检查；词典随完整产物交付，语言不改变业务字段值或数据库结构。旧未启用配置保持单中文。
+国际化始终启用，create 生成 languages 的默认中文/英文/韩文、根 language.schema.json 和 translations.json。语言使用代码、可选唯一别名及必填显示名；设备默认语言不支持时使用 fallback。`kenvoy i18n` 更新 Schema、只在缺失时创建带引用的译文文件，不覆盖已有翻译；dev/run 缺少或校验失败时阻断，不能关闭。DSL/内置界面与 `useI18n()` 共用上下文，业务值及数据库结构不变。旧可选配置与分语言文件须显式迁移；无源码部署也必须携带匹配的 translations.json。
 
 停止 dev 后可运行：
 

@@ -12,7 +12,7 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及 `locales/zh-CN.json`、`locales/en-US.json`；默认项目格式和最低 CLI 为 0.3.0，自动启用原生双语。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖，采用原子 create_dir 及 create_new 文件写入；失败保留本次部分产物并报告路径，不删除未知内容。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；项目格式和最低 CLI 为 0.4.0，languages 默认中文/英文/韩文，国际化始终启用。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
 
 check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 
@@ -31,12 +31,11 @@ inspect 默认输出宿主 Application IR；指定资源输出字段、表名、
 
 ```text
 kenvoy i18n
-kenvoy i18n check
-kenvoy i18n extract
-kenvoy i18n extract --locale en-US
 ```
 
-裸 `i18n` 默认只读检查。`check` 输出语言、默认语言和逐语言缺失键；单条缺失允许回退，损坏词典和缺少整份非默认文件失败。`extract` 向标准输出提取当前声明默认文案及内置系统词条，不自动翻译、不合并或覆盖已有文件、不连接数据库。`--locale` 必须是已配置语言；缺少源码时可读取完整产物。键名、回退与文件维护流程见[原生国际化契约](../contracts/i18n.md)。
+命令先检查 languages 与兼容配置，再更新根 language.schema.json；已有相同 Schema 不重写。translations.json 缺失时独占创建，仅包含 `"$schema":"./language.schema.json"`；已存在则不覆盖。随后按最新生成的 draft 2020-12 Schema 校验引用及每个词条完整的非空语言矩阵，代码与别名只能选一个。无需源码或产物，不编译应用或连接数据库；旧 extract/check 子命令已移除。
+
+dev/run 启动时重复配置、Schema 和译文检查，但不创建 translations.json；缺失时提示该命令或手工带引用创建。坏文件在数据库创建、迁移和应用代码执行前阻断。详见[原生语言契约](../contracts/i18n.md)。
 
 
 ## 数据库迁移
@@ -57,7 +56,7 @@ kenvoy migrate baseline --at <基线步骤ID>
 kenvoy migrate baseline --at <基线步骤ID> --rules rules.json --confirm <接入报告checksum>
 ```
 
-默认 status 只读核对正式链与数据库；数据库不存在时不创建文件。generate 比较上一正式 Schema 与当前受检 IR，seal 验证并追加固化候选，两者不连接业务数据库。apply 只执行固化链，逐步事务提交，危险计划要求当前执行 checksum 和一致性备份；显式规则可处理改名、回填、转换及数据断言，不猜测业务意图。baseline 单独进行只读报告与确认接入，不伪造历史。history 不编译源码，不要求兼容门禁通过，输出 `applied`、`baseline` 和 `legacy_history`；语法或旧配置问题不妨碍读取真实审计记录。具体规则文件与恢复操作见[迁移执行协议](migration-design.md)。
+默认 status 只读核对正式链与数据库；数据库不存在时不创建文件。generate 比较上一正式 Schema 与当前受检 IR，seal 验证并追加固化候选，两者不连接业务数据库。apply 只执行固化链，逐步事务提交，危险计划要求当前执行 checksum 和一致性备份；显式规则处理改名、回填、转换及断言，不猜测业务意图。baseline 单独报告与确认，不伪造历史。history 不编译源码、不要求版本门禁通过、不读取译文，但 kenvoy.toml 仍须可解析且路径/语言配置有效；输出 applied、baseline 和 legacy_history。旧配置语法或已移除字段须先按诊断转换，不能把“绕过版本门禁”理解为忽略配置解析。规则见[迁移执行协议](migration-design.md)。
 
 ## 账号管理
 
@@ -85,15 +84,15 @@ kenvoy run --confirm <status 的 confirmation_checksum>
 kenvoy dev --snapshot dev-snapshots/try.sqlite
 ```
 
-dev 先校验兼容性并构建有效候选，再按正式迁移链初始化 SQLite、Auth、QuickJS 和 Axum，输出真实应用与管理登录 Origin。notify 监听源码、配置、迁移和受支持资产；180ms 去抖后按内容指纹构建。语法、字段、边界、构建或迁移错误保留最后有效页面与数据库。数据库、输出目录、监听地址、public_origin、正式链或物理 Schema 变更要求停服后重启；未固化 Schema 不会静默写库。显式快照只允许隔离空路径，其数据和产物不能直接用于正式 run。
+dev 先完成兼容性、languages 与根译文预检，再构建候选并按正式迁移链初始化 SQLite、Auth、QuickJS 和 Axum。notify 监听源码、配置、译文、迁移及受支持资产，派生语言 Schema 不自激重建。坏配置、译文、源码、构建或迁移候选保留最后有效页面和数据库。数据/输出/监听路径、正式链或物理 Schema 变更须停服重启；未固化结构不静默写库，隔离开发快照不能直接用于 run。
 
 启动日志中的应用 Origin 可直接访问：未声明 `/` 页面时，根地址加载 Runtime 并进入当前身份的首个可访问页面，无可访问页面则显示登录页；显式根页仍按声明权限处理。未知页面、API 和私有文件不会因此开放或返回页面壳。
 
 仅使用内置 DSL 的项目直接使用 CLI 携带的 React 原生 CSS Runtime，不启动 Node/Vite。自定义组件使用已验证源文件和资产的开发镜像，候选发布后才通知 Vite 更新；浏览器通过同一个 Kenvoy Origin 访问代理与 HMR。正式组件/CSS 状态保持与错误恢复已验收，详见 [运行时设计](../architecture/runtime-design.md)。
 
-build 不连接业务数据库，也不补迁移。它检查完整项目、词典和正式链目标，构建客户端及服务端函数包，写入独立版本目录，验证文件清单、大小和哈希后激活格式 3 的 dist/manifest.json。输出包括 application.ir、client/、modules/server.json、完整 migrations.json 与私有 i18n.json；旧产物和持久化数据不自动清理。已有非框架管理的输出目录拒绝接管。
+build 不连接业务数据库，也不补迁移。它检查完整项目、集中译文和正式链，构建客户端与服务端包，验证后激活格式 4 的 dist/manifest.json。输出包含 application.ir、client/、modules/server.json、migrations.json 与规范化私有 i18n.json；旧产物和持久化数据不自动清理，未知输出目录拒绝接管。
 
-run 不要求事先执行 build。源码存在时核对输入指纹、项目/CLI 双重兼容及独立产物协议，缺失或过期才构建；失败返回错误，不静默运行旧产物。源码不存在时加载已验证产物，部署只需要 CLI、匹配的 kenvoy.toml、完整 dist 和独立数据目录，不依赖源码 migrations/ 或词典目录。空库也执行完整链；已有库必须是有效前缀。生产不启动 watcher、Vite 或 HMR，开发状态与代理路由返回 404。没有源码时 inspect、admin、i18n 和 migrate status/apply 可使用产物；check、inspect --generic、迁移生成及固化需要源码。
+run 不要求事先 build。源码存在时校验输入与产物身份，缺失或过期才构建；失败不静默运行旧产物。无源码部署需要 CLI、匹配的 kenvoy.toml、根 translations.json、完整 dist 和独立数据目录，不需要源码或 migrations/。Schema 可在启动时重建，但缺根译文仍阻断，规范化内容不得与产物不同。空库执行完整迁移链；生产不启动 watcher/Vite/HMR，开发端点为 404。inspect、admin 和 migrate status/apply 在无源码时可使用产物；i18n 只需配置，check、inspect --generic、迁移生成/固化仍需要源码。
 
 三个命令都支持显式 --install-deps，为已经声明但缺失的用户 npm 依赖安装提供入口；没有该参数则缺失依赖明确报错。框架使用隔离的锁定工具链缓存，不修改用户 package.json，不读取用户 Vite 配置，不运行用户 npm 生命周期脚本。基础 DSL 和已有完整生产产物不要求 Node。构建缓存命中不重复安装全部依赖。
 

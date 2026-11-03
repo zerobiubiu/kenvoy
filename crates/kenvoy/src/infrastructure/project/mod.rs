@@ -57,9 +57,20 @@ impl Project {
         let root = root.canonicalize().map_err(|error| io(root, error))?;
         let path = root.join("kenvoy.toml");
         let source = fs::read_to_string(&path).map_err(|error| io(&path, error))?;
-        let config: Config =
-            toml::from_str(&source).map_err(|source| Error::Config { path, source })?;
+        let config: Config = toml::from_str(&source).map_err(|source: toml::de::Error| {
+            if source.message().starts_with("unknown field `i18n`") {
+                Error::InvalidConfig(format!(
+                    "不再支持旧 [i18n] 配置：{source}\n请手工转换为 [languages] 与根 translations.json，保留 \"$schema\":\"./language.schema.json\" 并为每个词条补齐所有配置语言；将项目格式和最低 CLI 声明为 0.4.0 或受支持的更高版本，再执行 kenvoy i18n。既有 sealed 迁移不得改写。"
+                ))
+            } else {
+                Error::Config { path, source }
+            }
+        })?;
         config.server.resolve_origin(config.server.port)?;
+        config
+            .languages
+            .validate()
+            .map_err(|error| Error::InvalidConfig(error.to_string()))?;
         if config.project.name.trim().is_empty()
             || config.project.name.chars().any(char::is_control)
         {
@@ -126,7 +137,6 @@ impl Project {
             out_dir,
             snapshot: false,
         };
-        i18n::messages_dir(&project)?;
         Ok(project)
     }
 }

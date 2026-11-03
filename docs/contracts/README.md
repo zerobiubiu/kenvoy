@@ -23,7 +23,7 @@
 | [项目配置与路径规则](project-configuration.md) | 参考 | `kenvoy.toml` 默认值、严格校验、路径保护、开发重载和生产部署输入。 |
 | [组件重载、数据绑定与联动选项](component-bindings.md) | 参考 | 系统组件重载、字段及表单绑定、静态与跨资源选项接口、权限和 `@kenvoy/client` SDK。 |
 | [多文件上传与图片展示](file-uploads.md) | 参考 | file 数组、SQLite 附件绑定与清理、上传/访问授权、图片节点及 SDK Image。 |
-| [kenvoy 项目原生国际化](i18n.md) | 参考 | 语言配置、自动词条、内置界面与 SDK、回退/格式化、提取检查、权限投影与无源码交付。 |
+| [kenvoy 项目原生国际化](i18n.md) | 参考 | 强制 languages、代码/别名/display、集中译文、生成 Schema、设备语言、SDK、权限投影与无源码交付。 |
 
 ## 推荐阅读顺序
 

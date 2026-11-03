@@ -28,6 +28,11 @@ pub fn input_fingerprint(project: &Project) -> Result<String> {
                 continue;
             }
             let name = entry.file_name().to_string_lossy().into_owned();
+            if folder == project.root
+                && (name == "language.schema.json" || name.starts_with(".language.schema."))
+            {
+                continue;
+            }
             if matches!(
                 name.as_str(),
                 ".git" | ".kenvoy" | "node_modules" | "target"

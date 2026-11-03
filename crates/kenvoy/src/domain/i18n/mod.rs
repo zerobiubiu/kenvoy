@@ -1,6 +1,6 @@
-//! 原生词典及展示词条规则；不读配置、文件或业务数据。
+//! 原生语言配置与规范化词典的纯规则；不读取文件或业务数据。
+mod config;
 mod decode;
-mod defaults;
 mod locale;
 
 #[cfg(test)]
@@ -10,17 +10,26 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-pub use defaults::defaults;
+pub use config::LanguagesConfig;
 
-pub const I18N_BUNDLE_VERSION: u32 = 1;
-pub const DEFAULT_LOCALE: &str = "zh-CN";
+pub const I18N_BUNDLE_VERSION: u32 = 2;
+pub const DEFAULT_FALLBACK: &str = "zh-CN";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct LanguageOption {
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
+    pub display: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct I18nBundle {
     pub format_version: u32,
-    pub default_locale: String,
-    pub locales: Vec<String>,
+    pub fallback: String,
+    pub languages: Vec<LanguageOption>,
     #[serde(deserialize_with = "decode::messages")]
     pub messages: BTreeMap<String, BTreeMap<String, String>>,
 }
@@ -31,11 +40,25 @@ pub struct I18nError(pub String);
 
 impl Default for I18nBundle {
     fn default() -> Self {
+        let config = LanguagesConfig::default();
+        let mut messages = BTreeMap::new();
+        let languages = config
+            .definitions
+            .into_iter()
+            .map(|(code, definition)| {
+                messages.insert(code.clone(), BTreeMap::new());
+                LanguageOption {
+                    code,
+                    alias: definition.alias,
+                    display: definition.display,
+                }
+            })
+            .collect();
         Self {
             format_version: I18N_BUNDLE_VERSION,
-            default_locale: DEFAULT_LOCALE.into(),
-            locales: vec![DEFAULT_LOCALE.into()],
-            messages: BTreeMap::from([(DEFAULT_LOCALE.into(), BTreeMap::new())]),
+            fallback: config.fallback,
+            languages,
+            messages,
         }
     }
 }
@@ -48,48 +71,40 @@ impl I18nBundle {
                 self.format_version
             )));
         }
-        validate_locales(&self.default_locale, &self.locales)?;
-        for locale in &self.locales {
-            if !self.messages.contains_key(locale) {
-                return Err(I18nError(format!("i18n 词典缺少已配置语言 {locale}")));
-            }
-        }
-        for (locale, messages) in &self.messages {
-            if !self.locales.contains(locale) {
+        config::validate(
+            &self.fallback,
+            self.languages.iter().map(|language| {
+                (
+                    language.code.as_str(),
+                    language.alias.as_deref(),
+                    language.display.as_str(),
+                )
+            }),
+        )?;
+        for language in &self.languages {
+            if !self.messages.contains_key(&language.code) {
                 return Err(I18nError(format!(
-                    "i18n 词典语言 {locale} 未在 locales 中声明"
+                    "i18n 词典缺少已配置语言 {}",
+                    language.code
                 )));
             }
-            if messages.keys().any(String::is_empty) {
-                return Err(I18nError(format!("i18n 词典 {locale} 的消息键不能为空")));
+        }
+        if self.messages.len() != self.languages.len() {
+            return Err(I18nError("i18n 词典包含 languages 未声明的语言".into()));
+        }
+        let reference = &self.messages[&self.fallback];
+        for (code, messages) in &self.messages {
+            if messages.keys().ne(reference.keys()) {
+                return Err(I18nError(format!(
+                    "i18n 词典 {code} 的消息键必须完整覆盖所有配置语言"
+                )));
+            }
+            if let Some((key, _)) = messages.iter().find(|(_, value)| value.is_empty()) {
+                return Err(I18nError(format!(
+                    "i18n 词典 {code} 的消息 {key:?} 不能为空字符串"
+                )));
             }
         }
         Ok(())
     }
-}
-
-/// 配置与构建产物共同使用同一纯规则，不推定或修改语言标识。
-pub fn validate_locales(default_locale: &str, locales: &[String]) -> Result<(), I18nError> {
-    if locales.is_empty() {
-        return Err(I18nError("i18n.locales 至少需要一种语言".into()));
-    }
-    for (index, locale) in locales.iter().enumerate() {
-        if !locale::valid_locale(locale) {
-            return Err(I18nError(format!(
-                "i18n.locales 包含非法语言 {locale:?}；请使用 zh-CN、en-US 等 BCP 47 语言标识"
-            )));
-        }
-        if locales[..index]
-            .iter()
-            .any(|previous| previous.eq_ignore_ascii_case(locale))
-        {
-            return Err(I18nError(format!("i18n.locales 包含重复语言 {locale}")));
-        }
-    }
-    if !locales.iter().any(|locale| locale == default_locale) {
-        return Err(I18nError(format!(
-            "i18n.default_locale {default_locale:?} 必须与 locales 中的一种语言完全一致"
-        )));
-    }
-    Ok(())
 }

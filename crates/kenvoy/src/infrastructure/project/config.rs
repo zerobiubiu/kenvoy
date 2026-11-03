@@ -2,6 +2,8 @@ use std::{net::IpAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::i18n::LanguagesConfig;
+
 use super::error::{ProjectError as Error, Result};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -14,8 +16,7 @@ pub struct Config {
     pub frontend: FrontendConfig,
     pub runtime: RuntimeConfig,
     pub build: BuildConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub i18n: Option<I18nConfig>,
+    pub languages: LanguagesConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -35,24 +36,6 @@ impl Default for ProjectConfig {
             version: "0.1.0".into(),
             min_cli_version: None,
             format_version: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct I18nConfig {
-    pub default_locale: String,
-    pub locales: Vec<String>,
-    pub messages_dir: PathBuf,
-}
-
-impl Default for I18nConfig {
-    fn default() -> Self {
-        Self {
-            default_locale: "zh-CN".into(),
-            locales: vec!["zh-CN".into(), "en-US".into()],
-            messages_dir: "locales".into(),
         }
     }
 }

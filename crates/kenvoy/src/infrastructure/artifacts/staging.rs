@@ -8,7 +8,7 @@ use std::{
 use super::{
     BUILD_HASH_VERSION, FORMAT_VERSION, INPUT_HASH_VERSION, Loaded, Manifest, Result,
     files::{collect, directory, reject_link, write_new},
-    i18n_config_hash, invalid, io,
+    invalid, io, languages_config_hash,
     load::load_manifest,
     relocate::relocate,
     valid_hash,
@@ -33,7 +33,7 @@ pub struct Staging {
     development_snapshot: bool,
     migrations: catalog::Catalog,
     i18n: I18nBundle,
-    i18n_config_hash: String,
+    languages_config_hash: String,
     _lock: fs::File,
 }
 impl Staging {
@@ -58,7 +58,7 @@ impl Staging {
         migrations.validate()?;
         let i18n = crate::infrastructure::project::i18n::load(project)
             .map_err(|error| invalid(error.to_string()))?;
-        let i18n_config_hash = i18n_config_hash(project)?;
+        let languages_config_hash = languages_config_hash(project)?;
         let cache = directory(&root, &root.join(".kenvoy/artifacts"))?;
         let lock_path = cache.join("build.lock");
         reject_link(&lock_path)?;
@@ -89,7 +89,7 @@ impl Staging {
             development_snapshot: project.snapshot,
             migrations,
             i18n,
-            i18n_config_hash,
+            languages_config_hash,
             _lock: lock,
         })
     }
@@ -158,7 +158,7 @@ impl Staging {
             framework_fingerprint: crate::infrastructure::frontend::FRAMEWORK_FINGERPRINT.into(),
             build_id: String::new(),
             input_fingerprint,
-            i18n_config_hash: std::mem::take(&mut self.i18n_config_hash),
+            languages_config_hash: std::mem::take(&mut self.languages_config_hash),
             files,
             dependencies,
         };

@@ -1,46 +1,50 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { LOCALE_STORAGE_KEY, localeDirection, localeLabel, selectLocale } from '../domain/i18n/locale';
-import { LEGACY_I18N } from '../domain/i18n/model';
-import type { I18n, I18nBundle } from '../domain/i18n/model';
+import { localeDirection, resolveLocale, selectLocale } from '../domain/i18n/locale';
+import { LOADING_I18N } from '../domain/i18n/model';
+import type { I18n, I18nBundle, LanguageOption } from '../domain/i18n/model';
 import { createI18n } from '../domain/i18n/translate';
 
 export interface I18nContextValue extends I18n { setLocale: (locale: string) => void }
-const I18nContext = createContext<I18nContextValue | null>(null);
+type RuntimeI18n = I18nContextValue & { languages: readonly LanguageOption[] };
+const I18nContext = createContext<RuntimeI18n | null>(null);
 
-/** 框架自动装配；语言偏好不访问 API，也不参与 Session、权限和 Schema 代际。 */
-export function I18nProvider({ bundle = LEGACY_I18N, children }: { bundle?: I18nBundle; children: ReactNode }) {
-  const [preference, setPreference] = useState<string | null>(() => {
-    try { return window.localStorage.getItem(LOCALE_STORAGE_KEY); } catch { return null; }
+/** 每次装载只采集设备默认语言；手动选择仅在本页生效，不重载组件或访问存储。 */
+export function I18nProvider({ bundle = LOADING_I18N, children }: { bundle?: I18nBundle; children: ReactNode }) {
+  const [deviceLanguage] = useState<string | undefined>(() => {
+    try { return typeof navigator === 'undefined' ? undefined : navigator.language; } catch { return undefined; }
   });
-  const languages = typeof navigator === 'undefined' ? [] : navigator.languages;
-  const locale = selectLocale(bundle, preference, languages);
+  const [preference, setPreference] = useState<string | null>(null);
+  const locale = resolveLocale(preference, bundle.languages) ?? selectLocale(bundle, deviceLanguage);
   const i18n = useMemo(() => createI18n(bundle, locale), [bundle, locale]);
   const setLocale = useCallback((next: string) => {
-    if (!bundle.locales.includes(next)) return;
-    setPreference(next);
-    try { window.localStorage.setItem(LOCALE_STORAGE_KEY, next); } catch { /* 禁用存储不阻止本页切换。 */ }
-  }, [bundle.locales]);
+    const code = resolveLocale(next, bundle.languages);
+    if (code) setPreference(code);
+  }, [bundle.languages]);
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = localeDirection(locale);
   }, [locale]);
-  const value = useMemo(() => ({ ...i18n, setLocale }), [i18n, setLocale]);
+  const value = useMemo(() => ({ ...i18n, languages: bundle.languages, setLocale }), [i18n, bundle.languages, setLocale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
-export function useI18n(): I18nContextValue {
+function useRuntimeI18n(): RuntimeI18n {
   const value = useContext(I18nContext);
   if (!value) throw new Error('useI18n 必须在 Kenvoy Runtime 内使用');
   return value;
 }
 
+export function useI18n(): I18nContextValue {
+  return useRuntimeI18n();
+}
+
 export function LocaleSelector() {
-  const { locale, locales, setLocale, t } = useI18n();
-  if (locales.length < 2) return null;
+  const { locale, languages, setLocale, t } = useRuntimeI18n();
+  if (languages.length < 2) return null;
   return <label className="kv-locale"><span>{t('ui.language')}</span>
     <select value={locale} onChange={event => setLocale(event.target.value)}>
-      {locales.map(language => <option key={language} value={language} lang={language}>{localeLabel(language)}</option>)}
+      {languages.map(language => <option key={language.code} value={language.code} lang={language.code}>{language.display}</option>)}
     </select>
   </label>;
 }

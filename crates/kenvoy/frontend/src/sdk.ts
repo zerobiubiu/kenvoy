@@ -16,7 +16,7 @@ export type { FileUploadBinding, FileUploadState } from './application/uploads';
 export { normalizeInput, validateField, validateRecord } from './domain/validation';
 export { useI18n } from './presentation/i18n';
 export type { I18nContextValue } from './presentation/i18n';
-export type { I18n, I18nBundle, I18nFormatters, MessageParams, Translate } from './domain/i18n/model';
+export type { I18n, I18nBundle, I18nFormatters, LanguageOption, MessageParams, Translate } from './domain/i18n/model';
 
 export function callAction(name: string, args: JsonValue[] = []): Promise<JsonValue> {
   return api.executeAction(name, args);

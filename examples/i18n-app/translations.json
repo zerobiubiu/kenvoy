@@ -1,0 +1,111 @@
+{
+  "$schema": "./language.schema.json",
+  "app.name": {
+    "zh-CN": "国际化报名示例",
+    "en-US": "Native i18n registration"
+  },
+  "resources.registrations.label": {
+    "cn": "报名记录",
+    "en": "Registrations"
+  },
+  "resources.registrations.fields.name.label": {
+    "zh-CN": "姓名",
+    "en": "Name"
+  },
+  "resources.registrations.fields.guests.label": {
+    "cn": "同行人数",
+    "en-US": "Guests"
+  },
+  "resources.registrations.fields.session.label": {
+    "zh-CN": "参加场次",
+    "en-US": "Session"
+  },
+  "resources.registrations.fields.session.options.morning.label": {
+    "cn": "上午场",
+    "en": "Morning"
+  },
+  "resources.registrations.fields.session.options.afternoon.label": {
+    "zh-CN": "下午场",
+    "en": "Afternoon"
+  },
+  "resources.registrations.fields.newsletter.label": {
+    "cn": "接收通知",
+    "en-US": "Receive notifications"
+  },
+  "resources.registrations.fields.arrival.label": {
+    "zh-CN": "到访日期",
+    "en-US": "Arrival date"
+  },
+  "pages./register.title": {
+    "cn": "活动报名",
+    "en": "Event registration"
+  },
+  "pages./registrations.title": {
+    "zh-CN": "报名查询",
+    "en": "Registration records"
+  },
+  "text:填写报名信息": {
+    "cn": "填写报名信息",
+    "en-US": "Registration details"
+  },
+  "text:报名导航": {
+    "zh-CN": "报名导航",
+    "en-US": "Registration navigation"
+  },
+  "text:提交报名": {
+    "cn": "提交报名",
+    "en": "Register"
+  },
+  "text:查看报名": {
+    "zh-CN": "查看报名",
+    "en": "View registrations"
+  },
+  "ui.form.submit": {
+    "cn": "提交报名",
+    "en-US": "Submit registration"
+  },
+  "ui.form.another": {
+    "zh-CN": "再报一名",
+    "en-US": "Register another attendee"
+  },
+  "demo.title": {
+    "cn": "原生国际化演示",
+    "en": "Native internationalization demo"
+  },
+  "demo.greeting": {
+    "zh-CN": "你好，{name}！无需自行接入翻译库。",
+    "en": "Hello, {name}! No application i18n library is needed."
+  },
+  "demo.locale": {
+    "cn": "当前语言：{locale}",
+    "en-US": "Current locale: {locale}"
+  },
+  "demo.people.one": {
+    "zh-CN": "演示计数：{count} 人",
+    "en-US": "Demo count: {count} person"
+  },
+  "demo.people.other": {
+    "cn": "演示计数：{count} 人",
+    "en": "Demo count: {count} people"
+  },
+  "demo.add": {
+    "zh-CN": "增加演示计数",
+    "en": "Increase demo count"
+  },
+  "demo.number": {
+    "cn": "数字显示示例",
+    "en-US": "Example number"
+  },
+  "demo.date": {
+    "zh-CN": "日历日期显示示例",
+    "en-US": "Example calendar date"
+  },
+  "demo.datetime": {
+    "cn": "时间显示示例（UTC）",
+    "en": "Example date and time (UTC)"
+  },
+  "demo.note": {
+    "zh-CN": "上方计数只在本页内存中，切换语言后保留；报名表单另行保存到 SQLite。",
+    "en": "The demo count lives only in this page and survives language changes. The registration form is saved separately to SQLite."
+  }
+}

@@ -2,7 +2,7 @@
 
 此示例保留真实客户登记与 SQLite 持久化，同时展示 Schema Component、React Hooks、Props、内联回调捕获、门面模块 CSS、第三方 `clsx`，以及 TypeScript ES Module 异步服务端动作。
 
-首次运行需要 Kenvoy CLI、Node.js 24.22 或更高的兼容版本及配套 npm。在本目录执行：
+首次运行需要 Kenvoy CLI 0.4.0 或以上兼容版本、Node.js 24.22 或更高的兼容版本及配套 npm；项目格式为 0.4.0。在本目录执行：
 
 ```text
 kenvoy check
@@ -18,5 +18,7 @@ kenvoy dev --install-deps
 管理数据前先在本目录执行 `kenvoy admin init --username admin`，按隐藏交互提示设置密码，然后登录 `/admin/login` 并访问 `/admin/customers`。没有默认管理员密码。此示例仅明确开放登记表单提交与纯计算动作；匿名列表、详情、修改和删除仍然禁止。
 
 `CustomerFields.diu.tsx` 参与 Schema 推导，普通 `CustomerCard.tsx` 不参与。`discount.server.ts` 和仅被它依赖的 `math.ts` 不进入浏览器产物；`app.tsx` 的内联回调通过受控词法切片注册，不把整个声明入口打包到浏览器。不要在客户端组件或其 Props 中填写服务端密钥。
+
+本例通过 `[languages]` 显式启用 `zh-CN`，显示名称为“简体中文”。根目录 `translations.json` 仅保留必需的 `$schema` 引用，界面沿用源码默认文案和框架内置中文，原生国际化仍然启用。执行 `kenvoy i18n` 可按配置更新根目录 `language.schema.json` 并校验译文；不会覆盖已有词条或自动翻译。完整规则见[示例总览](../README.md)。
 
 部署和接口边界见[前端 Runtime](../../docs/architecture/frontend-runtime.md)、[JavaScript Runtime](../../docs/architecture/javascript-runtime.md)和[配置规范](../../docs/contracts/project-configuration.md)。

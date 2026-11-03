@@ -1,4 +1,4 @@
-//! 原生词典命令只读取自有临时项目；用真实 Binary 验证提取、配置和旧格式边界。
+//! 用真实 Binary 验证强制集中译文、Schema 生命周期与只读边界。
 
 use std::{
     collections::BTreeMap,
@@ -9,10 +9,12 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 #[path = "i18n_cli/config.rs"]
 mod config;
+#[path = "i18n_cli/translations.rs"]
+mod translations;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 struct Fixture(PathBuf);
@@ -52,13 +54,6 @@ impl Fixture {
         )?;
         Ok(())
     }
-    fn extract(&self) -> Result<Value> {
-        let before = snapshot(&self.project())?;
-        let output = self.command(&["i18n", "extract"])?;
-        success(&output)?;
-        assert_eq!(snapshot(&self.project())?, before, "提取不能改写项目文件");
-        Ok(serde_json::from_slice(&output.stdout)?)
-    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -76,11 +71,11 @@ fn success(output: &Output) -> Result {
     );
     Ok(())
 }
-fn reject(output: &Output, expected: &str) -> Result {
-    assert!(!output.status.success(), "不应接受该词典或配置");
+fn reject(output: &Output) -> Result<String> {
+    assert!(!output.status.success(), "不应接受该译文、配置或命令");
     let diagnostic = String::from_utf8(output.stderr.clone())?;
-    assert!(diagnostic.contains(expected), "{diagnostic}");
-    Ok(())
+    assert!(!diagnostic.trim().is_empty(), "拒绝必须提供诊断");
+    Ok(diagnostic)
 }
 fn snapshot(root: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
     fn visit(root: &Path, path: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) -> Result {
@@ -105,26 +100,40 @@ fn snapshot(root: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
 }
 
 #[test]
-fn create_provides_native_bilingual_messages_and_keeps_application_ir_format_one() -> Result {
+fn create_provides_required_root_files_and_keeps_application_ir_format_one() -> Result {
     let fixture = Fixture::new()?;
     let config = fixture.config()?;
-    assert_eq!(config["i18n"]["default_locale"].as_str(), Some("zh-CN"));
+    assert_eq!(config["project"]["format_version"].as_str(), Some("0.4.0"));
+    assert_eq!(config["project"]["min_cli_version"].as_str(), Some("0.4.0"));
+    assert!(config.get("i18n").is_none());
+    assert!(!fixture.project().join("locales").exists());
+    let translations: Value =
+        serde_json::from_slice(&fs::read(fixture.project().join("translations.json"))?)?;
+    assert_eq!(translations["$schema"], "./language.schema.json");
+    success(&fixture.command(&["i18n"])?)?;
+    let schema: Value =
+        serde_json::from_slice(&fs::read(fixture.project().join("language.schema.json"))?)?;
     assert_eq!(
-        config["i18n"]["locales"].as_array().ok_or("缺少语言列表")?,
-        &[toml::Value::from("zh-CN"), toml::Value::from("en-US")]
+        schema["$schema"],
+        "https://json-schema.org/draft/2020-12/schema"
     );
-    let defaults = fixture.extract()?;
-    let zh: Value =
-        serde_json::from_slice(&fs::read(fixture.project().join("locales/zh-CN.json"))?)?;
-    let en: Value =
-        serde_json::from_slice(&fs::read(fixture.project().join("locales/en-US.json"))?)?;
-    assert_eq!(defaults["app.name"], "客户管理系统");
-    assert_eq!(defaults["pages./customers.title"], "客户登记");
-    assert_eq!(zh["resources.customers.fields.name.label"], "客户姓名");
-    assert_eq!(en["resources.customers.fields.name.label"], "Customer name");
-    assert_eq!(en["pages./customers.title"], "Customer registration");
+    assert_eq!(schema["required"], json!(["$schema"]));
+    assert_eq!(schema["minProperties"], 1);
+    assert_eq!(
+        schema["properties"]["$schema"]["const"],
+        "./language.schema.json"
+    );
+    for key in ["zh-CN", "cn", "en-US", "en", "ko-KR", "ko"] {
+        assert_eq!(
+            schema["additionalProperties"]["properties"][key]["type"],
+            "string"
+        );
+        assert_eq!(
+            schema["additionalProperties"]["properties"][key]["minLength"],
+            1
+        );
+    }
     success(&fixture.command(&["check"])?)?;
-    success(&fixture.command(&["i18n", "check"])?)?;
     let inspected = fixture.command(&["inspect"])?;
     success(&inspected)?;
     let ir: Value = serde_json::from_slice(&inspected.stdout)?;
@@ -136,71 +145,100 @@ fn create_provides_native_bilingual_messages_and_keeps_application_ir_format_one
 }
 
 #[test]
-fn extract_covers_native_display_text_without_reading_database_or_translating_data() -> Result {
+fn first_i18n_creates_only_schema_reference_without_reading_source_or_database() -> Result {
     let fixture = Fixture::new()?;
-    fs::write(
-        fixture.project().join("src/card.tsx"),
-        "export function Card(props: unknown) { return <div/>; }",
+    fs::remove_file(fixture.project().join("translations.json"))?;
+    fs::rename(
+        fixture.project().join("src"),
+        fixture.0.join("source-archive"),
     )?;
-    let source = r#"import {Card} from './card';
-export default <app name="提取验收">
-  <resource name="customers">
-    <text name="name" label="姓名" required default="业务默认值"/>
-    <select name="category" label="类别"><option value="business-code" label="甲类"/></select>
-  </resource>
-  <page path="/customers" title="登记页面">
-    <group label="登记分组"><form resource="customers"/><image src="/private-image.png" alt="图片说明"/>页面说明</group>
-    <Card href="https://private.example/data" payload="不应提取的组件数据"/>
-  </page>
-  <page path="/customers/alias" resource="customers" title="别名页面"><text name="name" label="登记姓名" required default="业务默认值"/><select name="category" label="类别"><option value="business-code" label="甲类"/></select></page>
-  <navigation label="站点导航"><group label="客户分组"><item path="/customers" label="登记入口"/></group></navigation>
-</app>;"#;
-    fs::write(fixture.project().join("src/app.tsx"), source)?;
-    // 非 SQLite 文件会使任何真实数据库打开失败；提取必须完全忽略它。
-    fs::write(
-        fixture.project().join("data/app.sqlite"),
-        b"not-a-sqlite-database\0owned-marker",
-    )?;
-    let extracted = fixture.extract()?;
-    for (key, value) in [
-        ("app.name", "提取验收"),
-        ("resources.customers.label", "customers"),
-        ("resources.customers.fields.name.label", "姓名"),
-        (
-            "resources.customers.fields.category.options.business-code.label",
-            "甲类",
-        ),
-        ("pages./customers.title", "登记页面"),
-        ("text:登记分组", "登记分组"),
-        ("text:图片说明", "图片说明"),
-        ("text:页面说明", "页面说明"),
-        ("text:登记姓名", "登记姓名"),
-        ("text:站点导航", "站点导航"),
-        ("text:客户分组", "客户分组"),
-        ("text:登记入口", "登记入口"),
-    ] {
-        assert_eq!(extracted[key], value, "缺少展示词条 {key}");
+    let schema = fixture.project().join("language.schema.json");
+    if schema.exists() {
+        fs::remove_file(&schema)?;
     }
-    let values = extracted.as_object().ok_or("提取结果必须为平面词典")?;
-    for excluded in [
-        "业务默认值",
-        "business-code",
-        "/private-image.png",
-        "https://private.example/data",
-        "不应提取的组件数据",
-    ] {
-        assert!(
-            values.values().all(|value| value != excluded),
-            "业务值不能被收集：{excluded}"
-        );
+    let database = fixture.project().join("data/app.sqlite");
+    let marker = b"not-a-sqlite-database\0owned-marker";
+    fs::write(&database, marker)?;
+    let initialized = fixture.command(&["i18n"])?;
+    success(&initialized)?;
+    let report: Value = serde_json::from_slice(&initialized.stdout)?;
+    assert_eq!(report["status"], "passed");
+    assert_eq!(report["schema"], "language.schema.json");
+    assert_eq!(report["translations"], "translations.json");
+    assert_eq!(report["schema_updated"], true);
+    assert_eq!(report["translations_created"], true);
+    assert_eq!(report["message_count"], 0);
+    assert_eq!(report["fallback"], "zh-CN");
+    assert_eq!(
+        report["languages"].as_array().ok_or("缺少语言列表")?.len(),
+        3
+    );
+    let translations: Value =
+        serde_json::from_slice(&fs::read(fixture.project().join("translations.json"))?)?;
+    assert_eq!(translations, json!({"$schema":"./language.schema.json"}));
+    assert!(schema.is_file());
+    assert_eq!(fs::read(database)?, marker);
+    assert!(!fixture.project().join("dist").exists());
+    Ok(())
+}
+
+#[test]
+fn i18n_preserves_existing_bytes_and_schema_mtime_when_configuration_is_unchanged() -> Result {
+    let fixture = Fixture::new()?;
+    let path = fixture.project().join("translations.json");
+    let original = b"{\r\n  \"$schema\": \"./language.schema.json\",\r\n  \"custom.title\": {\"zh-CN\":\"Chinese\", \"en\":\"English\", \"ko-KR\":\"Korean\"}\r\n}\r\n";
+    fs::write(&path, original)?;
+    success(&fixture.command(&["i18n"])?)?;
+    let schema_path = fixture.project().join("language.schema.json");
+    let old_time = UNIX_EPOCH + std::time::Duration::from_secs(86_400);
+    for file in [&path, &schema_path] {
+        fs::File::options()
+            .write(true)
+            .open(file)?
+            .set_times(fs::FileTimes::new().set_modified(old_time))?;
     }
-    fs::write(
-        fixture.project().join("src/app.tsx"),
-        source.replace(
-            "<form resource=\"customers\"/><image src=\"/private-image.png\" alt=\"图片说明\"/>",
-            "<image src=\"/private-image.png\" alt=\"图片说明\"/><form resource=\"customers\"/>",
-        ),
+    let schema_time = fs::metadata(&schema_path)?.modified()?;
+    let translation_time = fs::metadata(&path)?.modified()?;
+    let before = snapshot(&fixture.project())?;
+    let repeated = fixture.command(&["i18n"])?;
+    success(&repeated)?;
+    let report: Value = serde_json::from_slice(&repeated.stdout)?;
+    assert_eq!(report["schema_updated"], false);
+    assert_eq!(report["translations_created"], false);
+    assert_eq!(report["message_count"], 1);
+    success(&fixture.command(&["check"])?)?;
+    assert_eq!(snapshot(&fixture.project())?, before);
+    assert_eq!(fs::read(&path)?, original);
+    assert_eq!(fs::metadata(&schema_path)?.modified()?, schema_time);
+    assert_eq!(fs::metadata(&path)?.modified()?, translation_time);
+    assert!(!fixture.project().join("data/app.sqlite").exists());
+    Ok(())
+}
+
+#[test]
+fn i18n_updates_schema_for_configuration_without_rewriting_existing_translations() -> Result {
+    let fixture = Fixture::new()?;
+    let path = fixture.project().join("translations.json");
+    let original = r#"{"$schema":"./language.schema.json","title":{"zh-CN":"标题","en-US":"Title","ko-KR":"제목"}}"#;
+    fs::write(&path, original)?;
+    success(&fixture.command(&["i18n"])?)?;
+    let schema_path = fixture.project().join("language.schema.json");
+    let previous = fs::read(&schema_path)?;
+    let mut config = fixture.config()?;
+    config["languages"] = toml::from_str::<toml::Value>(
+        "fallback='zh-CN'\n[zh-CN]\nalias='china'\ndisplay='中文标题'\n[en-US]\nalias='en'\ndisplay='English'\n[ko-KR]\nalias='ko'\ndisplay='한국어'\n",
     )?;
-    assert_eq!(fixture.extract()?, extracted, "组件重排不能更换词条键");
+    fixture.write_config(&config)?;
+    success(&fixture.command(&["i18n"])?)?;
+    let changed = fs::read(&schema_path)?;
+    assert_ne!(changed, previous);
+    let schema: Value = serde_json::from_slice(&changed)?;
+    let keys = &schema["additionalProperties"]["properties"];
+    assert!(keys.get("china").is_some());
+    assert!(keys.get("cn").is_none());
+    assert_eq!(fs::read_to_string(&path)?, original);
+    success(&fixture.command(&["i18n"])?)?;
+    assert_eq!(fs::read(&schema_path)?, changed);
+    assert!(!fixture.project().join("data/app.sqlite").exists());
     Ok(())
 }

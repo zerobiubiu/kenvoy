@@ -28,7 +28,7 @@ try {
   await page.getByLabel('用户名', { exact: false }).fill('admin');
   await page.getByLabel('密码', { exact: false }).fill(password);
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '客户', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: '张三', exact: true })).toBeVisible();
   await page.getByRole('button', { name: `查看记录 ${zhang.id}`, exact: true }).click();
   await expect(page.getByRole('heading', { name: `记录 ${zhang.id} 的详情` })).toBeVisible();
@@ -135,7 +135,7 @@ try {
   await expect(page.getByRole('button', { name: '选择数据资源' })).toBeFocused();
   await server.stop(); server = await fixture.start();
   await page.goto(server.origin + '/admin/customers');
-  await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '客户', exact: true })).toBeVisible();
   const persisted = await page.request.get(server.origin + `/api/customers/${li.id}`);
   assert.equal(persisted.status(), 200); assert.equal((await persisted.json()).data.age, 30);
   assert.deepEqual(errors, []);

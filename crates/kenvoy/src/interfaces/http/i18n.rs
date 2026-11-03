@@ -64,8 +64,8 @@ pub(super) fn project(bundle: &I18nBundle, application: &Value) -> I18nBundle {
         .collect();
     I18nBundle {
         format_version: bundle.format_version,
-        default_locale: bundle.default_locale.clone(),
-        locales: bundle.locales.clone(),
+        fallback: bundle.fallback.clone(),
+        languages: bundle.languages.clone(),
         messages,
     }
 }

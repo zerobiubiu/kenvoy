@@ -4,7 +4,7 @@
 
 ## 运行
 
-先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy。从仓库根目录执行：
+要求 Kenvoy CLI 0.4.0 或以上兼容版本，项目格式为 0.4.0。先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy。从仓库根目录执行：
 
 ```powershell
 .\target\debug\kenvoy.exe --project examples/uploads-app check
@@ -31,6 +31,8 @@
 ```
 
 两种模式使用同一数据库。`data/`、`.kenvoy/`、`dist/` 和 `node_modules/` 已被本示例的 `.gitignore` 排除；不要删除数据目录来重建前端。
+
+本例通过 `[languages]` 显式启用 `zh-CN`，显示名称为“简体中文”。根目录 `translations.json` 仅含必需的 `$schema` 引用，界面沿用源码默认文案和框架内置中文，原生国际化仍然启用。在示例目录执行 `kenvoy i18n` 会按配置更新 `language.schema.json` 并校验译文，不覆盖已有词条或自动翻译。完整规则见[示例总览](../README.md)。
 
 ## 操作流程
 

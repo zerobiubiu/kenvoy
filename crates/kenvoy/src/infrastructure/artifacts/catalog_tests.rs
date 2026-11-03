@@ -163,7 +163,7 @@ fn old_artifact_formats_are_rejected_even_with_resigned_complete_metadata() -> T
     let output = build(&project, &application)?;
     load(&project)?;
     let mut previous = output.manifest.clone();
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         let mut old = previous.clone();
         old.format_version = version;
         previous = resign(&project, &previous, old)?;
@@ -240,7 +240,7 @@ fn source_free_config_cannot_impersonate_another_project_version() -> TestResult
                 changed.project.min_cli_version =
                     Some(format!("{}+identity.1", env!("CARGO_PKG_VERSION")))
             }
-            "format_version" => changed.project.format_version = Some("0.3.1".into()),
+            "format_version" => changed.project.format_version = Some("0.4.1".into()),
             _ => unreachable!(),
         }
         fs::write(project.root.join("kenvoy.toml"), toml::to_string(&changed)?)?;
@@ -304,5 +304,39 @@ fn fingerprints_cover_all_migration_files_but_not_data_secrets_or_timestamps() -
         fs::write(project.root.join(name), content)?;
         assert_eq!(before, input_fingerprint(&project)?, "{name}");
     }
+    Ok(())
+}
+
+#[test]
+fn generated_language_schema_is_derived_but_translations_change_build_identity() -> TestResult {
+    let (_fixture, project, _) = Fixture::new(true)?;
+    let initial = input_fingerprint(&project)?;
+    let translations_path = project.root.join("translations.json");
+    let original = fs::read(&translations_path)?;
+    fs::write(
+        project.root.join("language.schema.json"),
+        r#"{"outdated":true}"#,
+    )?;
+    assert_eq!(input_fingerprint(&project)?, initial);
+    let prepared = project::i18n::prepare(&project, false)?;
+    assert!(prepared.schema_updated);
+    assert!(!prepared.translations_created);
+    assert_eq!(fs::read(&translations_path)?, original);
+    assert_eq!(input_fingerprint(&project)?, initial);
+    assert!(!project::i18n::prepare(&project, false)?.schema_updated);
+
+    let mut document: serde_json::Value = serde_json::from_slice(&original)?;
+    document["custom.identity"] = project
+        .config
+        .languages
+        .definitions
+        .keys()
+        .map(|code| (code.clone(), serde_json::json!(format!("{code}：新增翻译"))))
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    fs::write(translations_path, serde_json::to_vec(&document)?)?;
+    project::i18n::load(&project)?;
+    assert_ne!(input_fingerprint(&project)?, initial);
+    assert!(!project.database.exists());
     Ok(())
 }

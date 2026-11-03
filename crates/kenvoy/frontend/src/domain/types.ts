@@ -49,7 +49,7 @@ export type Operation = 'create' | 'list' | 'read' | 'update' | 'delete' | 'exec
 export type PermissionTarget = { kind: 'resource' | 'action'; name: string };
 export interface PermissionDefinition { target: PermissionTarget; operation: Operation; fields: string[]; form: string | null }
 export interface ApplicationDescription {
-  format_version: 2;
+  format_version: 3;
   i18n: I18nBundle;
   name: string;
   generation: number;

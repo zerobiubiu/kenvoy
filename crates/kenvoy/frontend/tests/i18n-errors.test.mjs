@@ -4,17 +4,21 @@ import { ApiError } from '../src/application/errors.ts';
 import { FormUploads } from '../src/application/uploads.ts';
 import { ApiClient } from '../src/infrastructure/api.ts';
 import { createI18n } from '../src/domain/i18n/translate.ts';
-import { LEGACY_I18N } from '../src/domain/i18n/model.ts';
+import { LOADING_I18N } from '../src/domain/i18n/model.ts';
 import { translateError } from '../src/domain/i18n/error.ts';
 import { validateField } from '../src/domain/validation.ts';
 
-const configuration = { format_version: 1, default_locale: 'zh-CN', locales: ['zh-CN', 'en-US'], messages: { 'zh-CN': {}, 'en-US': {} } };
+const configuration = {
+  format_version: 2, fallback: 'zh-CN',
+  languages: [{ code: 'zh-CN', alias: 'cn', display: '简体中文' }, { code: 'en-US', alias: 'en', display: 'English' }],
+  messages: { 'zh-CN': {}, 'en-US': {} },
+};
 const english = createI18n(configuration, 'en-US');
 const chinese = createI18n(configuration, 'zh-CN');
 const field = (kind, rules = {}) => ({ name: 'value', label: '值', kind, required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], ...rules });
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', 'x-request-id': 'reference-1' } });
 const session = { user: null, csrf_token: 'a'.repeat(64), expires_at: Math.floor(Date.now() / 1000) + 900, generation: 7 };
-const application = () => ({ format_version: 2, i18n: structuredClone(configuration), name: '应用', role: 'anonymous', generation: 7, resources: [], pages: [], actions: [], navigation: [], permissions: [] });
+const application = () => ({ format_version: 3, i18n: structuredClone(configuration), name: '应用', role: 'anonymous', generation: 7, resources: [], pages: [], actions: [], navigation: [], permissions: [] });
 
 test('规则参数直接驱动错误翻译，无需解析默认中文且切语言不改变校验结果', () => {
   const cases = [
@@ -99,17 +103,31 @@ test('上传控制器保留机器错误供切语言展示，结果未知后仍�
   uploads.dispose();
 });
 
-test('format2描述严拒无词典、旧版本、无效语言与嵌套词条，不悄悄接收损坏协议', async () => {
+test('description3严拒旧版本、无词典、非法元数据和不完整矩阵，不接收损坏协议', async () => {
   const broken = [
-    { ...application(), format_version: 1 }, { ...application(), i18n: undefined },
-    { ...application(), i18n: { ...configuration, format_version: 2 } },
-    { ...application(), i18n: { ...configuration, default_locale: 'fr-FR' } },
+    { ...application(), format_version: 1 }, { ...application(), format_version: 2 }, { ...application(), format_version: 4 },
+    { ...application(), i18n: undefined }, { ...application(), i18n: null },
+    { ...application(), i18n: { ...configuration, format_version: 1 } },
+    { ...application(), i18n: { format_version: 1, default_locale: 'zh-CN', locales: ['zh-CN'], messages: { 'zh-CN': {} } } },
+    { ...application(), i18n: { ...configuration, fallback: 'fr-FR' } },
+    { ...application(), i18n: { ...configuration, languages: [{ code: 'zh-CN', alias: 'cn' }, configuration.languages[1]] } },
     { ...application(), i18n: { ...configuration, messages: { 'zh-CN': {}, 'en-US': { broken: { nested: 'not flat' } } } } },
+    { ...application(), i18n: { ...configuration, messages: { 'zh-CN': {}, 'en-US': { incomplete: 'Missing Chinese' } } } },
+    { ...application(), i18n: { ...configuration, messages: { cn: {}, en: {} } } },
   ];
   for (const value of broken) {
     const client = new ApiClient(async () => json(value));
     await assert.rejects(client.getApplication(), error => error.code === 'KV6002' && !error.outcomeUnknown);
   }
-  const legacy = { ...application(), i18n: LEGACY_I18N };
-  assert.deepEqual(await new ApiClient(async () => json(legacy)).getApplication(), legacy);
+  const defaults = { ...application(), i18n: LOADING_I18N };
+  assert.deepEqual(await new ApiClient(async () => json(defaults)).getApplication(), defaults);
+});
+
+test('description3接受自定义display和可选alias，但只按规范代码接收词典', async () => {
+  const value = application();
+  value.i18n.languages = [{ code: 'zh-CN', display: '项目中文' }, { code: 'en-US', alias: 'English', display: 'Team English' }];
+  value.i18n.messages = { 'zh-CN': { custom: '自定义译文' }, 'en-US': { custom: 'Custom translation' } };
+  const received = await new ApiClient(async () => json(value)).getApplication();
+  assert.deepEqual(received, value);
+  assert.equal(createI18n(received.i18n, 'english').t('custom'), 'Custom translation');
 });

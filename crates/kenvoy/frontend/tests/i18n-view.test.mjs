@@ -1,14 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createI18n } from '../src/domain/i18n/translate.ts';
+import { isI18nBundle } from '../src/domain/i18n/model.ts';
 import { localizeApplication } from '../src/domain/i18n/view.ts';
 import { validateRecord } from '../src/domain/validation.ts';
 
 const field = (name, kind, rules = {}) => ({ name, label: name, kind, required: false, integer: false, min: null, max: null, max_length: null, unique: false, options: [], ...rules });
 const source = () => ({
-  format_version: 2, name: '原始应用', generation: 17, role: 'admin', development: false,
-  i18n: { format_version: 1, default_locale: 'zh-CN', locales: ['zh-CN', 'en-US'], messages: {
-    'zh-CN': {},
+  format_version: 3, name: '原始应用', generation: 17, role: 'admin', development: false,
+  i18n: { format_version: 2, fallback: 'zh-CN',
+    languages: [{ code: 'zh-CN', alias: 'cn', display: '简体中文' }, { code: 'en-US', alias: 'en', display: 'English' }],
+    messages: {
+    'zh-CN': {
+      'app.name': '原始应用', 'resources.entries.label': 'entries',
+      'resources.entries.fields.name.label': '姓名', 'resources.entries.fields.status.label': '状态',
+      'resources.entries.fields.status.options.待确认.label': '待确认', 'pages./客户.title': '客户登记',
+      'text:导航': '导航', 'text:入口': '入口', 'text:分组': '分组', 'text:说明': '说明',
+      'text:姓名覆盖': '姓名覆盖', 'text:照片': '照片', 'text:业务数据': '不替换业务数据',
+      'text:/images/照片.png': '不替换图片地址',
+    },
     'en-US': {
       'app.name': 'Entries', 'resources.entries.label': 'Customer entries',
       'resources.entries.fields.name.label': 'Name', 'resources.entries.fields.status.label': 'Status',
@@ -37,6 +47,7 @@ const source = () => ({
 
 test('自动词条翻译完整声明树，仅改变展示字段且视图不可变', () => {
   const original = source();
+  assert.equal(isI18nBundle(original.i18n), true);
   const before = structuredClone(original);
   const english = localizeApplication(original, createI18n(original.i18n, 'en-US').t);
   assert.equal(english.name, 'Entries');
@@ -86,4 +97,20 @@ test('在双语视图间切换仍接受同一规范payload，展示译文不能�
   assert.equal(validateRecord(english.resources[0], input).ok, true);
   assert.equal(validateRecord(english.resources[0], { ...input, status: 'Pending' }).ok, false);
   assert.equal(JSON.stringify(input), snapshot);
+});
+
+test('metadata-only词典不强制业务自动键，所有语言都保留DSL源码默认展示', () => {
+  const original = source();
+  original.i18n.messages = { 'zh-CN': {}, 'en-US': {} };
+  assert.equal(isI18nBundle(original.i18n), true);
+  for (const { code } of original.i18n.languages) {
+    const localized = localizeApplication(original, createI18n(original.i18n, code).t);
+    assert.equal(localized.name, '原始应用');
+    assert.equal(localized.resources[0].fields[0].label, '姓名');
+    assert.equal(localized.resources[0].fields[1].options[0].label, '待确认');
+    assert.equal(localized.pages[0].title, '客户登记');
+    assert.equal(localized.pages[0].components[0].children[0].value, '说明');
+    assert.equal(localized.pages[0].components[0].children[2].labels.name, '姓名覆盖');
+    assert.equal(localized.navigation[0].items[0].items[0].label, '入口');
+  }
 });

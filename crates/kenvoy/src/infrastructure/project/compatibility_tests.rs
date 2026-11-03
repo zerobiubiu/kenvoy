@@ -34,20 +34,20 @@ fn full_semver_is_required_for_every_project_version_field() {
         ">=1.2.3",
         "18446744073709551616.0.0",
     ] {
-        let mut project = config("0.2.1", "0.2.0");
+        let mut project = config("0.4.0", "0.4.0");
         project.version = invalid.into();
         assert!(
-            check(&project, "0.2.1").is_err(),
+            check(&project, "0.4.0").is_err(),
             "project.version={invalid:?}"
         );
-        let mut project = config(invalid, "0.2.0");
+        let mut project = config(invalid, "0.4.0");
         assert!(
-            check(&project, "0.2.1").is_err(),
+            check(&project, "0.4.0").is_err(),
             "min_cli_version={invalid:?}"
         );
-        project = config("0.2.1", invalid);
+        project = config("0.4.0", invalid);
         assert!(
-            check(&project, "0.2.1").is_err(),
+            check(&project, "0.4.0").is_err(),
             "format_version={invalid:?}"
         );
     }
@@ -57,32 +57,34 @@ fn full_semver_is_required_for_every_project_version_field() {
         "1.2.3+build.9",
         "1.2.3-rc.1+build",
     ] {
-        let mut project = config("0.2.1", "0.2.0");
+        let mut project = config("0.4.0", "0.4.0");
         project.version = valid.into();
-        assert!(check(&project, "0.2.1").is_ok(), "{valid}");
+        assert!(check(&project, "0.4.0").is_ok(), "{valid}");
     }
 }
 
 #[test]
 fn minimum_cli_uses_semver_precedence_not_strings_or_build_metadata() {
     for (cli, minimum, accepted) in [
-        ("0.2.1", "0.2.1", true),
-        ("0.2.9", "0.2.10", false),
-        ("0.2.10", "0.2.9", true),
-        ("0.3.0", "0.2.99", true),
-        ("0.2.1+local", "0.2.1+release", true),
-        ("0.2.1-rc.1", "0.2.1", false),
-        ("0.2.1-rc.1", "0.2.1-rc.1", true),
-        ("0.2.1-beta.2", "0.2.1-beta.11", false),
-        ("0.2.1-beta.11", "0.2.1-beta.2", true),
-        ("0.2.1-alpha", "0.2.1-beta", false),
-        ("0.2.1-rc.1+local", "0.2.1-rc.1+release", true),
-        ("0.2.2-alpha", "0.2.1", true),
-        ("0.2.1", "0.2.1-rc.1", false),
-        ("1.0.0", "0.2.1-rc.1", false),
+        ("0.4.0", "0.4.0", true),
+        ("0.4.9", "0.4.10", false),
+        ("0.4.10", "0.4.9", true),
+        ("0.5.0", "0.4.99", true),
+        ("0.4.1+local", "0.4.1+release", true),
+        ("0.4.1-rc.1", "0.4.1", false),
+        ("0.4.1-rc.1", "0.4.1-rc.1", true),
+        ("0.4.1-beta.2", "0.4.1-beta.11", false),
+        ("0.4.1-beta.11", "0.4.1-beta.2", true),
+        ("0.4.1-alpha", "0.4.1-beta", false),
+        ("0.4.1-rc.1+local", "0.4.1-rc.1+release", true),
+        ("0.4.2-alpha", "0.4.1", true),
+        ("0.4.1", "0.4.1-rc.1", false),
+        ("1.0.0", "0.4.1-rc.1", false),
+        ("0.4.0", "0.3.99", false),
+        ("0.4.0-rc.1", "0.4.0-rc.1", false),
     ] {
         assert_eq!(
-            check(&config(minimum, "0.2.0"), cli).is_ok(),
+            check(&config(minimum, "0.4.0"), cli).is_ok(),
             accepted,
             "CLI={cli}, minimum={minimum}"
         );
@@ -92,27 +94,25 @@ fn minimum_cli_uses_semver_precedence_not_strings_or_build_metadata() {
 #[test]
 fn format_gate_is_independent_from_minimum_cli_gate() {
     for (cli, format, accepted) in [
-        ("0.2.1", "0.1.99", false),
-        ("0.2.1", "0.2.0", true),
-        ("0.2.1", "0.2.999", true),
-        ("0.3.0", "0.3.0", true),
-        ("0.3.0", "0.3.999", true),
-        ("0.3.0", "0.4.0", false),
-        ("0.2.1", "1.0.0", false),
-        ("0.2.1", "0.2.0+schema.1", true),
-        ("0.2.1", "0.2.1-alpha", false),
-        ("0.2.1-alpha", "0.2.0-alpha", false),
-        ("0.2.1-alpha", "0.2.1-alpha", true),
-        ("0.2.1-alpha", "0.3.0-alpha", true),
-        ("0.3.0-alpha", "0.4.0", false),
+        ("0.4.0", "0.3.999", false),
+        ("0.4.0", "0.4.0", true),
+        ("0.4.0", "0.4.999", true),
+        ("0.4.0", "0.5.0", false),
+        ("0.4.0", "1.0.0", false),
+        ("0.4.0", "0.4.0+schema.1", true),
+        ("0.4.0", "0.4.1-alpha", false),
+        ("0.4.1-alpha", "0.4.0-alpha", false),
+        ("0.4.1-alpha", "0.4.1-alpha", true),
+        ("0.4.1-alpha", "0.5.0-alpha", true),
+        ("0.5.0-alpha", "0.5.0", false),
     ] {
         assert_eq!(
-            check(&config("0.2.0", format), cli).is_ok(),
+            check(&config("0.4.0", format), cli).is_ok(),
             accepted,
             "CLI={cli}, format={format}"
         );
     }
-    let error = check(&config("0.9.0", "0.4.0"), "0.3.0")
+    let error = check(&config("0.9.0", "0.5.0"), "0.4.0")
         .expect_err("两个门禁必须同时报告")
         .to_string();
     assert!(error.contains("低于项目要求"));
@@ -126,17 +126,21 @@ fn missing_legacy_fields_stay_missing_and_diagnostic_explains_upgrade() -> TestR
     assert_eq!(legacy.format_version, None);
     assert!(!toml::to_string(&legacy)?.contains("min_cli_version"));
     for missing in ["both", "minimum", "format"] {
-        legacy.min_cli_version = (missing == "format").then(|| "0.2.1".into());
-        legacy.format_version = (missing == "minimum").then(|| "0.2.0".into());
-        let error = check(&legacy, "0.2.1")
+        legacy.min_cli_version = (missing == "format").then(|| "0.4.0".into());
+        legacy.format_version = (missing == "minimum").then(|| "0.4.0".into());
+        let error = check(&legacy, "0.4.0")
             .expect_err("旧配置不能自动补齐")
             .to_string();
         for required in [
-            "实际 Kenvoy CLI：0.2.1",
+            "实际 Kenvoy CLI：0.4.0",
             "最低 CLI：",
             "项目格式：",
-            ">=0.2.0, <0.4.0",
+            ">=0.4.0, <0.5.0",
             "旧配置升级路径",
+            "手工",
+            "[languages]",
+            "translations.json",
+            "sealed",
             "migrate baseline",
             "migrate history",
         ] {
@@ -184,7 +188,7 @@ fn load_keeps_legacy_history_accessible_but_new_templates_are_explicit() -> Test
         new.config.project.min_cli_version.as_deref(),
         Some(env!("CARGO_PKG_VERSION"))
     );
-    assert_eq!(new.config.project.format_version.as_deref(), Some("0.3.0"));
+    assert_eq!(new.config.project.format_version.as_deref(), Some("0.4.0"));
     new.check_compatibility()?;
     Ok(())
 }

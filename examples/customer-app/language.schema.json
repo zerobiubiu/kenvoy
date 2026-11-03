@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": {
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "required": [
+          "zh-CN"
+        ]
+      }
+    ],
+    "properties": {
+      "zh-CN": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "minProperties": 1,
+  "properties": {
+    "$schema": {
+      "const": "./language.schema.json",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema"
+  ],
+  "type": "object"
+}

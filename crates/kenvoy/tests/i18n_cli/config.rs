@@ -1,190 +1,172 @@
-//! 词典输入、路径、语言与项目格式边界。
+//! 语言配置只接受明确代码、唯一别名、非空显示名和当前项目协议。
 
 use std::fs;
 
-use serde_json::{Value, json};
-
 use super::{Fixture, Result, reject, snapshot, success};
 
-#[test]
-fn check_rejects_duplicate_keys_non_string_and_malformed_catalogs_without_writes() -> Result {
-    let fixture = Fixture::new()?;
-    let dictionary = fixture.project().join("locales/en-US.json");
-    for invalid in [
-        r#"{"app.name":"First","app.name":"Second"}"#,
-        r#"{"custom.count":3}"#,
-        r#"{"custom.nested":{"value":"no"}}"#,
-        r#"["not a message map"]"#,
-        r#"{"app.name":"unterminated"#,
-    ] {
-        fs::write(&dictionary, invalid)?;
-        let before = snapshot(&fixture.project())?;
-        for args in [vec!["check"], vec!["i18n", "check"]] {
-            reject(&fixture.command(&args)?, "en-US.json")?;
-        }
-        assert_eq!(snapshot(&fixture.project())?, before);
-        assert!(!fixture.project().join("data/app.sqlite").exists());
-    }
-    Ok(())
+fn languages(fixture: &Fixture, original: &toml::Value, value: &str) -> Result {
+    let mut config = original.clone();
+    config
+        .as_table_mut()
+        .ok_or("配置不是表")?
+        .insert("languages".into(), toml::from_str(value)?);
+    fixture.write_config(&config)
 }
 
-#[test]
-fn check_rejects_catalog_directories_excluded_from_fingerprints_and_watchers() -> Result {
-    let fixture = Fixture::new()?;
-    let original = fixture.config()?;
-    success(&fixture.command(&["i18n", "check"])?)?;
-    for directory in [
-        "target/locales",
-        ".env-locales",
-        "src/target/locales",
-        "src/.env-i18n",
-    ] {
-        let destination = fixture.project().join(directory);
-        fs::create_dir_all(&destination)?;
-        for locale in ["zh-CN", "en-US"] {
-            fs::copy(
-                fixture
-                    .project()
-                    .join("locales")
-                    .join(format!("{locale}.json")),
-                destination.join(format!("{locale}.json")),
-            )?;
-        }
-        let mut config = original.clone();
-        config["i18n"]["messages_dir"] = toml::Value::from(directory);
-        fixture.write_config(&config)?;
-        let before = snapshot(&fixture.project())?;
-        reject(&fixture.command(&["i18n", "check"])?, "messages_dir")?;
-        assert_eq!(snapshot(&fixture.project())?, before);
-    }
-    assert!(!fixture.project().join("data/app.sqlite").exists());
-    Ok(())
-}
-
-#[test]
-fn check_enforces_locale_and_directory_boundaries_but_allows_source_locales() -> Result {
-    let fixture = Fixture::new()?;
-    let original = fixture.config()?;
-    for directory in [
-        "../outside",
-        ".",
-        "data",
-        "data/locales",
-        "dist",
-        "dist/locales",
-        "migrations",
-        "migrations/locales",
-    ] {
-        let mut config = original.clone();
-        config["i18n"]["messages_dir"] = toml::Value::from(directory);
-        fixture.write_config(&config)?;
-        let before = snapshot(&fixture.project())?;
-        reject(&fixture.command(&["check"])?, "messages_dir")?;
-        assert_eq!(snapshot(&fixture.project())?, before);
-    }
-    let mut absolute = original.clone();
-    absolute["i18n"]["messages_dir"] = toml::Value::from(fixture.0.to_string_lossy().into_owned());
-    fixture.write_config(&absolute)?;
-    let before = snapshot(&fixture.project())?;
-    reject(&fixture.command(&["check"])?, "messages_dir")?;
-    assert_eq!(snapshot(&fixture.project())?, before);
-    for (default, locales) in [
-        ("zh-CN", vec!["zh-CN", "zh-cn"]),
-        ("zh-CN", vec!["zh_CN", "en-US"]),
-        ("zh-CN", vec!["zh-CN", "en--US"]),
-        ("zh-CN", vec!["zh-CN", ""]),
-        ("fr-FR", vec!["zh-CN", "en-US"]),
-        ("zh-CN", vec!["zh-CN", "../en-US"]),
-        ("zh-CN", Vec::new()),
-    ] {
-        let mut config = original.clone();
-        config["i18n"]["default_locale"] = toml::Value::from(default);
-        config["i18n"]["locales"] =
-            toml::Value::Array(locales.into_iter().map(toml::Value::from).collect());
-        fixture.write_config(&config)?;
-        reject(&fixture.command(&["check"])?, "i18n")?;
-    }
-    let mut config = original;
-    config["i18n"]["messages_dir"] = toml::Value::from("src/locales");
-    fixture.write_config(&config)?;
-    fs::rename(
-        fixture.project().join("locales"),
-        fixture.project().join("src/locales"),
+fn metadata_only(fixture: &Fixture) -> Result {
+    fs::write(
+        fixture.project().join("translations.json"),
+        r#"{"$schema":"./language.schema.json"}"#,
     )?;
-    success(&fixture.command(&["check"])?)?;
-    success(&fixture.command(&["i18n", "check"])?)?;
-    assert_eq!(
-        fixture.extract()?["resources.customers.fields.name.label"],
-        "客户姓名"
-    );
-    assert!(!fixture.project().join("data/app.sqlite").exists());
     Ok(())
 }
 
 #[test]
-fn missing_default_uses_dsl_fallback_and_missing_nondefault_is_an_error() -> Result {
-    let fixture = Fixture::new()?;
-    fs::remove_file(fixture.project().join("locales/zh-CN.json"))?;
-    success(&fixture.command(&["check"])?)?;
-    let checked = fixture.command(&["i18n", "check"])?;
-    success(&checked)?;
-    let report: Value = serde_json::from_slice(&checked.stdout)?;
-    assert_eq!(report["status"], "passed");
-    assert_eq!(report["default_locale"], "zh-CN");
-    assert_eq!(report["locales"], json!(["zh-CN", "en-US"]));
-    assert!(
-        report["missing"]["zh-CN"]
-            .as_array()
-            .ok_or("缺少默认语言缺失报告")?
-            .contains(&json!("resources.customers.fields.name.label"))
-    );
-    assert_eq!(fixture.extract()?["pages./customers.title"], "客户登记");
-    fs::remove_file(fixture.project().join("locales/en-US.json"))?;
-    reject(&fixture.command(&["check"])?, "en-US")?;
-    reject(&fixture.command(&["i18n", "check"])?, "en-US")?;
-    assert!(!fixture.project().join("data/app.sqlite").exists());
-    Ok(())
-}
-
-#[test]
-fn legacy_format_accepts_new_cli_but_explicit_i18n_needs_both_new_version_declarations() -> Result {
+fn invalid_language_definitions_fail_without_rewriting_project_or_creating_database() -> Result {
     let fixture = Fixture::new()?;
     let original = fixture.config()?;
-    for (format, minimum) in [("0.2.0", "0.2.1"), ("0.2.0", "0.3.0"), ("0.3.0", "0.2.1")] {
+    metadata_only(&fixture)?;
+    for invalid in [
+        "",
+        "fallback='zh-CN'",
+        "enabled=false\n[zh-CN]\ndisplay='中文'",
+        "fallback=''\n[zh-CN]\ndisplay='中文'",
+        "fallback='en'\n[en-US]\nalias='en'\ndisplay='English'",
+        "fallback='fr-FR'\n[zh-CN]\ndisplay='中文'",
+        "[zh-CN]\nalias='cn'",
+        "[zh-CN]\ndisplay=''",
+        "[zh-CN]\ndisplay='   '",
+        "[zh-CN]\ndisplay=3",
+        "[zh-CN]\ndisplay='中文'\nalias=''",
+        "[zh-CN]\ndisplay='中文'\nalias='  '",
+        "[zh-CN]\ndisplay='中文'\nalias=['cn','zh']",
+        "[zh-CN]\ndisplay='中文'\nalias='ZH-cn'",
+        "[zh-CN]\ndisplay='中文'\nalias='english'\n[en-US]\ndisplay='English'\nalias='ENGLISH'",
+        "[zh-CN]\ndisplay='中文'\nalias='EN-us'\n[en-US]\ndisplay='English'",
+        "[zh-CN]\ndisplay='中文'\n[zh-cn]\ndisplay='重复代码'",
+        "[zh_CN]\ndisplay='非法代码'",
+        "[zh-CN]\ndisplay='中文'\n[en--US]\ndisplay='非法代码'",
+        "[zh-CN]\ndisplay='中文'\n['../en-US']\ndisplay='非法代码'",
+        "[zh-CN]\ndisplay='中文'\nunknown='不支持字段'",
+    ] {
+        languages(&fixture, &original, invalid)?;
+        let before = snapshot(&fixture.project())?;
+        for args in [&["check"][..], &["build"][..], &["i18n"][..]] {
+            reject(&fixture.command(args)?)?;
+            assert_eq!(snapshot(&fixture.project())?, before, "{invalid}");
+            assert!(!fixture.project().join("data/app.sqlite").exists());
+        }
+    }
+    fixture.write_config(&original)?;
+    success(&fixture.command(&["i18n"])?)?;
+    success(&fixture.command(&["check"])?)?;
+    Ok(())
+}
+
+#[test]
+fn omitted_languages_uses_defaults_and_explicit_languages_add_no_implicit_entries() -> Result {
+    let fixture = Fixture::new()?;
+    metadata_only(&fixture)?;
+    let mut original = fixture.config()?;
+    original
+        .as_table_mut()
+        .ok_or("配置不是表")?
+        .remove("languages");
+    fixture.write_config(&original)?;
+    success(&fixture.command(&["i18n"])?)?;
+    let path = fixture.project().join("language.schema.json");
+    let schema: serde_json::Value = serde_json::from_slice(&fs::read(&path)?)?;
+    assert_eq!(
+        schema["additionalProperties"]["properties"]
+            .as_object()
+            .ok_or("缺少语言定义")?
+            .len(),
+        6
+    );
+    for valid in [
+        "[zh-CN]\ndisplay='仅中文'",
+        "fallback='en-US'\n[en-US]\nalias='english'\ndisplay='Custom English'",
+        "fallback='ar'\n[ar]\ndisplay='العربية'",
+    ] {
+        languages(&fixture, &original, valid)?;
+        success(&fixture.command(&["i18n"])?)?;
+        success(&fixture.command(&["check"])?)?;
+        let schema: serde_json::Value = serde_json::from_slice(&fs::read(&path)?)?;
+        let count = schema["additionalProperties"]["properties"]
+            .as_object()
+            .ok_or("缺少语言定义")?
+            .len();
+        assert_eq!(count, if valid.contains("alias") { 2 } else { 1 });
+    }
+    assert!(!fixture.project().join("data/app.sqlite").exists());
+    Ok(())
+}
+
+#[test]
+fn obsolete_commands_and_i18n_configuration_are_rejected_without_compatibility_aliases() -> Result {
+    let fixture = Fixture::new()?;
+    let before = snapshot(&fixture.project())?;
+    for command in ["extract", "check"] {
+        reject(&fixture.command(&["i18n", command])?)?;
+        assert_eq!(snapshot(&fixture.project())?, before);
+    }
+    let mut config = fixture.config()?;
+    config.as_table_mut().ok_or("配置不是表")?.insert(
+        "i18n".into(),
+        toml::from_str("default_locale='zh-CN'\nlocales=['zh-CN']\nmessages_dir='locales'")?,
+    );
+    fixture.write_config(&config)?;
+    let before = snapshot(&fixture.project())?;
+    for args in [&["check"][..], &["i18n"][..]] {
+        reject(&fixture.command(args)?)?;
+        assert_eq!(snapshot(&fixture.project())?, before);
+    }
+    Ok(())
+}
+
+#[test]
+fn previous_project_formats_and_minimum_cli_declarations_require_manual_conversion() -> Result {
+    let fixture = Fixture::new()?;
+    let original = fixture.config()?;
+    for (format, minimum) in [
+        ("0.2.0", "0.2.1"),
+        ("0.3.0", "0.3.0"),
+        ("0.3.0", "0.4.0"),
+        ("0.4.0", "0.3.0"),
+    ] {
         let mut config = original.clone();
+        config
+            .as_table_mut()
+            .ok_or("配置不是表")?
+            .remove("languages");
         config["project"]["format_version"] = toml::Value::from(format);
         config["project"]["min_cli_version"] = toml::Value::from(minimum);
         fixture.write_config(&config)?;
         let before = snapshot(&fixture.project())?;
-        for args in [
-            vec!["check"],
-            vec!["i18n", "extract"],
-            vec!["i18n", "check"],
-        ] {
-            reject(&fixture.command(&args)?, "i18n")?;
+        for args in [&["check"][..], &["build"][..], &["i18n"][..]] {
+            reject(&fixture.command(args)?)?;
+            assert_eq!(
+                snapshot(&fixture.project())?,
+                before,
+                "不能自动升级项目协议"
+            );
         }
-        assert_eq!(
-            snapshot(&fixture.project())?,
-            before,
-            "不能自动升级配置数字"
-        );
     }
-    let mut legacy = original;
-    legacy.as_table_mut().ok_or("配置不是表")?.remove("i18n");
-    legacy["project"]["format_version"] = toml::Value::from("0.2.0");
-    legacy["project"]["min_cli_version"] = toml::Value::from("0.2.1");
-    fixture.write_config(&legacy)?;
+    assert!(!fixture.project().join("data/app.sqlite").exists());
+    Ok(())
+}
+
+#[test]
+fn language_configuration_uses_toml_comments_not_javascript_comments() -> Result {
+    let fixture = Fixture::new()?;
+    let path = fixture.project().join("kenvoy.toml");
+    let original = fs::read_to_string(&path)?;
+    fs::write(&path, format!("{original}\n# 正确的 TOML 注释\n"))?;
+    success(&fixture.command(&["i18n"])?)?;
+    fs::write(&path, format!("{original}\n// 非 TOML 注释\n"))?;
     let before = snapshot(&fixture.project())?;
-    success(&fixture.command(&["check"])?)?;
-    let output = fixture.command(&["inspect"])?;
-    success(&output)?;
-    let application: Value = serde_json::from_slice(&output.stdout)?;
-    assert_eq!(application["format_version"], 1);
-    assert_eq!(application["name"], "客户管理系统");
-    assert_eq!(
-        fixture.extract()?["pages./customers.title"],
-        json!("客户登记")
-    );
+    reject(&fixture.command(&["i18n"])?)?;
+    reject(&fixture.command(&["check"])?)?;
     assert_eq!(snapshot(&fixture.project())?, before);
     assert!(!fixture.project().join("data/app.sqlite").exists());
     Ok(())

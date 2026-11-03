@@ -58,7 +58,7 @@ pub(super) fn application(
         })
         .collect();
     let permissions: Vec<_> = application.permissions.iter().filter(|policy|permits(role,policy.role)).filter(|policy|match &policy.target {PermissionTarget::Resource(name)=>visible.contains_key(name),PermissionTarget::Action(_)=>true}).map(|policy|json!({"target":policy.target,"operation":policy.operation,"fields":policy.fields,"form":policy.form})).collect();
-    let mut projection = json!({"format_version":2,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions,"component_overrides":application.component_overrides});
+    let mut projection = json!({"format_version":3,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions,"component_overrides":application.component_overrides});
     let catalog = super::i18n::project(i18n, &projection);
     projection["i18n"] = json!(catalog);
     projection

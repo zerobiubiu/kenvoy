@@ -20,6 +20,8 @@ swc_ecma_transforms_base = "=51.0.0"
 swc_ecma_transforms_typescript = "=57.0.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
+# 保持既有 serde_json 浮点解析特性；升级验证器时同步核查 Cargo feature 合并。
+jsonschema = { version = "=0.33.0", default-features = false }
 thiserror = "=2.0.21"
 rquickjs = { version = "=0.14.0", default-features = false, features = ["std", "loader", "futures"] }
 axum = { version = "=0.8.9", features = ["ws"] }

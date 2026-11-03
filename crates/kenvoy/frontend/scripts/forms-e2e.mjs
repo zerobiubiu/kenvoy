@@ -54,7 +54,7 @@ try {
   await page.getByLabel('用户名', { exact: false }).fill('admin');
   await page.getByLabel('密码', { exact: false }).fill('browser-only-test-password-729');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'customers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '客户', exact: true })).toBeVisible();
   const listed = await page.request.get(server.origin + '/api/customers'); assert.equal(listed.status(), 200);
   assert.equal((await listed.json()).data[0].id, record.id);
   assert.deepEqual(errors, []);

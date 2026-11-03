@@ -1,6 +1,6 @@
 # Application IR 与客户端描述协议
 
-状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述格式 2；实际类型位于 `crates/kenvoy/src/domain/model/mod.rs`。同代发布、文件监听与 build/run 已接入，早期覆盖范围见[生命周期验收](../verification/0011-cli-lifecycle.md)，原生国际化见[0027](../changes/0027-native-project-i18n.md)。
+状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述格式 3；实际类型位于 `crates/kenvoy/src/domain/model/mod.rs`。生命周期的早期证据见[0011](../verification/0011-cli-lifecycle.md)，强制语言与集中译文见[0028](../changes/0028-mandatory-languages-and-schema.md)。
 
 ## 单一业务模型
 
@@ -37,7 +37,7 @@ Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定
 
 客户端投影由 HTTP 显式构造，使用独立格式版本，只包含当前身份可见页面、所需字段约束、导航、动作公开标识以及组件注册表所需信息。它不携带源码、绝对路径、密码哈希、Session、数据库路径、服务端函数实现或环境变量。匿名可见页面所需字段的展示合并不改变单条表单权限规则。
 
-客户端描述格式 2 增加独立格式 1 的 `i18n`（默认语言、语言列表和词典）。宿主 Application IR 仍为 1，DSL 默认文案和 Schema 哈希不因此改变。词典与模型、客户端资产、JavaScript 包同代封存和发布；原生资源/字段/页面词条按当前授权投影过滤，项目自定义公共词条不得包含秘密。语言切换不改变 generation、Session 或服务端权限；详细契约见[原生国际化](i18n.md)。
+客户端描述格式 3 携带格式 2 的 `i18n`：fallback、languages 选项（code、可选 alias、display）及以代码规范化的词典。根集中译文必须完整覆盖配置语言，代码与别名在装载时消歧；投影按当前角色过滤原生资源/字段/页面词条，自定义公共词条不得包含秘密。Application IR 1 与 Schema 哈希不变，语言切换不改 generation、Session 或授权。见[原生语言契约](i18n.md)。
 
 前端通过统一 Runtime 解释页面组件树，通过同一 Field 定义实现创建与编辑表单。Admin 使用相同 Resource 描述，不创建第二套字段模型。服务器仍逐请求验证权限和字段；客户端的允许操作列表只用于展示。
 
@@ -45,7 +45,7 @@ Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定
 
 ## 激活与产物
 
-构建产物格式 3 保存宿主 `application.ir`、`client/` 资产、`modules/server.json`、完整 `migrations.json` 和私有 `i18n.json`，manifest 校验格式、框架版本、配置身份和内容摘要。客户端投影由 HTTP 在运行时按身份构造，没有独立的静态投影文件。结构变更在停服执行已固化迁移后激活模型，不在持久化 dev 热更新时迁移数据库。
+构建产物格式 4 保存 application.ir、client/、modules/server.json、migrations.json 和私有 i18n.json，manifest 校验协议、框架、languages 配置身份和文件摘要。无源码仍须保留匹配根 translations.json，不能仅凭打包词典启动。HTTP 按身份动态投影；结构变更停服执行正式迁移后激活模型，不在持久化 dev 热更新时迁移数据库。
 
 ComponentDefinition 使用 type 字段区分 form/table/group/custom/text/image。Form 包含资源、字段名投影及页面 labels；Image 包含 src、alt、可选 width/height 和 fit，不推导资源字段。PropValue 使用 kind=literal/module 区分 JSON 值和注册 ID。ModuleReference 保存模块导出或表达式来源，属于宿主数据。SourceLocation 仅用于宿主诊断。未知 Application IR 版本反序列化失败；Field.default 区分未声明与显式 null。
 

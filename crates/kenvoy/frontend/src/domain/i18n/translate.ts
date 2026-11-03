@@ -1,4 +1,5 @@
 import { createFormatters } from './format.ts';
+import { resolveLocale } from './locale.ts';
 import type { I18n, I18nBundle, MessageParams } from './model.ts';
 import { SYSTEM_MESSAGES } from './messages.ts';
 
@@ -8,10 +9,10 @@ function systemLocale(locale: string): 'zh-CN' | 'en-US' | undefined {
 }
 
 export function createI18n(bundle: I18nBundle, requestedLocale: string): I18n {
-  const locale = bundle.locales.includes(requestedLocale) ? requestedLocale : bundle.default_locale;
-  const language = systemLocale(locale) ?? systemLocale(bundle.default_locale) ?? 'zh-CN';
-  const defaultLanguage = systemLocale(bundle.default_locale) ?? 'zh-CN';
-  const dictionaries = [[bundle.messages[locale], locale], [bundle.messages[bundle.default_locale], bundle.default_locale],
+  const locale = resolveLocale(requestedLocale, bundle.languages) ?? bundle.fallback;
+  const language = systemLocale(locale) ?? systemLocale(bundle.fallback) ?? 'zh-CN';
+  const defaultLanguage = systemLocale(bundle.fallback) ?? 'zh-CN';
+  const dictionaries = [[bundle.messages[locale], locale], [bundle.messages[bundle.fallback], bundle.fallback],
     [SYSTEM_MESSAGES[language], language], [SYSTEM_MESSAGES[defaultLanguage], defaultLanguage]] as const;
   const plurals = new Map<string, Intl.PluralRules>();
   const t = (key: string, params: MessageParams = {}, fallback?: string): string => {
@@ -33,5 +34,5 @@ export function createI18n(bundle: I18nBundle, requestedLocale: string): I18n {
     return (message ?? fallback ?? key).replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (placeholder, name: string) =>
       Object.hasOwn(params, name) ? String(params[name] ?? '') : placeholder);
   };
-  return { locale, locales: bundle.locales, t, ...createFormatters(locale) };
+  return { locale, locales: bundle.languages.map(language => language.code), t, ...createFormatters(locale) };
 }

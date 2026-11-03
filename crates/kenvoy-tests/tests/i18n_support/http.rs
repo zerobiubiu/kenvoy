@@ -24,60 +24,144 @@ async fn application_metadata_filters_native_messages_for_anonymous_user_and_adm
       <navigation label="公共导航"><item path="/customers" label="公开入口"/><item path="/private" label="隐藏入口"/></navigation>
     </app>;"#,
     )?;
+    let entries = [
+        (
+            "app.name",
+            "词条权限",
+            "Catalog permissions",
+            "تطبيق العملاء",
+        ),
+        ("resources.customers.label", "客户", "Customers", "العملاء"),
+        (
+            "resources.customers.fields.name.label",
+            "客户姓名",
+            "Customer name",
+            "اسم العميل",
+        ),
+        (
+            "resources.customers.fields.phone.label",
+            "私密联系电话",
+            "Confidential phone label",
+            "هاتف خاص",
+        ),
+        (
+            "resources.customers.fields.age.label",
+            "年龄",
+            "Age",
+            "العمر",
+        ),
+        (
+            "resources.unknown.fields.secret.label",
+            "未声明字段",
+            "Undeclared field label",
+            "حقل غير معلن",
+        ),
+        (
+            "pages./customers.title",
+            "公开登记",
+            "Public registration",
+            "تسجيل عام",
+        ),
+        (
+            "pages./private.title",
+            "隐藏页面",
+            "Private review title",
+            "مراجعة خاصة",
+        ),
+        (
+            "pages./missing.title",
+            "未声明页面",
+            "Undeclared page title",
+            "صفحة غير معلنة",
+        ),
+        ("text:公开分组", "公开分组", "Public section", "قسم عام"),
+        ("text:公开说明", "公开说明", "Public help", "مساعدة عامة"),
+        (
+            "text:隐藏分组",
+            "隐藏分组",
+            "Private section label",
+            "قسم خاص",
+        ),
+        (
+            "text:隐藏说明",
+            "隐藏说明",
+            "Private explanation",
+            "شرح خاص",
+        ),
+        ("text:公共导航", "公共导航", "Navigation", "التنقل"),
+        ("text:公开入口", "公开入口", "Register", "التسجيل"),
+        (
+            "text:隐藏入口",
+            "隐藏入口",
+            "Private navigation label",
+            "تنقل خاص",
+        ),
+        (
+            "text:不存在的隐藏原文",
+            "未声明原文",
+            "Undeclared raw message",
+            "نص غير معلن",
+        ),
+        (
+            "custom.public",
+            "客户端文案",
+            "Public client message",
+            "رسالة عامة",
+        ),
+        (
+            "ui.project_hint",
+            "界面提示",
+            "Project UI message",
+            "رسالة الواجهة",
+        ),
+        (
+            "errors.project_rule",
+            "规则提示",
+            "Project rule message",
+            "رسالة القاعدة",
+        ),
+    ];
+    let mut translations = json!({"$schema":"./language.schema.json"});
+    for (key, chinese, english, arabic) in entries {
+        translations[key] = json!({"cn":chinese,"en-US":english,"ar":arabic});
+    }
     fs::write(
-        fixture.project().join("locales/en-US.json"),
-        serde_json::to_vec(&json!({
-            "app.name":"Catalog permissions",
-            "resources.customers.label":"Customers",
-            "resources.customers.fields.name.label":"Customer name",
-            "resources.customers.fields.phone.label":"Confidential phone label",
-            "resources.customers.fields.age.label":"Age",
-            "resources.unknown.fields.secret.label":"Undeclared field label",
-            "pages./customers.title":"Public registration",
-            "pages./private.title":"Private review title",
-            "pages./missing.title":"Undeclared page title",
-            "text:公开分组":"Public section",
-            "text:公开说明":"Public help",
-            "text:隐藏分组":"Private section label",
-            "text:隐藏说明":"Private explanation",
-            "text:公共导航":"Navigation",
-            "text:公开入口":"Register",
-            "text:隐藏入口":"Private navigation label",
-            "text:不存在的隐藏原文":"Undeclared raw message",
-            "custom.public":"Public client message",
-            "ui.project_hint":"Project UI message",
-            "errors.project_rule":"Project rule message"
-        }))?,
+        fixture.project().join("translations.json"),
+        serde_json::to_vec(&translations)?,
     )?;
     fs::write(
         fixture.project().join("kenvoy.toml"),
-        "[project]\nname='app'\nversion='0.1.0'\nmin_cli_version='0.3.0'\nformat_version='0.3.0'\n[server]\nport=0\n[i18n]\ndefault_locale='zh-CN'\nlocales=['zh-CN','en-US','ar']\nmessages_dir='locales'\n",
-    )?;
-    fs::write(
-        fixture.project().join("locales/ar.json"),
-        serde_json::to_vec(&json!({
-            "app.name":"تطبيق العملاء",
-            "resources.customers.fields.name.label":"اسم العميل",
-            "resources.customers.fields.phone.label":"هاتف خاص"
-        }))?,
+        "[project]\nname='app'\nversion='0.1.0'\nmin_cli_version='0.4.0'\nformat_version='0.4.0'\n[server]\nport=0\n[languages]\nfallback='zh-CN'\n[languages.zh-CN]\nalias='cn'\ndisplay='中文界面'\n[languages.en-US]\nalias='en'\ndisplay='Custom English'\n[languages.ar]\ndisplay='العربية'\n",
     )?;
     account(&fixture, "init", "administrator")?;
     account(&fixture, "add-user", "reader")?;
     let mut server = fixture.start("run")?;
     let mut session = Session::new(server.origin()).await?;
     let anonymous = session.get("/_kenvoy/application", StatusCode::OK).await?;
-    assert_eq!(anonymous["format_version"], 2);
+    assert_eq!(anonymous["format_version"], 3);
     assert_eq!(anonymous["role"], "anonymous");
     assert_eq!(
         anonymous["name"], "词条权限",
         "HTTP 默认文案不是根据 Accept-Language 改写的数据"
     );
-    assert_eq!(anonymous["i18n"]["format_version"], 1);
-    assert_eq!(anonymous["i18n"]["default_locale"], "zh-CN");
-    assert_eq!(
-        anonymous["i18n"]["locales"],
-        json!(["zh-CN", "en-US", "ar"])
-    );
+    assert_eq!(anonymous["i18n"]["format_version"], 2);
+    assert_eq!(anonymous["i18n"]["fallback"], "zh-CN");
+    let languages = anonymous["i18n"]["languages"]
+        .as_array()
+        .ok_or("缺少语言列表")?;
+    assert_eq!(languages.len(), 3);
+    for option in [
+        json!({"code":"zh-CN","alias":"cn","display":"中文界面"}),
+        json!({"code":"en-US","alias":"en","display":"Custom English"}),
+        json!({"code":"ar","display":"العربية"}),
+    ] {
+        assert!(
+            languages.contains(&option),
+            "必须保留配置语言信息：{option}"
+        );
+    }
+    assert!(anonymous["i18n"]["messages"].get("cn").is_none());
+    assert!(anonymous["i18n"]["messages"].get("en").is_none());
     assert_eq!(
         anonymous["i18n"]["messages"]["ar"]["app.name"],
         "تطبيق العملاء"
@@ -115,8 +199,13 @@ async fn application_metadata_filters_native_messages_for_anonymous_user_and_adm
         "text:隐藏入口",
         "text:不存在的隐藏原文",
     ];
-    for key in hidden {
-        assert!(public.get(key).is_none(), "匿名投影泄露 {key}");
+    for code in ["zh-CN", "en-US", "ar"] {
+        for key in hidden {
+            assert!(
+                anonymous["i18n"]["messages"][code].get(key).is_none(),
+                "匿名投影泄露 {code}/{key}"
+            );
+        }
     }
     assert!(
         anonymous["pages"]
@@ -135,11 +224,13 @@ async fn application_metadata_filters_native_messages_for_anonymous_user_and_adm
     session.login("reader").await?;
     let reader = session.get("/_kenvoy/application", StatusCode::OK).await?;
     assert_eq!(reader["role"], "user");
-    for key in hidden {
-        assert!(
-            reader["i18n"]["messages"]["en-US"].get(key).is_none(),
-            "普通用户投影泄露 {key}"
-        );
+    for code in ["zh-CN", "en-US", "ar"] {
+        for key in hidden {
+            assert!(
+                reader["i18n"]["messages"][code].get(key).is_none(),
+                "普通用户投影泄露 {code}/{key}"
+            );
+        }
     }
     session.logout().await?;
     session.login("administrator").await?;
@@ -155,7 +246,12 @@ async fn application_metadata_filters_native_messages_for_anonymous_user_and_adm
     assert_eq!(private["text:隐藏说明"], "Private explanation");
     assert_eq!(private["text:隐藏入口"], "Private navigation label");
     assert!(private.get("pages./missing.title").is_none());
-    for path in ["/locales/en-US.json", "/i18n.json", "/_kenvoy/i18n"] {
+    for path in [
+        "/translations.json",
+        "/language.schema.json",
+        "/i18n.json",
+        "/_kenvoy/i18n",
+    ] {
         let response = session
             .client
             .get(format!("{}{path}", server.origin()))

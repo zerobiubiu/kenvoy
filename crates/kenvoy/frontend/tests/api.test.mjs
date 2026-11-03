@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient, developmentChange, fileUrl } from '../src/infrastructure/api.ts';
 import { ApiError } from '../src/application/errors.ts';
-import { LEGACY_I18N } from '../src/domain/i18n/model.ts';
+import { LOADING_I18N } from '../src/domain/i18n/model.ts';
 
 const session = (generation = 1, user = null, csrf = 'a'.repeat(64)) => ({ user, csrf_token: csrf, expires_at: Math.floor(Date.now() / 1000) + 900, generation });
 const record = { id: 1, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', name: '张三' };
-const application = generation => ({ format_version: 2, i18n: structuredClone(LEGACY_I18N), name: '客户管理', role: 'anonymous', generation, pages: [], resources: [], navigation: [], actions: [], permissions: [] });
+const application = generation => ({ format_version: 3, i18n: structuredClone(LOADING_I18N), name: '客户管理', role: 'anonymous', generation, pages: [], resources: [], navigation: [], actions: [], permissions: [] });
 const response = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', 'x-request-id': 'request-test' } });
 function harness(responses) {
   const calls = [];

@@ -6,23 +6,30 @@ use std::{
     fs,
     path::PathBuf,
     process::{Command, Output},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 struct Fixture(PathBuf);
 impl Fixture {
     fn new(app: &str) -> Result<Self> {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let sequence = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "kenvoy-dsl-security-{}-{stamp}",
+            "kenvoy-dsl-security-{}-{stamp}-{sequence}",
             std::process::id()
         ));
         fs::create_dir(&path)?;
         fs::create_dir(path.join("src"))?;
         fs::write(
             path.join("kenvoy.toml"),
-            "[project]\nname='安全验证'\nmin_cli_version='0.2.1'\nformat_version='0.2.0'\n",
+            "[project]\nname='安全验证'\nmin_cli_version='0.4.0'\nformat_version='0.4.0'\n",
+        )?;
+        fs::write(
+            path.join("translations.json"),
+            r#"{"$schema":"./language.schema.json"}"#,
         )?;
         fs::write(path.join("src/app.tsx"), app)?;
         Ok(Self(path))

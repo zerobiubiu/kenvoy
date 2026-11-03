@@ -8,7 +8,7 @@ import { RuntimeContext, useRuntime } from '../presentation/runtime/context';
 import { RuntimePage } from '../presentation/runtime/RuntimePage';
 import { Loading, NativeDialog, Notice } from '../presentation/ui';
 import type { ApplicationDescription, DevelopmentStatus, NavigationItem, SessionView } from '../domain/types';
-import { LEGACY_I18N } from '../domain/i18n/model';
+import { LOADING_I18N } from '../domain/i18n/model';
 import { localizeApplication } from '../domain/i18n/view';
 import { I18nProvider, LocaleSelector, useI18n } from '../presentation/i18n';
 
@@ -222,7 +222,7 @@ export default function App() {
     finally { setLoading(false); }
   }, [refresh]);
   useEffect(() => { void load(); }, [load]);
-  return <I18nProvider bundle={application?.i18n ?? LEGACY_I18N}>
+  return <I18nProvider bundle={application?.i18n ?? LOADING_I18N}>
     <ApplicationView source={application} session={session} failure={failure} loading={loading} load={load} refresh={refresh} />
   </I18nProvider>;
 }

@@ -1,43 +1,165 @@
 use std::collections::BTreeMap;
 
-use serde_json::json;
-
-use super::{I18nBundle, defaults, validate_locales};
-use crate::domain::model::{ApplicationIR, ComponentDefinition};
+use super::{I18nBundle, LanguagesConfig, config::LanguageDefinition};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+fn single(code: &str) -> LanguagesConfig {
+    LanguagesConfig {
+        fallback: code.into(),
+        definitions: BTreeMap::from([(
+            code.into(),
+            LanguageDefinition {
+                alias: None,
+                display: "测试语言".into(),
+            },
+        )]),
+    }
+}
+
 #[test]
-fn legacy_bundle_is_a_valid_single_language_without_project_messages() -> TestResult {
+fn defaults_are_a_valid_mandatory_three_language_bundle() -> TestResult {
+    let config = LanguagesConfig::default();
+    config.validate()?;
+    assert_eq!(config.fallback, "zh-CN");
+    for (code, alias, display) in [
+        ("zh-CN", "cn", "简体中文"),
+        ("en-US", "en", "English"),
+        ("ko-KR", "ko", "한국어"),
+    ] {
+        assert_eq!(config.definitions[code].alias.as_deref(), Some(alias));
+        assert_eq!(config.definitions[code].display, display);
+    }
     let bundle = I18nBundle::default();
     bundle.validate()?;
-    assert_eq!(bundle.default_locale, "zh-CN");
-    assert_eq!(bundle.locales, ["zh-CN"]);
-    assert!(bundle.messages["zh-CN"].is_empty());
+    assert_eq!(bundle.format_version, 2);
+    assert_eq!(bundle.fallback, "zh-CN");
+    assert_eq!(bundle.languages.len(), 3);
+    assert_eq!(bundle.messages.len(), 3);
+    assert!(bundle.messages.values().all(BTreeMap::is_empty));
     Ok(())
 }
 
 #[test]
-fn bundles_reject_unknown_versions_missing_catalogs_and_undeclared_languages() {
+fn explicit_configuration_has_no_implicit_languages_aliases_or_displays() -> TestResult {
+    let config: LanguagesConfig = toml::from_str("[zh-CN]\ndisplay='自定义中文'\n")?;
+    config.validate()?;
+    assert_eq!(config.fallback, "zh-CN");
+    assert_eq!(config.definitions.len(), 1);
+    assert_eq!(config.definitions["zh-CN"].alias, None);
+    for source in [
+        "",
+        "fallback='zh-CN'",
+        "[en-US]\ndisplay='English'",
+        "[zh-CN]\ndisplay=''",
+        "[zh-CN]\ndisplay='  '",
+        "[zh-CN]\ndisplay='中文'\nalias=' '",
+    ] {
+        let invalid: LanguagesConfig = toml::from_str(source)?;
+        assert!(invalid.validate().is_err(), "{source}");
+    }
+    for source in [
+        "[zh-CN]",
+        "[zh-CN]\ndisplay='中文'\nalias=['cn']",
+        "[zh-CN]\ndisplay='中文'\nname='中文'",
+        "[zh-CN]\ndisplay=1",
+    ] {
+        assert!(
+            toml::from_str::<LanguagesConfig>(source).is_err(),
+            "{source}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn aliases_and_codes_share_one_case_insensitive_namespace() {
+    for (code, alias) in [
+        ("zh-CN", "ZH-cn"),
+        ("zh-CN", "en-US"),
+        ("zh-CN", "EN"),
+        ("en-US", "CN"),
+        ("en-US", ""),
+        ("en-US", " \t"),
+    ] {
+        let mut config = LanguagesConfig::default();
+        config.definitions.get_mut(code).unwrap().alias = Some(alias.into());
+        assert!(config.validate().is_err(), "{code}: {alias:?}");
+    }
+    let mut config = LanguagesConfig::default();
+    config.definitions.get_mut("zh-CN").unwrap().alias = Some("Ä".into());
+    config.definitions.get_mut("en-US").unwrap().alias = Some("ä".into());
+    assert!(config.validate().is_err());
+    config = LanguagesConfig::default();
+    config
+        .definitions
+        .insert("zh-cn".into(), config.definitions["zh-CN"].clone());
+    assert!(config.validate().is_err());
+    for fallback in ["cn", "ZH-cn", "fr-FR", ""] {
+        let config = LanguagesConfig {
+            fallback: fallback.into(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_err(), "{fallback}");
+    }
+}
+
+#[test]
+fn bundle_rejects_old_fields_unknown_versions_and_incomplete_message_matrices() -> TestResult {
     let mut bundle = I18nBundle {
-        format_version: 2,
+        format_version: 1,
         ..Default::default()
     };
     assert!(bundle.validate().is_err());
-    bundle.format_version = 1;
-    bundle.locales.push("en-US".into());
+    bundle.format_version = 2;
+    bundle.messages.remove("ko-KR");
     assert!(bundle.validate().is_err());
-    bundle.messages.insert("en-US".into(), BTreeMap::new());
-    assert!(bundle.validate().is_ok());
+    bundle.messages.insert("ko-KR".into(), BTreeMap::new());
     bundle.messages.insert("fr-FR".into(), BTreeMap::new());
     assert!(bundle.validate().is_err());
     bundle.messages.remove("fr-FR");
     bundle
         .messages
-        .get_mut("en-US")
+        .get_mut("zh-CN")
         .unwrap()
-        .insert("".into(), "empty".into());
+        .insert("title".into(), "标题".into());
     assert!(bundle.validate().is_err());
+    for catalog in bundle.messages.values_mut() {
+        catalog.insert("title".into(), "显示文字".into());
+    }
+    bundle.validate()?;
+    bundle
+        .messages
+        .get_mut("ko-KR")
+        .unwrap()
+        .insert("title".into(), String::new());
+    assert!(bundle.validate().is_err());
+    // 权限投影可在所有语言同步删除同一词条。
+    for catalog in bundle.messages.values_mut() {
+        catalog.remove("title");
+    }
+    bundle.validate()?;
+    let mut encoded = serde_json::to_value(&bundle)?;
+    encoded["default_locale"] = "zh-CN".into();
+    assert!(serde_json::from_value::<I18nBundle>(encoded).is_err());
+    Ok(())
+}
+
+#[test]
+fn bundle_language_options_are_strict_and_alias_absence_is_serialized_as_absence() -> TestResult {
+    let mut bundle = I18nBundle::default();
+    bundle.languages[0].alias = None;
+    let encoded = serde_json::to_value(&bundle)?;
+    assert!(encoded["languages"][0].get("alias").is_none());
+    bundle.languages[0].display = " ".into();
+    assert!(bundle.validate().is_err());
+    bundle = I18nBundle::default();
+    bundle.languages.push(bundle.languages[0].clone());
+    assert!(bundle.validate().is_err());
+    let mut encoded = serde_json::to_value(I18nBundle::default())?;
+    encoded["languages"][0]["extra"] = true.into();
+    assert!(serde_json::from_value::<I18nBundle>(encoded).is_err());
+    Ok(())
 }
 
 #[test]
@@ -50,7 +172,7 @@ fn bundle_decoding_rejects_duplicate_languages_messages_and_non_string_values() 
         r#"{"zh-CN":{"label":1}}"#,
     ] {
         let encoded = format!(
-            r#"{{"format_version":1,"default_locale":"zh-CN","locales":["zh-CN"],"messages":{messages}}}"#
+            r#"{{"format_version":2,"fallback":"zh-CN","languages":[{{"code":"zh-CN","display":"中文"}}],"messages":{messages}}}"#
         );
         assert!(
             serde_json::from_str::<I18nBundle>(&encoded).is_err(),
@@ -60,8 +182,8 @@ fn bundle_decoding_rejects_duplicate_languages_messages_and_non_string_values() 
 }
 
 #[test]
-fn locale_rules_allow_portable_intl_tags_and_reject_ambiguous_or_unsafe_identifiers() {
-    for locale in [
+fn language_codes_keep_the_existing_unicode_bcp47_structure_rules() {
+    for code in [
         "zh-CN",
         "en-US",
         "fr",
@@ -76,12 +198,9 @@ fn locale_rules_allow_portable_intl_tags_and_reject_ambiguous_or_unsafe_identifi
         "en-t-zh-hant",
         "hi-Latn-t-en-h0-hybrid",
     ] {
-        assert!(
-            validate_locales(locale, &[locale.into()]).is_ok(),
-            "{locale}"
-        );
+        assert!(single(code).validate().is_ok(), "{code}");
     }
-    for locale in [
+    for code in [
         "",
         "en_US",
         "../en",
@@ -105,104 +224,6 @@ fn locale_rules_allow_portable_intl_tags_and_reject_ambiguous_or_unsafe_identifi
         "en-t-12-abc",
         "en-t-h0-hybrid-h0-other",
     ] {
-        assert!(
-            validate_locales(locale, &[locale.into()]).is_err(),
-            "{locale}"
-        );
+        assert!(single(code).validate().is_err(), "{code}");
     }
-    assert!(validate_locales("zh-CN", &[]).is_err());
-    assert!(validate_locales("zh-CN", &["en-US".into()]).is_err());
-    assert!(validate_locales("zh-CN", &["zh-CN".into(), "zh-cn".into()]).is_err());
-    assert!(validate_locales("zh-cn", &["zh-CN".into()]).is_err());
-}
-
-fn application() -> Result<ApplicationIR, serde_json::Error> {
-    let source = json!({
-        "path": "src/app.tsx",
-        "span": {"start": 0, "end": 1,
-            "start_position": {"line": 1, "column": 1},
-            "end_position": {"line": 1, "column": 2}}
-    });
-    serde_json::from_value(json!({
-        "format_version": 1, "name": "业务应用",
-        "resources": [{"name": "customers", "source": source, "fields": [{
-            "name": "status", "label": "状态", "kind": "select", "required": false,
-            "default": "业务默认值", "integer": false, "min": null, "max": null,
-            "max_length": null, "unique": false, "index": false,
-            "options": [{"value": "pending", "label": "待处理", "when": {"region": "业务过滤值"}}],
-            "options_source": {"resource": "regions", "value": "id", "label": "name",
-                "filters": {"enabled": "flag"}, "permission": "anonymous"},
-            "source": source
-        }]}],
-        "pages": [{"path": "/customers", "title": "客户页面", "permission": "anonymous",
-            "source": source, "components": [{"type": "group", "label": "客户分组", "source": source,
-                "children": [
-                    {"type": "form", "id": "customer-form", "resource": "customers", "mode": "create",
-                        "fields": ["status"], "labels": {"status": "表单状态"}, "source": source},
-                    {"type": "table", "resource": "customers", "columns": ["status"], "source": source},
-                    {"type": "text", "value": "欢迎登记", "source": source},
-                    {"type": "image", "src": "/private-image.png", "alt": "客户图标",
-                        "width": 20, "height": 20, "fit": "contain", "source": source},
-                    {"type": "custom", "module": "Widget", "props": {
-                        "url": {"kind": "literal", "value": "https://example.invalid/private"},
-                        "data": {"kind": "literal", "value": "自定义业务数据"}},
-                        "children": [{"type": "text", "value": "子节点文案", "source": source}], "source": source}
-                ]}]}],
-        "navigation": [{"label": "导航", "source": source, "items": [{"type": "group",
-            "label": "导航分组", "source": source, "items": [
-                {"type": "link", "label": "客户入口", "path": "/customers", "permission": "anonymous", "source": source},
-                {"type": "link", "label": "欢迎登记", "path": "/welcome", "permission": "anonymous", "source": source}
-            ]}]}],
-        "actions": [], "permissions": [], "module_references": []
-    }))
-}
-
-#[test]
-fn defaults_cover_every_known_display_node_without_collecting_business_values() -> TestResult {
-    let application = application()?;
-    let catalog = defaults(&application);
-    let expected = BTreeMap::from([
-        ("app.name", "业务应用"),
-        ("resources.customers.label", "customers"),
-        ("resources.customers.fields.status.label", "状态"),
-        (
-            "resources.customers.fields.status.options.pending.label",
-            "待处理",
-        ),
-        ("pages./customers.title", "客户页面"),
-        ("text:客户分组", "客户分组"),
-        ("text:表单状态", "表单状态"),
-        ("text:欢迎登记", "欢迎登记"),
-        ("text:客户图标", "客户图标"),
-        ("text:子节点文案", "子节点文案"),
-        ("text:导航", "导航"),
-        ("text:导航分组", "导航分组"),
-        ("text:客户入口", "客户入口"),
-    ]);
-    assert_eq!(catalog.len(), expected.len());
-    for (key, value) in expected {
-        assert_eq!(catalog.get(key).map(String::as_str), Some(value), "{key}");
-    }
-    for business_value in [
-        "业务默认值",
-        "业务过滤值",
-        "自定义业务数据",
-        "https://example.invalid/private",
-        "/private-image.png",
-    ] {
-        assert!(!catalog.values().any(|value| value == business_value));
-    }
-    Ok(())
-}
-
-#[test]
-fn text_keys_remain_stable_after_component_and_navigation_reordering() -> TestResult {
-    let mut application = application()?;
-    let before = defaults(&application);
-    if let ComponentDefinition::Group { children, .. } = &mut application.pages[0].components[0] {
-        children.reverse();
-    }
-    application.navigation.reverse();
-    assert_eq!(defaults(&application), before);
-    Ok(())
 }

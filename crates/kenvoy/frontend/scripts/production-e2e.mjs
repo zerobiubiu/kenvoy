@@ -6,9 +6,9 @@ import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture = await projectFixture();
 let browser;
 try {
-  const chinesePath=join(fixture.project,'locales/zh-CN.json');
-  const chinese=JSON.parse(await readFile(chinesePath,'utf8'));delete chinese['pages./customers.title'];
-  await writeFile(chinesePath,JSON.stringify(chinese));
+  const translationsPath=join(fixture.project,'translations.json');
+  const translations=JSON.parse(await readFile(translationsPath,'utf8'));delete translations['pages./customers.title'];
+  await writeFile(translationsPath,JSON.stringify(translations));
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'production-test-password-295\n');
   assert.equal(await stat(join(fixture.project,'dist/manifest.json')).then(()=>true,()=>false),false);
   let server=await fixture.start('run');
@@ -27,9 +27,8 @@ try {
   await page.goto(server.origin+'/customers');await expect(page.getByRole('heading',{name:'生产登记',exact:true})).toBeVisible();
   assert.equal((await page.request.get(server.origin+`/api/customers/${id}`)).status(),200);
   const started=Date.now();await server.stop();
-  // 移动目标都由本夹具创建，且仍在同一个 mkdtemp 根中，保留源码、词典与缓存供最后清理。
+  // 无源码交付仍必须保留根 translations；只移动本夹具拥有的源码与缓存。
   await rename(join(fixture.project,'src'),join(fixture.root,'source-archive'));
-  await rename(join(fixture.project,'locales'),join(fixture.root,'locales-archive'));
   await rename(join(fixture.project,'.kenvoy'),join(fixture.root,'cache-archive'));
   const pathWithoutNode=process.platform==='win32'?join(process.env.SystemRoot,'System32'):'/usr/bin:/bin';
   server=await fixture.start('run',[],45000,{PATH:pathWithoutNode,Path:pathWithoutNode});

@@ -1,7 +1,7 @@
 use std::{fs, io::Write, path::Path};
 
 use super::{
-    config::{Config, I18nConfig},
+    config::Config,
     error::{ProjectError as Error, Result, io},
 };
 
@@ -19,23 +19,38 @@ pub const CUSTOMER_APP: &str = r#"export default (
 );
 "#;
 
-const CUSTOMER_ZH_MESSAGES: &str = r#"{
-  "app.name": "客户管理系统",
-  "resources.customers.label": "客户",
-  "resources.customers.fields.name.label": "客户姓名",
-  "resources.customers.fields.phone.label": "联系电话",
-  "resources.customers.fields.age.label": "年龄",
-  "pages./customers.title": "客户登记"
-}
-"#;
-
-const CUSTOMER_EN_MESSAGES: &str = r#"{
-  "app.name": "Customer management",
-  "resources.customers.label": "Customers",
-  "resources.customers.fields.name.label": "Customer name",
-  "resources.customers.fields.phone.label": "Phone number",
-  "resources.customers.fields.age.label": "Age",
-  "pages./customers.title": "Customer registration"
+const CUSTOMER_TRANSLATIONS: &str = r#"{
+  "$schema": "./language.schema.json",
+  "app.name": {
+    "zh-CN": "客户管理系统",
+    "en-US": "Customer management",
+    "ko-KR": "고객 관리"
+  },
+  "resources.customers.label": {
+    "zh-CN": "客户",
+    "en-US": "Customers",
+    "ko-KR": "고객"
+  },
+  "resources.customers.fields.name.label": {
+    "zh-CN": "客户姓名",
+    "en-US": "Customer name",
+    "ko-KR": "고객 이름"
+  },
+  "resources.customers.fields.phone.label": {
+    "zh-CN": "联系电话",
+    "en-US": "Phone number",
+    "ko-KR": "전화번호"
+  },
+  "resources.customers.fields.age.label": {
+    "zh-CN": "年龄",
+    "en-US": "Age",
+    "ko-KR": "나이"
+  },
+  "pages./customers.title": {
+    "zh-CN": "客户登记",
+    "en-US": "Customer registration",
+    "ko-KR": "고객 등록"
+  }
 }
 "#;
 
@@ -61,28 +76,30 @@ pub fn create(target: &Path) -> Result<()> {
     config.project.name = name.to_owned();
     config.project.min_cli_version = Some(env!("CARGO_PKG_VERSION").into());
     config.project.format_version = Some(super::compatibility::CURRENT_PROJECT_FORMAT.into());
-    config.i18n = Some(I18nConfig::default());
     let encoded =
         toml::to_string_pretty(&config).map_err(|error| Error::InvalidConfig(error.to_string()))?;
+    let mut schema = serde_json::to_string_pretty(&super::i18n::schema(&config.languages)?)
+        .map_err(|error| Error::InvalidConfig(error.to_string()))?;
+    schema.push('\n');
     // 原子保留目标目录，跨平台都不会用 rename 替换已存在的空目录。
     // 中途失败保留本次部分文件供排查，不删除未知内容或再次覆盖。
     fs::create_dir(&target).map_err(|error| io(&target, error))?;
-    for directory in ["src", "data", "locales"] {
+    for directory in ["src", "data"] {
         let path = target.join(directory);
         fs::create_dir(&path).map_err(|error| io(path, error))?;
     }
     for (path, content) in [
         ("kenvoy.toml", encoded.as_str()),
         ("src/app.tsx", CUSTOMER_APP),
-        ("locales/zh-CN.json", CUSTOMER_ZH_MESSAGES),
-        ("locales/en-US.json", CUSTOMER_EN_MESSAGES),
+        ("translations.json", CUSTOMER_TRANSLATIONS),
+        ("language.schema.json", schema.as_str()),
         (
             ".gitignore",
-            "# locales/ 是项目业务词典，需与源码一同提交。\ndata/*.sqlite*\n*.kenvoy.lock\n*.kenvoy-snapshot.json\n*.kenvoy-startups.jsonl\ndist/\n.kenvoy/\nnode_modules/\n.env*\n",
+            "# translations.json 与 language.schema.json 随配置和源码提交。\ndata/*.sqlite*\n*.kenvoy.lock\n*.kenvoy-snapshot.json\n*.kenvoy-startups.jsonl\ndist/\n.kenvoy/\nnode_modules/\n.env*\n",
         ),
         (
             "README.md",
-            "# Kenvoy 应用\n\n`kenvoy create` 已固化初始迁移，尚未写入业务数据库。执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 查看数据库迁移位置，`kenvoy migrate history` 查看历史。\n\n原生国际化已启用，界面可切换中文和英文，无需安装国际化库或自行装配 Provider。`locales/zh-CN.json` 与 `locales/en-US.json` 保存平面业务词典，请与源码一同提交；`kenvoy i18n extract` 只读输出当前 DSL 默认词条，`kenvoy i18n check` 检查词典并报告缺失翻译，不自动覆盖已有词典。缺失翻译回退项目默认语言及 DSL 原文；切换语言不修改业务数据或未提交草稿。词典会交付客户端，请勿写入密钥。新增语言在 kenvoy.toml 的 [i18n] 中声明并提供对应 JSON 文件。\n\nSchema 变化后执行 `kenvoy migrate generate --description \"说明本次变化\"`，审查候选并通过 `kenvoy migrate seal` 固化，再停服重启 `kenvoy dev` 或 `kenvoy run`。构建和热重载不会隐式生成正式迁移。\n\n`kenvoy build` 准备包含完整迁移链的产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
+            "# Kenvoy 应用\n\n`kenvoy create` 已固化初始迁移，尚未写入业务数据库。执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 查看数据库迁移位置，`kenvoy migrate history` 查看历史。\n\n原生国际化始终启用，无需安装国际化库或自行装配 Provider。kenvoy.toml 的 [languages] 声明 fallback 与每种语言的 display、可选 alias；模板默认中文、英文、韩文三种语言，业务译文已完整提供，系统内置文案仍只有中文和英文并按 fallback 回退。每次打开或刷新优先精确匹配设备默认语言，不支持时使用 fallback；页面内可手动切换，label 使用配置 display。\n\n根 translations.json 是集中业务词典，必须保留 \"$schema\":\"./language.schema.json\"；每条消息都必须覆盖全部配置语言，每种语言的 code 或 alias 恰好写一个，不能同时写、漏写或使用未知语言。没有业务词条也合法；没有对应词条的原生 DSL 文案继续使用源码文字。词典会交付客户端，请勿写入密钥。\n\n修改 [languages] 后执行 `kenvoy i18n` 刷新 language.schema.json；它从不覆盖已有 translations.json，首次缺失时仅创建 Schema 引用，不伪造译文。dev/run 也会刷新 Schema 并严格校验，build/check 只读校验，词典缺失或无效会阻断；无需源码即可校验。配置、词典与 Schema 请一同提交，切换语言不会修改业务数据或未提交草稿。\n\n数据库 Schema 变化后执行 `kenvoy migrate generate --description \"说明本次变化\"`，审查候选并通过 `kenvoy migrate seal` 固化，再停服重启 `kenvoy dev` 或 `kenvoy run`。构建和热重载不会隐式生成正式迁移。\n\n`kenvoy build` 准备包含完整迁移链的产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
         ),
     ] {
         let path = target.join(path);
