@@ -165,7 +165,7 @@ fn http_wiring_may_bind_an_adapter_but_controllers_may_not_use_the_actor() -> Re
 
 fn frontend_errors(sources: &[Source]) -> Result<Vec<String>> {
     let mut errors = Vec::new();
-    typescript::inspect(sources, &mut errors)?;
+    typescript::inspect(sources, &Default::default(), &mut errors)?;
     Ok(errors)
 }
 
@@ -345,5 +345,43 @@ fn source_layout_and_hard_line_limit_include_test_code() -> Result<()> {
         .err()
         .ok_or("旧平铺源码未被拒绝")?;
     assert!(error.to_string().contains("未约定条目"));
+    Ok(())
+}
+
+#[test]
+fn json_module_assets_resolve_without_bypassing_layers_or_counting_as_code() -> Result<()> {
+    let fixture = Scratch::new()?;
+    fixture.layout()?;
+    let module = "crates/kenvoy/frontend/src/domain/messages.ts";
+    let dictionary = "crates/kenvoy/frontend/src/domain/messages.json";
+    fixture.write(
+        module,
+        "import messages from './messages.json' with { type: 'json' }; export default messages;",
+    )?;
+    fixture.write(
+        dictionary,
+        &format!(
+            "{{\"hello\":\"world\"{}}}",
+            "\n".repeat(layout::MAX_LINES + 1)
+        ),
+    )?;
+    layout::inspect(&fixture.0)?;
+    fs::remove_file(fixture.0.join(dictionary))?;
+    let error = layout::inspect(&fixture.0)
+        .err()
+        .ok_or("缺失 JSON 模块未被拒绝")?;
+    assert!(error.to_string().contains("前端相对依赖未解析"));
+    fixture.write(
+        "crates/kenvoy/frontend/src/presentation/messages.json",
+        r#"{"hello":"world"}"#,
+    )?;
+    fixture.write(
+        module,
+        "import messages from '../presentation/messages.json' with { type: 'json' }; export default messages;",
+    )?;
+    let error = layout::inspect(&fixture.0)
+        .err()
+        .ok_or("JSON 资源绕过了分层约束")?;
+    assert!(error.to_string().contains("前端层依赖越界"));
     Ok(())
 }

@@ -16,6 +16,7 @@ async fn unicode_page_form_ids_use_one_strict_percent_decoding_pass() -> TestRes
         f.auth.clone(),
         "http://127.0.0.1:3000".into(),
         Some(client.clone()),
+        Default::default(),
     )
     .await?;
     for path in [
@@ -40,6 +41,7 @@ async fn unicode_page_form_ids_use_one_strict_percent_decoding_pass() -> TestRes
         f.auth.clone(),
         format!("http://{address}"),
         Some(client),
+        Default::default(),
     )
     .await?;
     let (stop, stopped) = oneshot::channel();
@@ -126,6 +128,7 @@ async fn static_assets_require_real_files_and_admin_navigation_preserves_api_aut
         f.auth.clone(),
         "http://127.0.0.1:3000".into(),
         Some(client),
+        Default::default(),
     )
     .await?;
     for path in ["/", "/customers"] {
@@ -211,6 +214,7 @@ async fn declared_root_permissions_take_precedence_over_runtime_entry() -> TestR
         f.auth.clone(),
         "http://127.0.0.1:3000".into(),
         Some(client),
+        Default::default(),
     )
     .await?;
     assert_eq!(

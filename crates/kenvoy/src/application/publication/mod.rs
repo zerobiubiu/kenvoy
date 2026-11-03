@@ -21,7 +21,10 @@ use tokio::{
 
 use crate::{
     application::{execution::FunctionExecutor, resources::ResourceRepository},
-    domain::model::{ApplicationIR, ExecutionEnvironment},
+    domain::{
+        i18n::I18nBundle,
+        model::{ApplicationIR, ExecutionEnvironment},
+    },
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -37,6 +40,7 @@ pub struct Generation<E> {
     pub generation: u64,
     pub assets: Option<PathBuf>,
     pub javascript: Option<E>,
+    pub i18n: Arc<I18nBundle>,
 }
 
 struct Shared<R, E> {
@@ -64,6 +68,7 @@ impl<R: ResourceRepository, E: FunctionExecutor> Publication<R, E> {
         repository: R,
         generation: u64,
         assets: Option<PathBuf>,
+        i18n: Arc<I18nBundle>,
     ) -> Self {
         Self {
             shared: Arc::new(Shared {
@@ -72,6 +77,7 @@ impl<R: ResourceRepository, E: FunctionExecutor> Publication<R, E> {
                     generation,
                     assets,
                     javascript: None,
+                    i18n,
                 }),
                 repository,
                 publications: Mutex::new(vec![]),
@@ -96,7 +102,10 @@ impl<R: ResourceRepository, E: FunctionExecutor> Publication<R, E> {
         application: ApplicationIR,
         assets: Option<PathBuf>,
         javascript: Option<E>,
+        i18n: Arc<I18nBundle>,
     ) -> Result<u64, PublicationError<R::Error>> {
+        i18n.validate()
+            .map_err(|error| PublicationError::Publication(error.to_string()))?;
         validate_javascript::<E, R::Error>(&application, javascript.as_ref())?;
         let (reply, response) = oneshot::channel();
         {
@@ -128,6 +137,7 @@ impl<R: ResourceRepository, E: FunctionExecutor> Publication<R, E> {
                         generation,
                         assets,
                         javascript,
+                        i18n,
                     };
                     Ok(generation)
                 }

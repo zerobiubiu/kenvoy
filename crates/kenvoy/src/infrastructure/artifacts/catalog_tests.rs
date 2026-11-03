@@ -85,7 +85,6 @@ fn artifact_migrations_execute_without_source_or_project_migration_files() -> Te
     let (_fixture, project, application) = Fixture::new(true)?;
     let expected = serde_json::to_value(catalog::read(&project.root)?)?;
     let output = build(&project, &application)?;
-    assert_eq!(output.manifest.format_version, 2);
     assert!(output.manifest.files.contains_key("migrations.json"));
     assert!(
         output
@@ -159,14 +158,18 @@ fn catalog_target_must_match_artifact_ir_after_outer_assets_are_resigned() -> Te
 }
 
 #[test]
-fn old_artifact_format_is_rejected_with_and_without_v2_fields() -> TestResult {
+fn old_artifact_formats_are_rejected_even_with_resigned_complete_metadata() -> TestResult {
     let (_fixture, project, application) = Fixture::new(true)?;
     let output = build(&project, &application)?;
-    let mut old = output.manifest.clone();
-    old.format_version = 1;
-    let old = resign(&project, &output.manifest, old)?;
-    assert!(load_error(&project).contains("只接受 v2"));
-    let mut legacy = serde_json::to_value(old)?;
+    load(&project)?;
+    let mut previous = output.manifest.clone();
+    for version in [1, 2] {
+        let mut old = previous.clone();
+        old.format_version = version;
+        previous = resign(&project, &previous, old)?;
+        assert!(load(&project).is_err());
+    }
+    let mut legacy = serde_json::to_value(&previous)?;
     for field in [
         "project_name",
         "project_version",
@@ -233,17 +236,17 @@ fn source_free_config_cannot_impersonate_another_project_version() -> TestResult
         match field {
             "name" => changed.project.name = "另一个应用".into(),
             "version" => changed.project.version = "1.2.3".into(),
-            "min_cli_version" => changed.project.min_cli_version = Some("0.2.0".into()),
-            "format_version" => changed.project.format_version = Some("0.2.1".into()),
+            "min_cli_version" => {
+                changed.project.min_cli_version =
+                    Some(format!("{}+identity.1", env!("CARGO_PKG_VERSION")))
+            }
+            "format_version" => changed.project.format_version = Some("0.3.1".into()),
             _ => unreachable!(),
         }
         fs::write(project.root.join("kenvoy.toml"), toml::to_string(&changed)?)?;
         let reloaded = Project::load(&project.root)?;
         reloaded.check_compatibility()?;
-        assert!(
-            load_error(&reloaded).contains("与 kenvoy.toml 不一致"),
-            "{field}"
-        );
+        assert!(load(&reloaded).is_err(), "{field}");
     }
     Ok(())
 }

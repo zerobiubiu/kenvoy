@@ -48,12 +48,13 @@ fn purge_expired(connection: &Connection, now: i64) -> Result<()> {
     Ok(())
 }
 
-fn invalid(field: &str, message: &str) -> DatabaseError {
-    validation::ValidationErrors(vec![validation::ValidationError {
-        code: "KV4014".into(),
-        field: Some(field.into()),
-        message: message.into(),
-    }])
+fn invalid(field: &str, message: &str, message_key: &str) -> DatabaseError {
+    validation::ValidationErrors(vec![validation::ValidationError::new(
+        "KV4014",
+        Some(field.into()),
+        message,
+        message_key,
+    )])
     .into()
 }
 
@@ -120,21 +121,40 @@ pub(super) fn stage(
         ));
     }
     if !validation::valid_upload_id(&upload.owner) || upload.expires_at <= now {
-        return Err(invalid(&field.name, "上传会话无效或已过期"));
+        return Err(invalid(
+            &field.name,
+            "上传会话无效或已过期",
+            "validation.files.session",
+        ));
     }
     let size = upload.data.len() as u64;
     if size == 0 || size > MAX_UPLOAD_SIZE || size > constraints.max_size {
-        return Err(invalid(&field.name, "附件为空或超过单文件大小限制"));
+        return Err(validation::ValidationErrors(vec![
+            validation::ValidationError::new(
+                "KV4014",
+                Some(field.name.clone()),
+                "附件为空或超过单文件大小限制",
+                "validation.files.upload_size",
+            )
+            .with_param("min", 1)
+            .with_param("max", constraints.max_size.min(MAX_UPLOAD_SIZE)),
+        ])
+        .into());
     }
     let content_type =
         canonical_content_type(&upload.content_type, &upload.data).ok_or_else(|| {
             invalid(
                 &field.name,
                 "附件 MIME 无效、图片签名不符或图片格式不受支持",
+                "validation.files.signature",
             )
         })?;
     if !validation::mime_matches_accept(content_type, &constraints.accept) {
-        return Err(invalid(&field.name, "附件 MIME 不满足 accept 约束"));
+        return Err(invalid(
+            &field.name,
+            "附件 MIME 不满足 accept 约束",
+            "validation.files.accept",
+        ));
     }
     let file = UploadedFile {
         id: random_id()?,
@@ -142,7 +162,11 @@ pub(super) fn stage(
         content_type: content_type.into(),
         size,
     };
-    validation::validate_uploaded_file(&file).map_err(|message| invalid(&field.name, message))?;
+    validation::validate_uploaded_file(&file).map_err(|error| {
+        DatabaseError::from(validation::ValidationErrors(vec![
+            error.into_validation(field.name.clone()),
+        ]))
+    })?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     purge_expired(&transaction, now)?;
     let (count, bytes): (i64, i64) = transaction.query_row(

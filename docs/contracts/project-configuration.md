@@ -16,6 +16,8 @@ CLI 从 --project 指定位置或当前目录向上寻找 kenvoy.toml。路径�
 | runtime.javascript | quickjs |
 | runtime.trust | project |
 | build.out_dir | dist |
+| i18n | 未声明时保持单一 zh-CN；create 显式生成双语配置 |
+| i18n.default_locale / locales / messages_dir | 显式启用时为 zh-CN / [zh-CN, en-US] / locales |
 
 host 为 IP 地址，port 为 u16，0 允许系统分配空闲端口。runtime.trust 仅接受 project 或 untrusted；当前只执行可信项目代码，untrusted 在 JavaScript 准备/运行时明确拒绝，不会降级为同进程不可信执行。实际验收进度见 [路线](../development/development-roadmap.md)。
 
@@ -29,9 +31,9 @@ dev 重新读取配置，但 database.path、build.out_dir、server.host、serve
 
 开发 Vite 地址、代理密钥和镜像目录由宿主管理，不是用户可配置的任意上游 URL。普通项目不需要自行编写 Vite 配置。用户 package.json 的直接依赖作为明确输入，缺少依赖时通过 dev/build/run --install-deps 显式安装；不会静默修改依赖声明。CLI 使用独立框架工具链缓存，生产加载已构建产物时不启动 Node。
 
-构建输入指纹覆盖源码、配置、包清单/锁文件、`migrations/` 及支持的静态资产，包括 TS/TSX/JS/JSX/MTS/CTS、CSS、常见图片和字体；数据库、输出目录、.git、.kenvoy、node_modules、target 与 .env 文件不作为输入。算法版本、规范化范围和产物身份见 [Runtime](../architecture/runtime-design.md#build-与-run)。修改受支持输入会使 run 重新构建，并触发 dev 候选检查；构建不会生成或补齐正式迁移。
+构建输入指纹覆盖源码、配置、包清单/锁文件、`migrations/`、所配置词典 JSON 及支持的静态资产，包括 TS/TSX/JS/JSX/MTS/CTS、CSS、常见图片和字体；数据库、输出目录、.git、.kenvoy、node_modules、target 与 .env 文件不作为输入。词典目录不能落入排除目录，解析后的链接目标也必须受监听和指纹覆盖。算法版本、规范化范围和产物身份见 [Runtime](../architecture/runtime-design.md#build-与-run)。修改受支持输入会使 run 重新构建，并触发 dev 候选检查；构建不会生成或补齐正式迁移。
 
-没有源码的生产部署保留 kenvoy.toml、完整 dist/manifest.json 及版本目录、独立 data 目录；产物内含目标 Schema 与执行所需完整迁移链，不要求源码 `migrations/` 存在。run 分别验证配置/CLI、产物协议/指纹和数据库实际结构/历史。项目配置中的应用身份、版本和兼容字段必须与产物匹配，不能修改数字冒充升级。
+没有源码的生产部署保留 kenvoy.toml、完整 dist/manifest.json 及版本目录、独立 data 目录；产物内含目标 Schema、完整迁移链和私有 i18n.json，不要求源码 `migrations/` 或词典目录存在。run 分别验证配置/CLI、产物协议/指纹和数据库实际结构/历史。项目配置中的应用身份、版本、兼容字段与 i18n 配置摘要必须与产物匹配，不能修改数字冒充升级。
 
 敏感信息不能进入客户端投影或开发错误响应；没有默认管理员密码。初始化使用 admin init，部署 Origin 和 Cookie 规则见 [安全设计](../architecture/security-design.md)。
 
@@ -41,16 +43,23 @@ dev 重新读取配置，但 database.path、build.out_dir、server.host、serve
 [project]
 name = "customer-app"
 version = "1.2.0"
-min_cli_version = "0.2.1"
-format_version = "0.2.0"
+min_cli_version = "0.3.0"
+format_version = "0.3.0"
 ```
 
 - `project.version` 是业务应用发布版本；不代表数据库迁移位置，也不等于 Kenvoy CLI 的包版本。
-- `min_cli_version` 是 CLI 下限；`format_version` 是配置、DSL 及行为契约。当前 CLI 支持的项目格式为 `>=0.2.0, <0.3.0`，必须同时满足下限与格式范围。
-- 三个配置版本均为完整 SemVer，按 precedence 比较，不进行字符串比较；构建元数据不改变优先级。稳定 CLI 拒绝预发布的最低 CLI 和项目格式；应用版本可为预发布。预发布 CLI 按自然 SemVer 次序检查下限和格式区间，例如 `0.2.1-alpha < 0.2.1`，而格式 `0.3.0-alpha` 在该 CLI 的 `<0.3.0` 区间内；不把预发布 CLI 当作对应稳定版。
+- `min_cli_version` 是 CLI 下限；`format_version` 是配置、DSL 及行为契约。当前 CLI 支持的项目格式为 `>=0.2.0, <0.4.0`，必须同时满足下限与格式范围；显式 `[i18n]` 另要求最低 CLI 和项目格式均不低于 0.3.0。
+- 三个配置版本均为完整 SemVer，按 precedence 比较，不进行字符串比较；构建元数据不改变优先级。稳定 CLI 拒绝预发布的最低 CLI 和项目格式；应用版本可为预发布。预发布 CLI 按自然 SemVer 次序检查下限和格式区间，例如 `0.3.0-alpha < 0.3.0`，而格式 `0.4.0-alpha` 在该 CLI 的 `<0.4.0` 区间内；不把预发布 CLI 当作对应稳定版。
 - 缺少新增字段的旧配置明确拒绝运行并给出接入建议，不默默取当前格式或自动提高数字。先核对实际格式、补充经确认的字段，再单独处理旧库基线；`migrate history` 保留无需源码、无需通过兼容门禁的只读诊断入口。
 - 兼容检查在源码编译、用户代码执行、数据库创建和迁移前完成。产物格式与框架指纹是另一道独立门禁，源码格式兼容不表示旧产物可运行。
 - 应用构建哈希标识交付内容；Schema 哈希只标识规范结构。数据库迁移使用追加式 ID/checksum 及实际提交记录，同结构的数据清洗也可以独立推进迁移位置。
+
+## 原生国际化
+
+`create` 生成 `[i18n]`、`locales/zh-CN.json` 和 `locales/en-US.json`；现有未启用配置不会被静默修改。默认语言须属于支持列表，非默认语言文件必须存在，词典仅接受无重复键的平面字符串映射。目录不能与数据、输出、迁移及私有目录重叠，任一路径组件不得为 `target` 或 `.env*`。
+
+词典绑定 DSL 默认文案，内置界面和自定义 SDK 共用语言状态，不修改业务值或数据库结构。完整键规则、回退、提取命令、无源码交付及客户端公开边界见[原生国际化契约](i18n.md)。
+
 
 ## 一次性开发快照
 

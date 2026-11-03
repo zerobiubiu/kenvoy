@@ -168,11 +168,12 @@ pub fn matches(
 }
 
 pub fn invalid(field: &FieldDefinition) -> ValidationErrors {
-    ValidationErrors(vec![ValidationError {
-        code: "KV4013".into(),
-        field: Some(field.name.clone()),
-        message: "选项不存在、已经失效或不满足当前联动条件".into(),
-    }])
+    ValidationErrors(vec![ValidationError::new(
+        "KV4013",
+        Some(field.name.clone()),
+        "选项不存在、已经失效或不满足当前联动条件",
+        "validation.option_unavailable",
+    )])
 }
 
 pub fn validate_static(

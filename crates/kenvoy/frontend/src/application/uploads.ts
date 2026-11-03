@@ -2,6 +2,7 @@ import { ApiError } from './errors.ts';
 import type { Client } from './ports.ts';
 import { acceptsFile, formatFileSize, isFileConstraints, isUploadedFiles, validFileName, validMime } from '../domain/files.ts';
 import type { FieldDefinition, UploadedFile } from '../domain/types.ts';
+import type { LocalizedMessage } from '../domain/i18n/error.ts';
 
 export interface FileUploadState {
   busy: boolean;
@@ -10,6 +11,7 @@ export interface FileUploadState {
   total: number;
   removing: readonly string[];
   error?: string;
+  error_message?: LocalizedMessage;
   outcomeUnknown: boolean;
 }
 export interface FileUploadBinding {
@@ -60,29 +62,41 @@ export class FormUploads {
     if (this.#live) this.#scope.accept(name, files);
   }
   #state(name: string, patch: Partial<FileUploadState>): void {
+    if (Object.hasOwn(patch, 'error') && patch.error === undefined) patch.error_message = undefined;
     this.#states.set(name, { ...EMPTY_UPLOAD_STATE, ...this.#states.get(name), ...patch });
     if (this.#live) this.#scope.changed();
   }
   #failure(name: string, error: unknown): void {
-    this.#state(name, { error: error instanceof Error ? error.message : '文件操作未完成，请重新选择文件或取消本次填写。', outcomeUnknown: error instanceof ApiError && error.outcomeUnknown });
+    const message: LocalizedMessage = error instanceof ApiError
+      ? { message: error.message, message_key: error.message_key ?? error.code, params: error.params, outcomeUnknown: error.outcomeUnknown }
+      : { message: error instanceof Error ? error.message : '', message_key: error instanceof Error ? undefined : 'ui.files.failed' };
+    this.#state(name, { error: error instanceof Error ? error.message : '文件操作未完成，请重新选择文件或取消本次填写。',
+      error_message: message, outcomeUnknown: error instanceof ApiError && error.outcomeUnknown });
   }
   #available(name: string): void {
-    if (!this.#live || this.#preserve || !this.#scope.editable() || this.state(name).outcomeUnknown) throw new ApiError('当前表单不能修改附件，请先完成或取消本次填写');
+    if (!this.#live || this.#preserve || !this.#scope.editable() || this.state(name).outcomeUnknown) throw new ApiError('当前表单不能修改附件，请先完成或取消本次填写', { message_key: 'ui.files.unavailable' });
   }
   async upload(field: FieldDefinition, selected: Iterable<File>): Promise<void> {
     this.#available(field.name);
-    if (this.#active.has(field.name) || this.state(field.name).removing.length) throw new ApiError('此字段的文件操作正在进行');
+    if (this.#active.has(field.name) || this.state(field.name).removing.length) throw new ApiError('此字段的文件操作正在进行', { message_key: 'ui.files.pending' });
     const files = [...selected];
     if (files.length === 0) return;
-    let invalid: string | undefined;
-    if (field.kind !== 'file' || !isFileConstraints(field.upload)) invalid = '此字段未配置文件上传';
-    else if (this.#current(field.name).length + files.length > field.upload.max_files) invalid = `最多可上传 ${field.upload.max_files} 个文件，请减少选择数量`;
+    let invalid: ApiError | undefined;
+    if (field.kind !== 'file' || !isFileConstraints(field.upload)) invalid = new ApiError('此字段未配置文件上传', { message_key: 'ui.files.not_configured' });
+    else if (this.#current(field.name).length + files.length > field.upload.max_files) invalid = new ApiError(`最多可上传 ${field.upload.max_files} 个文件，请减少选择数量`,
+      { message_key: 'ui.files.too_many', params: { max: field.upload.max_files } });
     else for (const file of files) {
-      if (!(file instanceof File) || !validFileName(file.name)) { invalid = '文件名无效，不能包含路径、控制字符或超过 255 个字符'; break; }
-      if (file.size < 1 || file.size > field.upload.max_size) { invalid = `${file.name} 的大小不符合要求，单文件应为 1 B 至 ${formatFileSize(field.upload.max_size)}`; break; }
-      if (!validMime(file.type || 'application/octet-stream') || !acceptsFile(file.type || 'application/octet-stream', field.upload.accept)) { invalid = `${file.name} 的类型不符合要求，允许：${field.upload.accept.join('、') || '规范 MIME 类型'}`; break; }
+      if (!(file instanceof File) || !validFileName(file.name)) { invalid = new ApiError('文件名无效，不能包含路径、控制字符或超过 255 个字符', { message_key: 'ui.files.invalid_name' }); break; }
+      if (file.size < 1 || file.size > field.upload.max_size) {
+        invalid = new ApiError(`${file.name} 的大小不符合要求，单文件应为 1 B 至 ${formatFileSize(field.upload.max_size)}`,
+          { message_key: 'ui.files.invalid_size', params: { name: file.name, size: formatFileSize(field.upload.max_size) } }); break;
+      }
+      if (!validMime(file.type || 'application/octet-stream') || !acceptsFile(file.type || 'application/octet-stream', field.upload.accept)) {
+        invalid = new ApiError(`${file.name} 的类型不符合要求，允许：${field.upload.accept.join('、') || '规范 MIME 类型'}`,
+          { message_key: 'ui.files.invalid_type', params: { name: file.name, types: field.upload.accept.join(', ') || 'MIME' } }); break;
+      }
     }
-    if (invalid) { const error = new ApiError(invalid); this.#failure(field.name, error); throw error; }
+    if (invalid) { this.#failure(field.name, invalid); throw invalid; }
     const operation = { epoch: this.#epoch, canceled: false };
     this.#active.set(field.name, operation);
     this.#state(field.name, { busy: true, canceled: false, completed: 0, total: files.length, error: undefined, outcomeUnknown: false });
@@ -114,7 +128,7 @@ export class FormUploads {
   async remove(name: string, file: UploadedFile | string): Promise<void> {
     this.#available(name);
     const id = typeof file === 'string' ? file : file.id;
-    if (this.#active.has(name)) throw new ApiError('请先等待或取消此字段的上传');
+    if (this.#active.has(name)) throw new ApiError('请先等待或取消此字段的上传', { message_key: 'ui.files.wait_upload' });
     if (this.state(name).removing.includes(id) || !this.#current(name).some(item => item.id === id)) return;
     const staged = this.#staged.get(id);
     if (!staged) { this.#setFiles(name, this.#current(name).filter(item => item.id !== id)); return; }
@@ -134,7 +148,7 @@ export class FormUploads {
   }
   async replace(name: string, files: UploadedFile[] | null): Promise<void> {
     this.#available(name);
-    if (this.#active.has(name) || this.state(name).removing.length) throw new ApiError('请先等待或取消此字段的文件操作');
+    if (this.#active.has(name) || this.state(name).removing.length) throw new ApiError('请先等待或取消此字段的文件操作', { message_key: 'ui.files.wait_operation' });
     const epoch = this.#epoch;
     for (const previous of [...this.#current(name)]) if (!files?.some(file => file.id === previous.id)) await this.remove(name, previous.id);
     if (this.#live && epoch === this.#epoch) this.#setFiles(name, files === null ? null : [...files]);

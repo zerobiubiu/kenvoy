@@ -1,16 +1,17 @@
 use std::{
     fs,
     path::Path,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use super::{
     BUILD_HASH_VERSION, FORMAT_VERSION, INPUT_HASH_VERSION, Loaded, MAX_FILE, Manifest, Result,
     files::{check_directory, collect, read_limited, reject_link, write_new},
-    invalid, io, valid_hash,
+    i18n_config_hash, invalid, io, valid_hash,
 };
 use crate::{
-    domain::model::ApplicationIR,
+    domain::{i18n::I18nBundle, model::ApplicationIR},
     infrastructure::{
         persistence::sqlite::{migration::catalog::Catalog, schema::SCHEMA_HASH_VERSION},
         project::Project,
@@ -27,7 +28,8 @@ fn activate_paths(project: &Project, manifest: &Manifest) -> Result<()> {
     validate_project(project, manifest)?;
     let root = &project.root;
     let out = &project.out_dir;
-    load_manifest(root, out, manifest.clone(), project.snapshot)?;
+    let loaded = load_manifest(root, out, manifest.clone(), project.snapshot)?;
+    validate_i18n_project(project, &loaded.i18n)?;
     let encoded = serde_json::to_vec_pretty(manifest)?;
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -47,7 +49,9 @@ fn load_paths(project: &Project) -> Result<Loaded> {
     let bytes = read_limited(&manifest_path, 4 * 1024 * 1024)?;
     let manifest: Manifest = serde_json::from_slice(&bytes)?;
     validate_project(project, &manifest)?;
-    load_manifest(root, out, manifest, project.snapshot)
+    let loaded = load_manifest(root, out, manifest, project.snapshot)?;
+    validate_i18n_project(project, &loaded.i18n)?;
+    Ok(loaded)
 }
 pub(super) fn load_manifest(
     root: &Path,
@@ -58,7 +62,7 @@ pub(super) fn load_manifest(
     check_directory(root, out)?;
     if manifest.format_version != FORMAT_VERSION {
         return Err(invalid(
-            "产物格式版本不匹配，当前只接受 v2；请从源码重新构建",
+            "产物格式版本不匹配，当前只接受 v3；请从源码重新构建",
         ));
     }
     if manifest.input_hash_version != INPUT_HASH_VERSION
@@ -78,6 +82,7 @@ pub(super) fn load_manifest(
     }
     if !valid_hash(&manifest.build_id)
         || !valid_hash(&manifest.input_fingerprint)
+        || !valid_hash(&manifest.i18n_config_hash)
         || manifest.identity()? != manifest.build_id
     {
         return Err(invalid("产物内容标识或输入指纹不匹配，请重新构建"));
@@ -95,6 +100,7 @@ pub(super) fn load_manifest(
     for required in [
         "application.ir",
         "migrations.json",
+        "i18n.json",
         "modules/server.json",
         "client/index.html",
     ] {
@@ -110,11 +116,16 @@ pub(super) fn load_manifest(
     if !manifest.development_snapshot {
         migrations.validate_target(&application)?;
     }
+    let i18n: I18nBundle =
+        serde_json::from_slice(&read_limited(&version.join("i18n.json"), MAX_FILE)?)?;
+    i18n.validate()
+        .map_err(|error| invalid(error.to_string()))?;
     let server_modules = read_limited(&version.join("modules/server.json"), MAX_FILE)?;
     Ok(Loaded {
         manifest,
         application,
         migrations,
+        i18n: Arc::new(i18n),
         server_modules,
         client: version.join("client"),
     })
@@ -126,9 +137,29 @@ fn validate_project(project: &Project, manifest: &Manifest) -> Result<()> {
         || manifest.project_version != configured.version
         || Some(manifest.min_cli_version.as_str()) != configured.min_cli_version.as_deref()
         || Some(manifest.project_format_version.as_str()) != configured.format_version.as_deref()
+        || manifest.i18n_config_hash != i18n_config_hash(project)?
     {
         return Err(invalid(
-            "产物的项目名称、项目版本、最低 CLI 或项目格式与 kenvoy.toml 不一致；不能替换配置冒充新版本，请从对应源码重新构建",
+            "产物的项目身份、兼容要求或 i18n 配置与 kenvoy.toml 不一致；不能替换配置冒充新版本，请从对应源码重新构建",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_i18n_project(project: &Project, bundle: &I18nBundle) -> Result<()> {
+    let matches = match &project.config.i18n {
+        Some(config) => {
+            bundle.default_locale == config.default_locale && bundle.locales == config.locales
+        }
+        None => {
+            bundle.default_locale == "zh-CN"
+                && bundle.locales.len() == 1
+                && bundle.locales[0] == "zh-CN"
+        }
+    };
+    if !matches {
+        return Err(invalid(
+            "产物词典的默认/支持语言与项目配置不一致，请从对应源码重新构建",
         ));
     }
     Ok(())

@@ -1,6 +1,6 @@
 # Kenvoy 文档中心
 
-状态：参考；治理：现状文档；核对日期：2026-11-02。
+状态：参考；治理：现状文档；核对日期：2026-11-03。
 
 这里是项目详细文档的唯一入口，负责文档索引、规范和维护要求。业务设计、接口契约、操作指导与历史记录按类型放入子目录；项目执行规则见 [AGENTS.md](../AGENTS.md)。
 
@@ -12,6 +12,7 @@
 | 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [DDD 目录规范](architecture/ddd-structure.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
+| 原生支持多语言 | [国际化契约](contracts/i18n.md) → [可运行 i18n-app](../examples/i18n-app/README.md) → [CLI 词条工具](operations/cli-design.md#原生国际化工具) → [实施与证据 0027](changes/0027-native-project-i18n.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
 | 开发分支、版本标签与发布 | [Git 与发布操作](operations/releasing.md) → [多渠道软件包](operations/distribution-channels.md) → [分支与发布规则实施记录](changes/0021-dev-main-release-rules.md) → [标签规则定稿](changes/0023-version-tag-rules.md) |
 | 应用兼容、正式迁移与旧库接入 | [配置版本契约](contracts/project-configuration.md#四类版本与兼容规则) → [迁移操作](operations/migration-design.md) → [数据库设计](architecture/database-design.md) → [实施与证据 0026](changes/0026-application-migration-lifecycle.md) |
@@ -25,7 +26,7 @@
 | 分类入口 | 内容概览 | 治理方式 |
 |---|---|---|
 | [architecture/](architecture/README.md) | 整体架构、产品边界、语言与业务解释、前后端运行时、数据库、安全及当前技术选择 | 现状文档，维护当前设计与实现边界 |
-| [contracts/](contracts/README.md) | KEngine API、Generic/Application IR、DSL 语法、配置、组件绑定、选项及[附件与图片](contracts/file-uploads.md)协议 | 现状文档，维护有效接口契约 |
+| [contracts/](contracts/README.md) | KEngine API、Generic/Application IR、DSL 语法、配置、组件绑定、[原生国际化](contracts/i18n.md)及[附件与图片](contracts/file-uploads.md)协议 | 现状文档，维护有效接口契约 |
 | [development/](development/README.md) | 工程流程、测试策略、阶段状态、[后续待办](development/implementation-backlog.md)与风险登记 | 现状文档，区分完成事实、实现待办和待补证据 |
 | [operations/](operations/README.md) | CLI 使用、开发与生产运行、迁移确认及备份恢复操作 | 现状文档，维护操作条件与失败边界 |
 | [reference/](reference/README.md) | [称呼与术语](reference/terminology.md)、技术栈、依赖来源、锁定版本和平台实测范围 | 现状参考资料，不替代锁文件与验收记录 |
@@ -36,6 +37,8 @@
 产品与视觉约定由仓库现有的 [PRODUCT.md](../PRODUCT.md) 和 [DESIGN.md](../DESIGN.md) 维护，不在这里复制。
 
 0.2.0 已完成源包与六目标二进制发布：[版本日志](changes/CHANGELOG.md)、[发布操作](operations/releasing.md)及[执行记录 0019](changes/0019-crates-and-binary-release.md)。最近入口与 CLI 修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)及[文件与图片契约](contracts/file-uploads.md)。
+
+当前 dev 源码 CLI 为 0.3.0，KEngine 为 0.2.0，尚未发布。原生 i18n 与产物 v3、客户端描述 v2 的现状见[国际化契约](contracts/i18n.md)及[0027](changes/0027-native-project-i18n.md)；正式迁移的原始执行事实继续保留在 0026，不将本地版本号等同于已上线。
 
 ## 文档规范
 

@@ -3,7 +3,7 @@ use kengine::AnalysisSession;
 use super::{
     build, compile,
     error::{self, Error, Result},
-    migrations,
+    i18n, migrations,
     server::run_server,
     signals::Shutdown,
 };
@@ -17,7 +17,9 @@ use crate::{
         persistence::sqlite as database,
         project::{self, Project},
     },
-    interfaces::cli::{self, AccountRole, AdminCommand, Cli, Command, MigrationCommand},
+    interfaces::cli::{
+        self, AccountRole, AdminCommand, Cli, Command, I18nCommand, MigrationCommand,
+    },
 };
 
 pub(crate) async fn execute(cli: Cli) -> Result<()> {
@@ -41,6 +43,9 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
     }
     project.check_compatibility()?;
     let mut session = AnalysisSession::new();
+    if let Command::I18n { action } = cli.command {
+        return i18n::execute(&project, &mut session, action.unwrap_or(I18nCommand::Check));
+    }
     if let Command::Run {
         install_deps,
         confirm,
@@ -129,6 +134,7 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
             input,
             patch,
         } => {
+            project::i18n::load(&project)?;
             javascript::prepare(&program, &application, project.config.runtime.trust)?;
             if let (Some(name), Some(path)) = (resource, input) {
                 let resource = application

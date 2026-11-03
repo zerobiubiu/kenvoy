@@ -18,8 +18,9 @@ KEngine 是其中独立、通用的 Rust 源码解析库，提供 JS/TS/JSX/TSX 
 - **真实持久化**：SQLite 文件数据库、追加式正式迁移链、逐步事务与 checksum 确认；开发与生产共用同一数据路径，不因切换模式重置。
 - **内置管理后台**：登录、会话、资源查询、分页、排序、编辑与删除，复用同一权限模型。
 - **可扩展前端**：原生 React + TypeScript + CSS；支持组件重载、自定义组件、联动选项、多文件上传与图片展示。
+- **原生国际化**：项目词典、内置中英文界面、自动语言选择与切换、Intl 格式化及 `useI18n()`；应用无需自行接入 i18n 库或 Provider。
 - **受限 JavaScript**：服务端函数与 Action 运行在 QuickJS 中，客户端代码按依赖切片，不把服务端私有模块带入浏览器。
-- **工程闭环**：`create` / `check` / `inspect` / `migrate` / `admin` / `build` / `run` / `dev`，含受控 Vite/HMR 与版本化产物。
+- **工程闭环**：`create` / `check` / `inspect` / `i18n` / `migrate` / `admin` / `build` / `run` / `dev`，含受控 Vite/HMR 与版本化产物。
 
 ## 快速开始
 
@@ -49,6 +50,9 @@ kenvoy dev                           # http://127.0.0.1:3000
 ```
 
 访问 `/customers` 登记数据；登录 `/admin/customers` 查询、编辑和删除。匿名只有声明允许的表单提交权限。
+
+当前 dev 源码为 Kenvoy CLI **0.3.0**（尚未发布），KEngine 保持 **0.2.0**；上述安装命令获取已发布版本，不代表本次功能已上线。0.3.0 的 `create` 自动生成双语配置和 `locales/zh-CN.json`、`en-US.json`；正常编写 DSL 默认文案即可翻译字段、页面与选项，框架提供语言选择器。配置、词条和 SDK 用法见[原生国际化](docs/contracts/i18n.md)。
+
 
 ### 生产运行
 
@@ -96,9 +100,10 @@ export default (
 | [文档中心](docs/README.md) | 全部文档索引、规范与维护要求 |
 | [DSL 语法](docs/contracts/dsl-specification.md) | 元素、字段、权限、Action 与模块边界 |
 | [项目配置](docs/contracts/project-configuration.md) | `kenvoy.toml` 默认值、路径与校验规则 |
-| [CLI 使用](docs/operations/cli-design.md) | create/check/migrate/admin/dev/build/run |
+| [原生国际化](docs/contracts/i18n.md) | 项目词典、自动键、语言选择、SDK、提取检查及无源码交付 |
+| [CLI 使用](docs/operations/cli-design.md) | create/check/i18n/migrate/admin/dev/build/run |
 | [发布与渠道](docs/operations/releasing.md) | 版本标签、发布流程与多渠道状态 |
-| [可运行示例](examples/README.md) | customer-app、uploads-app、options-app、extensions-app |
+| [可运行示例](examples/README.md) | customer-app、uploads-app、options-app、extensions-app、[i18n-app](examples/i18n-app/README.md) |
 
 ## 仓库结构
 

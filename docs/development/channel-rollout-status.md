@@ -25,7 +25,7 @@
    `NPM_TOKEN`、`PACKAGES_TOKEN`、`WINGET_TOKEN`、`CHOCOLATEY_API_KEY`、`AUR_SSH_PRIVATE_KEY`、`GPG_PRIVATE_KEY`、`GPG_PASSPHRASE`、`APK_SIGNING_KEY`。
    用 `gh secret list --repo zerobiubiu/kenvoy` 核对。
 2. **AUR 账号**：在 <https://aur.archlinux.org> 的 *My Account → SSH Public Key* 登记 CI 公钥；无需网页建包。
-3. **采用新归档命名的版本**：0.2.0 的 Release 是旧的三元组文件名，渠道工作流不兼容。dev 已将 Kenvoy 升到 0.2.1，但尚未合并 main；待获准发布 0.2.1 后，它可作为首个兼容版本，无需先跳到 0.3.0。发布时须生成六目标 `kenvoy-{version}-{platform}-{arch}.zip`。
+3. **采用新归档命名的版本**：0.2.0 的 Release 是旧的三元组文件名，渠道工作流不兼容。dev 当前为 Kenvoy CLI 0.3.0（含原生 i18n），尚未合并 main 或发布；用户决定发布时仅发布当时 main 当前版本，不补发未发布的 0.2.1。须生成六目标 `kenvoy-{version}-{platform}-{arch}.zip`。
 4. **发布该版本**：在 dev 完成提交与本地 tag，推送所需 tag，合并并推送 main；观察 `main 最新版本自动发布` 成功。
 5. **观察渠道工作流**：`多渠道软件包发布` 由发布成功自动触发；若未触发，在 Actions 手动运行并填入该版本。
 6. **逐项验收**（每项单独记录，失败不连坐）：

@@ -15,7 +15,11 @@ enum Dependency {
     External(String),
 }
 
-pub(super) fn inspect(sources: &[Source], errors: &mut Vec<String>) -> Result<usize> {
+pub(super) fn inspect(
+    sources: &[Source],
+    json_assets: &BTreeSet<PathBuf>,
+    errors: &mut Vec<String>,
+) -> Result<usize> {
     let known: BTreeSet<_> = sources.iter().map(|source| source.path.clone()).collect();
     let engine = Engine::new();
     let mut graph = BTreeMap::new();
@@ -39,7 +43,7 @@ pub(super) fn inspect(sources: &[Source], errors: &mut Vec<String>) -> Result<us
         let mut dependencies = Vec::new();
         for specifier in specifiers(&module)? {
             let dependency = if specifier.starts_with('.') {
-                match resolve(&source.path, &specifier, &known) {
+                match resolve(&source.path, &specifier, &known, json_assets) {
                     Some(target) => Dependency::Source(target),
                     None => {
                         errors.push(format!(
@@ -171,9 +175,14 @@ fn trivia(mut source: &str) -> &str {
     }
 }
 
-fn resolve(importer: &Path, specifier: &str, known: &BTreeSet<PathBuf>) -> Option<PathBuf> {
+fn resolve(
+    importer: &Path,
+    specifier: &str,
+    known: &BTreeSet<PathBuf>,
+    json_assets: &BTreeSet<PathBuf>,
+) -> Option<PathBuf> {
     let base = normalize(&importer.parent()?.join(specifier));
-    if known.contains(&base) {
+    if known.contains(&base) || json_assets.contains(&base) {
         return Some(base);
     }
     let mapped = match base.extension().and_then(|value| value.to_str()) {

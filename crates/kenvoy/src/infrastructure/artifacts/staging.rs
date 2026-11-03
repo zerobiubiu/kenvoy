@@ -8,13 +8,13 @@ use std::{
 use super::{
     BUILD_HASH_VERSION, FORMAT_VERSION, INPUT_HASH_VERSION, Loaded, Manifest, Result,
     files::{collect, directory, reject_link, write_new},
-    invalid, io,
+    i18n_config_hash, invalid, io,
     load::load_manifest,
     relocate::relocate,
     valid_hash,
 };
 use crate::{
-    domain::model::ApplicationIR,
+    domain::{i18n::I18nBundle, model::ApplicationIR},
     infrastructure::{
         persistence::sqlite::{migration::catalog, schema::SCHEMA_HASH_VERSION},
         project::Project,
@@ -32,6 +32,8 @@ pub struct Staging {
     project_format_version: String,
     development_snapshot: bool,
     migrations: catalog::Catalog,
+    i18n: I18nBundle,
+    i18n_config_hash: String,
     _lock: fs::File,
 }
 impl Staging {
@@ -54,6 +56,9 @@ impl Staging {
             .ok_or_else(|| invalid("缺少 project.format_version；请先完成项目兼容性升级"))?;
         let migrations = catalog::read(&root)?;
         migrations.validate()?;
+        let i18n = crate::infrastructure::project::i18n::load(project)
+            .map_err(|error| invalid(error.to_string()))?;
+        let i18n_config_hash = i18n_config_hash(project)?;
         let cache = directory(&root, &root.join(".kenvoy/artifacts"))?;
         let lock_path = cache.join("build.lock");
         reject_link(&lock_path)?;
@@ -83,6 +88,8 @@ impl Staging {
             project_format_version,
             development_snapshot: project.snapshot,
             migrations,
+            i18n,
+            i18n_config_hash,
             _lock: lock,
         })
     }
@@ -122,6 +129,10 @@ impl Staging {
             &self.directory.join("migrations.json"),
             &serde_json::to_vec(&self.migrations)?,
         )?;
+        write_new(
+            &self.directory.join("i18n.json"),
+            &serde_json::to_vec(&self.i18n)?,
+        )?;
         fs::create_dir(self.directory.join("modules"))
             .map_err(|error| io(&self.directory, error))?;
         write_new(&self.directory.join("modules/server.json"), server_modules)?;
@@ -147,6 +158,7 @@ impl Staging {
             framework_fingerprint: crate::infrastructure::frontend::FRAMEWORK_FINGERPRINT.into(),
             build_id: String::new(),
             input_fingerprint,
+            i18n_config_hash: std::mem::take(&mut self.i18n_config_hash),
             files,
             dependencies,
         };

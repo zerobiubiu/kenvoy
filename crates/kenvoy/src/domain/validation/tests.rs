@@ -315,3 +315,116 @@ fn json_parser_rejects_duplicate_keys_trailing_input_and_nonobjects()
     );
     Ok(())
 }
+
+#[test]
+fn rule_metadata_reports_real_bounds_without_embedding_input_values()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut number = field(FieldKind::Number);
+    number.min = Some(3.0);
+    number.max = Some(9.0);
+    for (input, key, params) in [
+        (json!(2), "validation.number.min", json!({"min": 3.0})),
+        (json!(10), "validation.number.max", json!({"max": 9.0})),
+    ] {
+        let error = validate_field(&number, &input).expect_err("越界必须拒绝");
+        assert_eq!(error.code, "KV4005");
+        assert_eq!(error.field.as_deref(), Some("value"));
+        assert_eq!(error.message_key, key);
+        assert_eq!(serde_json::to_value(error.params)?, params);
+    }
+    number.integer = true;
+    let error = validate_field(&number, &json!(3.5)).expect_err("小数不能作为整数");
+    assert_eq!(error.message_key, "validation.number.integer");
+    let parameters: Value = serde_json::from_slice(&serde_json::to_vec(&error.params)?)?;
+    assert_eq!(parameters["min"].as_i64(), Some(-9_007_199_254_740_991));
+    assert_eq!(parameters["max"].as_i64(), Some(9_007_199_254_740_991));
+    let mut text = field(FieldKind::Text);
+    text.max_length = Some(2);
+    assert_eq!(validate_field(&text, &json!("😀好"))?, json!("😀好"));
+    let error = validate_field(&text, &json!("😀你好")).expect_err("Unicode 标量超限");
+    assert_eq!(error.message_key, "validation.text.max_length");
+    assert_eq!(serde_json::to_value(error.params)?, json!({"max": 2}));
+    let datetime = field(FieldKind::Datetime);
+    let error = validate_field(&datetime, &json!("2026-01-01T10:00:00")).expect_err("缺少显式时区");
+    assert_eq!(error.message_key, "validation.datetime");
+    assert_eq!(
+        serde_json::to_value(error.params)?,
+        json!({"fraction_digits": 3})
+    );
+    assert_eq!(
+        validate_field(&datetime, &json!("2026-01-01T10:00:00+08:00"))?,
+        json!("2026-01-01T02:00:00.000Z")
+    );
+    Ok(())
+}
+
+#[test]
+fn required_and_option_errors_have_distinct_machine_rules() {
+    for (kind, input, key) in [
+        (FieldKind::Text, Value::Null, "validation.required"),
+        (FieldKind::Text, json!(" \t"), "validation.required.text"),
+        (FieldKind::Select, json!(" "), "validation.required.select"),
+        (FieldKind::File, json!([]), "validation.required.files"),
+    ] {
+        let mut definition = field(kind);
+        definition.required = true;
+        let error = validate_field(&definition, &input).expect_err("必填值必须拒绝");
+        assert_eq!(error.code, "KV4001");
+        assert_eq!(error.message_key, key);
+        assert!(error.params.is_empty());
+        assert!(!error.message.is_empty());
+    }
+    let error = validate_field(&field(FieldKind::Select), &json!("private-value"))
+        .expect_err("未声明选项必须拒绝");
+    assert_eq!(error.message_key, "validation.enum");
+    assert!(error.params.is_empty());
+    let error =
+        parse_record_json(br#"{"secret":1,"secret":2}"#).expect_err("重复 JSON 字段必须拒绝");
+    assert_eq!(error.message_key, "validation.record.json");
+    assert!(error.params.is_empty());
+}
+
+#[test]
+fn attachment_metadata_exposes_only_actual_limits() -> Result<(), Box<dyn std::error::Error>> {
+    let mut definition = field(FieldKind::File);
+    definition.upload = Some(FileConstraints {
+        accept: vec!["image/*".into()],
+        max_files: 1,
+        max_size: 1,
+    });
+    for (input, key, params) in [
+        (
+            json!([uploaded('a'), uploaded('b')]),
+            "validation.files.max_files",
+            json!({"max": 1}),
+        ),
+        (
+            json!([uploaded('a')]),
+            "validation.files.max_size",
+            json!({"max": 1}),
+        ),
+    ] {
+        let error = validate_field(&definition, &input).expect_err("附件越界必须拒绝");
+        assert_eq!(error.code, "KV4014");
+        assert_eq!(error.message_key, key);
+        assert_eq!(serde_json::to_value(error.params)?, params);
+    }
+    let mut invalid = uploaded('a');
+    invalid["id"] = json!("invalid-id");
+    let error = validate_field(&definition, &json!([invalid])).expect_err("附件标识必须拒绝");
+    assert_eq!(error.message_key, "validation.files.id");
+    assert_eq!(serde_json::to_value(error.params)?, json!({"length": 64}));
+    let constraints = FileConstraints {
+        max_size: 0,
+        ..FileConstraints::default()
+    };
+    let error = validate_file_constraints(&constraints)
+        .expect_err("上传约束必须拒绝")
+        .into_validation("value");
+    assert_eq!(error.message_key, "validation.files.constraints.max_size");
+    assert_eq!(
+        serde_json::to_value(error.params)?,
+        json!({"min": 1, "max": MAX_UPLOAD_SIZE})
+    );
+    Ok(())
+}

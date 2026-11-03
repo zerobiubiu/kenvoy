@@ -5,8 +5,11 @@ import { chromium, expect } from '@playwright/test';
 import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture=await projectFixture();let browser;
 try {
+  const chinesePath=join(fixture.project,'locales/zh-CN.json');
+  const chinese=JSON.parse(await readFile(chinesePath,'utf8'));delete chinese['pages./customers.title'];
+  await writeFile(chinesePath,JSON.stringify(chinese));
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'watcher-test-password-725\n');
-  let server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage();
+  let server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'zh-CN'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(server.origin+'/customers');
   await page.getByLabel('客户姓名',{exact:false}).fill('监听前已保存');await page.getByLabel('联系电话',{exact:false}).fill('13800000000');

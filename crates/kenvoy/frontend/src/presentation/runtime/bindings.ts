@@ -88,7 +88,7 @@ export function useResource(name: string) {
   const definition = useMemo(() => immutable(resource), [resource]);
   const validated = useCallback((data: Record<string, JsonValue>, mode: 'create' | 'patch') => {
     const result = validateRecord(definition, data, mode);
-    if (!result.ok) throw new ApiError('字段校验未通过', { status: 422, fields: result.errors });
+    if (!result.ok) throw new ApiError('字段校验未通过', { code: 'KV5022', message_key: 'KV5022', status: 422, fields: result.errors });
     return data;
   }, [definition]);
   return useMemo(() => ({

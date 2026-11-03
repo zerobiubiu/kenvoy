@@ -6,6 +6,12 @@ const MIME = new RegExp(`^${MIME_TOKEN}/${MIME_TOKEN}$`);
 const ACCEPT = new RegExp(`^${MIME_TOKEN}/(?:${MIME_TOKEN}|\\*)$`);
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/u;
 
+export interface FileValidationIssue {
+  message_key: string;
+  params: Record<string, string | number | boolean | null>;
+}
+const issue = (message_key: string, params: FileValidationIssue['params'] = {}): FileValidationIssue => ({ message_key, params });
+
 export function validFileName(value: unknown): value is string {
   return typeof value === 'string' && value !== '' && value !== '.' && value !== '..'
     && [...value].length <= 255 && !/[\\/]/.test(value) && !CONTROL.test(value)
@@ -16,25 +22,42 @@ export function validMime(value: unknown): value is string {
   return typeof value === 'string' && MIME.exec(value)?.[0] === value;
 }
 
-export function isUploadedFile(value: unknown): value is UploadedFile {
+function uploadedFileIssue(value: unknown): FileValidationIssue | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)
-    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return false;
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return issue('validation.files.metadata');
   const file = value as Record<string, unknown>;
-  return Object.keys(file).length === 4 && typeof file.id === 'string' && /^[a-f0-9]{64}$/.exec(file.id)?.[0] === file.id
-    && validFileName(file.name) && validMime(file.content_type)
-    && typeof file.size === 'number' && Number.isSafeInteger(file.size) && file.size >= 1 && file.size <= MAX_FILE_SIZE;
+  if (Object.keys(file).length !== 4 || !['id', 'name', 'content_type', 'size'].every(key => Object.hasOwn(file, key))) return issue('validation.files.metadata');
+  if (typeof file.id !== 'string' || typeof file.name !== 'string' || typeof file.content_type !== 'string'
+    || typeof file.size !== 'number' || !Number.isSafeInteger(file.size) || file.size < 0) return issue('validation.files.metadata_types');
+  if (/^[a-f0-9]{64}$/.exec(file.id)?.[0] !== file.id) return issue('validation.files.id', { length: 64 });
+  if (!validFileName(file.name)) return issue('validation.files.name', { max: 255 });
+  if (file.size < 1 || file.size > MAX_FILE_SIZE) return issue('validation.files.size', { min: 1, max: MAX_FILE_SIZE });
+  if (!validMime(file.content_type)) return issue('validation.files.mime');
+  return null;
+}
+
+export function isUploadedFile(value: unknown): value is UploadedFile {
+  return uploadedFileIssue(value) === null;
+}
+
+export function uploadedFilesIssue(value: unknown): FileValidationIssue | null {
+  if (!Array.isArray(value)) return issue('validation.type.files');
+  if (value.length > 20) return issue('validation.files.max_files', { max: 20 });
+  const ids = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    if (!Object.hasOwn(value, index)) return issue('validation.files.metadata');
+    const file: unknown = value[index];
+    const problem = uploadedFileIssue(file);
+    if (problem) return problem;
+    const id = (file as UploadedFile).id;
+    if (ids.has(id)) return issue('validation.files.duplicate');
+    ids.add(id);
+  }
+  return null;
 }
 
 export function isUploadedFiles(value: unknown): value is UploadedFile[] {
-  if (!Array.isArray(value) || value.length > 20) return false;
-  const ids = new Set<string>();
-  for (let index = 0; index < value.length; index++) {
-    if (!Object.hasOwn(value, index)) return false;
-    const file: unknown = value[index];
-    if (!isUploadedFile(file) || ids.has(file.id)) return false;
-    ids.add(file.id);
-  }
-  return true;
+  return uploadedFilesIssue(value) === null;
 }
 
 export function isFieldValue(value: unknown): value is FieldValue {
@@ -43,11 +66,21 @@ export function isFieldValue(value: unknown): value is FieldValue {
 }
 
 export function isFileConstraints(value: unknown): value is FileConstraints {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  return fileConstraintsIssue(value) === null;
+}
+
+/** 错误来自实际机器规则；不从默认中文描述反推约束。 */
+export function fileConstraintsIssue(value: unknown): FileValidationIssue | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return issue('validation.files.constraints.missing');
   const rules = value as Record<string, unknown>;
-  return typeof rules.max_size === 'number' && Number.isSafeInteger(rules.max_size) && rules.max_size >= 1 && rules.max_size <= MAX_FILE_SIZE
-    && typeof rules.max_files === 'number' && Number.isSafeInteger(rules.max_files) && rules.max_files >= 1 && rules.max_files <= 20
-    && Array.isArray(rules.accept) && rules.accept.every(item => typeof item === 'string' && ACCEPT.exec(item)?.[0] === item);
+  if (typeof rules.max_size !== 'number' || !Number.isSafeInteger(rules.max_size) || rules.max_size < 1 || rules.max_size > MAX_FILE_SIZE) {
+    return issue('validation.files.constraints.max_size', { min: 1, max: MAX_FILE_SIZE });
+  }
+  if (typeof rules.max_files !== 'number' || !Number.isSafeInteger(rules.max_files) || rules.max_files < 1 || rules.max_files > 20) {
+    return issue('validation.files.constraints.max_files', { min: 1, max: 20 });
+  }
+  if (!Array.isArray(rules.accept) || !rules.accept.every(item => typeof item === 'string' && ACCEPT.exec(item)?.[0] === item)) return issue('validation.files.constraints.accept');
+  return null;
 }
 
 export function acceptsFile(contentType: string, accept: readonly string[]): boolean {
@@ -77,7 +110,18 @@ export function isSafeImageSource(src: unknown): src is string {
   } catch { return false; }
 }
 
-export function formatFileSize(size: number): string {
-  return size >= 1024 * 1024 ? `${Number((size / (1024 * 1024)).toFixed(1))} MiB`
-    : size >= 1024 ? `${Number((size / 1024).toFixed(1))} KiB` : `${size} B`;
+export function formatFileSize(size: number, locale?: string): string {
+  const amount = size >= 1024 * 1024 ? size / (1024 * 1024) : size >= 1024 ? size / 1024 : size;
+  const unit = size >= 1024 * 1024 ? 'MiB' : size >= 1024 ? 'KiB' : 'B';
+  return `${locale ? fileSizeFormatter(locale).format(amount) : size < 1024 ? size : Number(amount.toFixed(1))} ${unit}`;
+}
+
+const fileSizeFormatters = new Map<string, Intl.NumberFormat>();
+function fileSizeFormatter(locale: string): Intl.NumberFormat {
+  let formatter = fileSizeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+    fileSizeFormatters.set(locale, formatter);
+  }
+  return formatter;
 }

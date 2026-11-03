@@ -21,7 +21,7 @@ pub(in super::super) fn validate(model: &SchemaModel) -> Result<()> {
             }
             match (column.kind, &column.upload) {
                 (FieldKind::File, Some(upload)) => {
-                    validate_file_constraints(upload).map_err(invalid)?
+                    validate_file_constraints(upload).map_err(|error| invalid(error.message()))?
                 }
                 (FieldKind::File, None) | (_, Some(_)) => {
                     return Err(invalid("冻结附件字段与 upload 参数不一致"));

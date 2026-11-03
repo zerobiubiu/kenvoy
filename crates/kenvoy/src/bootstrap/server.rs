@@ -85,6 +85,7 @@ pub(super) async fn run_server(
             auth,
             origin.clone(),
             Some(output.client),
+            output.i18n,
         )
         .await?
         .with_javascript(runtime.clone())

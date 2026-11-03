@@ -32,6 +32,58 @@ pub(super) const SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../../../frontend/src/domain/options.ts"),
     ),
     (
+        "src/domain/i18n/model.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/model.ts"),
+    ),
+    (
+        "src/domain/i18n/locale.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/locale.ts"),
+    ),
+    (
+        "src/domain/i18n/format.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/format.ts"),
+    ),
+    (
+        "src/domain/i18n/translate.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/translate.ts"),
+    ),
+    (
+        "src/domain/i18n/view.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/view.ts"),
+    ),
+    (
+        "src/domain/i18n/messages.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/messages.ts"),
+    ),
+    (
+        "src/domain/i18n/error.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/error.ts"),
+    ),
+    (
+        "src/domain/i18n/display.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/display.ts"),
+    ),
+    (
+        "src/domain/i18n/errors.ts",
+        include_bytes!("../../../frontend/src/domain/i18n/errors.ts"),
+    ),
+    (
+        "src/domain/i18n/ui.zh-CN.json",
+        include_bytes!("../../../frontend/src/domain/i18n/ui.zh-CN.json"),
+    ),
+    (
+        "src/domain/i18n/ui.en-US.json",
+        include_bytes!("../../../frontend/src/domain/i18n/ui.en-US.json"),
+    ),
+    (
+        "src/domain/i18n/errors.zh-CN.json",
+        include_bytes!("../../../frontend/src/domain/i18n/errors.zh-CN.json"),
+    ),
+    (
+        "src/domain/i18n/errors.en-US.json",
+        include_bytes!("../../../frontend/src/domain/i18n/errors.en-US.json"),
+    ),
+    (
         "src/application/ports.ts",
         include_bytes!("../../../frontend/src/application/ports.ts"),
     ),
@@ -70,6 +122,10 @@ pub(super) const SOURCES: &[(&str, &[u8])] = &[
     (
         "src/presentation/styles.css",
         include_bytes!("../../../frontend/src/presentation/styles.css"),
+    ),
+    (
+        "src/presentation/i18n.tsx",
+        include_bytes!("../../../frontend/src/presentation/i18n.tsx"),
     ),
     (
         "src/presentation/runtime/context.ts",

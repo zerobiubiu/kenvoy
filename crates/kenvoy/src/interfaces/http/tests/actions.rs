@@ -46,6 +46,7 @@ async fn server_actions_execute_compiled_esm_with_permissions_csrf_and_atomic_ge
         f.auth.clone(),
         "http://127.0.0.1:3000".into(),
         None,
+        Default::default(),
     )
     .await?
     .with_javascript(js.clone())
@@ -143,10 +144,15 @@ async fn server_actions_execute_compiled_esm_with_permissions_csrf_and_atomic_ge
     let updated_js = js.with_bundle(Arc::new(updated))?;
     let next = f
         .runtime
-        .publish_prepared(app.clone(), None, Some(updated_js))
+        .publish_prepared(app.clone(), None, Some(updated_js), Default::default())
         .await?;
     assert_eq!(next, old_generation + 1);
-    assert!(f.runtime.publish_prepared(app, None, None).await.is_err());
+    assert!(
+        f.runtime
+            .publish_prepared(app, None, None, Default::default())
+            .await
+            .is_err()
+    );
     let response = f
         .request("POST", "/api/actions/sum", &headers, r#"{"args":[14]}"#)
         .await?;

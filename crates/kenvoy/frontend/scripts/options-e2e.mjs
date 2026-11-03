@@ -33,7 +33,7 @@ try {
   await fixture.command(['--project', 'app', 'admin', 'init', '--username', 'admin', '--password-stdin'], password + '\n');
   let server = await fixture.start('run', ['--install-deps'], 240000);
   browser = await chromium.launch({ headless: true });
-  const admin = await browser.newContext();
+  const admin = await browser.newContext({ locale: 'zh-CN' });
   async function headers(context, form) {
     const session = await (await context.request.get(server.origin + '/_kenvoy/session')).json();
     return { origin: server.origin, 'x-kenvoy-csrf': session.csrf_token, 'x-kenvoy-generation': String(session.generation), ...(form ? { 'x-kenvoy-form': encodeURIComponent(form) } : {}) };

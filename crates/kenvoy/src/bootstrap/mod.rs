@@ -2,6 +2,7 @@
 mod build;
 mod commands;
 mod error;
+mod i18n;
 mod lifecycle;
 mod migrations;
 mod server;

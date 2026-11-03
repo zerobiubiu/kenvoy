@@ -1,19 +1,23 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { useI18n } from './i18n';
 
 export function Notice({ kind = 'info', title, children, onClose, role }: {
   kind?: 'info' | 'success' | 'warning' | 'error'; title?: string; children: ReactNode;
   onClose?: () => void; role?: 'alert' | 'status';
 }) {
+  const { t } = useI18n();
   return <div className={`kv-alert ${kind}`} role={role ?? (kind === 'error' || kind === 'warning' ? 'alert' : 'status')}>
     <div className="kv-alert-content">{title && <p className="kv-alert-title">{title}</p>}{children}</div>
-    {onClose && <button type="button" className="kv-button compact" aria-label="关闭提示" onClick={onClose}>关闭</button>}
+    {onClose && <button type="button" className="kv-button compact" aria-label={t('ui.dismiss')} onClick={onClose}>{t('ui.close')}</button>}
   </div>;
 }
 
-export function Loading({ label = '正在加载…', height = 240 }: { label?: string; height?: number }) {
-  return <div className="kv-loading" role="status" aria-label={label} style={{ minHeight: height }}>
-    <span>{label}</span><div className="kv-skeleton" aria-hidden="true" />
+export function Loading({ label, height = 240 }: { label?: string; height?: number }) {
+  const { t } = useI18n();
+  const description = label ?? t('ui.loading');
+  return <div className="kv-loading" role="status" aria-label={description} style={{ minHeight: height }}>
+    <span>{description}</span><div className="kv-skeleton" aria-hidden="true" />
   </div>;
 }
 
@@ -22,6 +26,7 @@ export function NativeDialog({ open, onClose, title, children, footer, className
   open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode;
   className?: string; closeDisabled?: boolean;
 }) {
+  const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const trigger = useRef<HTMLElement | null>(null);
@@ -64,6 +69,6 @@ export function NativeDialog({ open, onClose, title, children, footer, className
     }}>
     <h2 id={titleId} className="kv-dialog-title">{title}</h2>
     <div className="kv-dialog-content">{children}</div>
-    <div className="kv-dialog-actions">{footer ?? <button className="kv-button outlined" type="button" disabled={closeDisabled} onClick={onClose}>关闭</button>}</div>
+    <div className="kv-dialog-actions">{footer ?? <button className="kv-button outlined" type="button" disabled={closeDisabled} onClick={onClose}>{t('ui.close')}</button>}</div>
   </dialog>;
 }

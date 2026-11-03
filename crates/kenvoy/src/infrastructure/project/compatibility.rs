@@ -8,16 +8,37 @@ use super::{
     error::{ProjectError as Error, Result},
 };
 
-pub(super) const CURRENT_PROJECT_FORMAT: &str = "0.2.0";
-const SUPPORTED_FORMATS: &str = ">=0.2.0, <0.3.0";
+pub(super) const CURRENT_PROJECT_FORMAT: &str = "0.3.0";
+const SUPPORTED_FORMATS: &str = ">=0.2.0, <0.4.0";
 const FORMAT_MIN: Version = Version::new(0, 2, 0);
-const FORMAT_MAX: Version = Version::new(0, 3, 0);
+const FORMAT_MAX: Version = Version::new(0, 4, 0);
 
 impl Project {
     /// 加载配置不执行兼容性门禁，历史查询可以读取尚未升级的项目。
     pub fn check_compatibility(&self) -> Result<()> {
+        if self.config.i18n.is_some() {
+            check_i18n(&self.config.project)?;
+        }
         check(&self.config.project, env!("CARGO_PKG_VERSION"))
     }
+}
+
+pub(super) fn check_i18n(config: &ProjectConfig) -> Result<()> {
+    let minimum = Version::new(0, 3, 0);
+    if [
+        config.format_version.as_deref(),
+        config.min_cli_version.as_deref(),
+    ]
+    .into_iter()
+    .any(|raw| {
+        raw.and_then(|raw| Version::parse(raw).ok())
+            .is_none_or(|version| version.cmp_precedence(&minimum) == Ordering::Less)
+    }) {
+        return Err(Error::InvalidConfig(
+            "启用 i18n 要求 project.format_version >=0.3.0 且 project.min_cli_version >=0.3.0；旧配置不会自动升级，请明确确认兼容性后填写版本字段".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn parse(field: &str, raw: Option<&str>, problems: &mut Vec<String>) -> Option<Version> {

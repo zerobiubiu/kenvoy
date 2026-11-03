@@ -1,4 +1,6 @@
 //! 框架内置 CSR 资产导出到独占构建目录，业务数据不进入此目录。
+mod i18n;
+pub(crate) use i18n::messages;
 use sha2::{Digest, Sha256};
 use std::{
     fs,

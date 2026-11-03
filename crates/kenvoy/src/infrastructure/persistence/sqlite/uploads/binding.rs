@@ -15,9 +15,13 @@ use super::super::{DatabaseError, Result, migration, schema::SchemaModel};
 use super::{info, invalid};
 
 fn file_id<'a>(field: &FieldDefinition, value: &'a Value) -> Result<&'a str> {
-    value["id"]
-        .as_str()
-        .ok_or_else(|| invalid(&field.name, "附件引用缺少有效标识"))
+    value["id"].as_str().ok_or_else(|| {
+        invalid(
+            &field.name,
+            "附件引用缺少有效标识",
+            "validation.files.reference",
+        )
+    })
 }
 
 fn metadata_matches(stored: &UploadedFile, value: &Value) -> bool {
@@ -48,30 +52,65 @@ pub(in super::super) fn synchronize(
         let files = match value {
             Value::Null => &[][..],
             Value::Array(files) => files.as_slice(),
-            _ => return Err(invalid(&field.name, "附件字段必须为数组或 null")),
+            _ => {
+                return Err(invalid(
+                    &field.name,
+                    "附件字段必须为数组或 null",
+                    "validation.type.files",
+                ));
+            }
         };
         let constraints = field
             .upload
             .as_ref()
             .ok_or_else(|| DatabaseError::InvalidState("附件字段缺少上传约束".into()))?;
-        if files.len() > constraints.max_files || (field.required && files.is_empty()) {
-            return Err(invalid(&field.name, "附件数量不满足字段约束"));
+        if files.len() > constraints.max_files {
+            return Err(validation::ValidationErrors(vec![
+                validation::ValidationError::new(
+                    "KV4014",
+                    Some(field.name.clone()),
+                    "附件数量不满足字段约束",
+                    "validation.files.max_files",
+                )
+                .with_param("max", constraints.max_files),
+            ])
+            .into());
+        }
+        if field.required && files.is_empty() {
+            return Err(invalid(
+                &field.name,
+                "附件数量不满足字段约束",
+                "validation.required.files",
+            ));
         }
         let mut ids = Vec::with_capacity(files.len());
         for file in files {
             let id = file_id(field, file)?;
             if ids.contains(&id) {
-                return Err(invalid(&field.name, "附件引用不能重复"));
+                return Err(invalid(
+                    &field.name,
+                    "附件引用不能重复",
+                    "validation.files.duplicate",
+                ));
             }
-            let stored = info(transaction, id, now)?
-                .ok_or_else(|| invalid(&field.name, "附件不存在或暂存已经过期"))?;
+            let stored = info(transaction, id, now)?.ok_or_else(|| {
+                invalid(
+                    &field.name,
+                    "附件不存在或暂存已经过期",
+                    "validation.files.missing",
+                )
+            })?;
             if stored.resource != resource.name
                 || stored.field != field.name
                 || !metadata_matches(&stored.file, file)
                 || stored.file.size > constraints.max_size
                 || !validation::mime_matches_accept(&stored.file.content_type, &constraints.accept)
             {
-                return Err(invalid(&field.name, "附件归属、元数据或当前上传约束不匹配"));
+                return Err(invalid(
+                    &field.name,
+                    "附件归属、元数据或当前上传约束不匹配",
+                    "validation.files.mismatch",
+                ));
             }
             match stored.record_id {
                 Some(bound_id) => {
@@ -82,12 +121,20 @@ pub(in super::super) fn synchronize(
                             files.iter().any(|file| file["id"].as_str() == Some(id))
                         });
                     if bound_id != record_id || !retained {
-                        return Err(invalid(&field.name, "已绑定附件不能挪用到其他记录或字段"));
+                        return Err(invalid(
+                            &field.name,
+                            "已绑定附件不能挪用到其他记录或字段",
+                            "validation.files.bound",
+                        ));
                     }
                 }
                 None => {
                     if owner != Some(stored.owner.as_str()) {
-                        return Err(invalid(&field.name, "暂存附件不属于当前上传会话"));
+                        return Err(invalid(
+                            &field.name,
+                            "暂存附件不属于当前上传会话",
+                            "validation.files.owner",
+                        ));
                     }
                     let bound = transaction.execute(
                         "UPDATE _kenvoy_uploads SET record_id=?1 WHERE id=?2 AND record_id IS NULL",

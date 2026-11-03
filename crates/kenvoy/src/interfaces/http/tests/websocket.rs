@@ -53,6 +53,7 @@ async fn development_websocket_uses_fixed_loopback_protocol_and_closes_on_shutdo
         f.auth.clone(),
         origin.clone(),
         None,
+        Default::default(),
     )
     .await?;
     runtime

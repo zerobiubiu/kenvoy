@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "id": "000001",
+  "previous": null,
+  "description": "建立原生双语报名应用",
+  "schema_hash_version": "sha256-schema-v1",
+  "from_hash": "d4fdaf3ef6e7b78dc1a224d36c8f3530f79170316cdaadf83a757322bb82badc",
+  "to_hash": "3ce8d9e71b3244841ea157fae00bfd2f4796f49f7a1751780936e588f9b17ad2",
+  "checksum": "afcc8a09b8350b6a3b604d8ea44bd4d4c33c79ce3dc383d92ef5a3f7ce6b4299",
+  "executor": "sqlite-schema-v1",
+  "executor_format": 1,
+  "min_cli": "0.2.1",
+  "schema": {
+    "tables": {
+      "registrations": {
+        "columns": {
+          "arrival": {
+            "name": "arrival",
+            "kind": "date",
+            "required": false,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "guests": {
+            "name": "guests",
+            "kind": "number",
+            "required": false,
+            "default": 1,
+            "integer": true,
+            "min": 1.0,
+            "max": 10.0,
+            "max_length": null,
+            "options": []
+          },
+          "name": {
+            "name": "name",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": 80,
+            "options": []
+          },
+          "newsletter": {
+            "name": "newsletter",
+            "kind": "boolean",
+            "required": false,
+            "default": false,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "session": {
+            "name": "session",
+            "kind": "select",
+            "required": true,
+            "default": "morning",
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": [
+              "afternoon",
+              "morning"
+            ]
+          }
+        },
+        "indexes": {}
+      }
+    }
+  },
+  "rules": {
+    "format": 1,
+    "renames": [],
+    "backfills": [],
+    "conversions": [],
+    "before_sql": [],
+    "after_sql": [],
+    "preconditions": [],
+    "assertions": [],
+    "baseline_proofs": [],
+    "resolved_risks": []
+  },
+  "risk_level": "safe",
+  "risks": []
+}

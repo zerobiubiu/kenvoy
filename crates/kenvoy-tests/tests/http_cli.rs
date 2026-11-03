@@ -128,6 +128,7 @@ async fn real_cli_http_roles_and_restart_persist_sqlite() -> TestResult {
             StatusCode::OK,
         )
         .await?;
+    assert_eq!(model["format_version"], 2);
     assert!(
         !model.to_string().contains(
             fixture

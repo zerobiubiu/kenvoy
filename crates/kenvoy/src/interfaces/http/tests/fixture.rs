@@ -43,6 +43,7 @@ impl Fixture {
             auth.clone(),
             "http://127.0.0.1:3000".into(),
             None,
+            Default::default(),
         )
         .await?;
         Ok(Self {

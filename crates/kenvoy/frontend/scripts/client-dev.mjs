@@ -69,7 +69,10 @@ async function main() {
             next();return;
           }
           try { file=await realpath(file); } catch {res.statusCode=404;res.end();return;}
-          const frameworkFile=inside(file,path.join(framework,'src')) && /\.(?:[cm]?[jt]sx?|css)$/.test(file);
+          const frameworkFile=inside(file,path.join(framework,'src')) && (
+            /\.(?:[cm]?[jt]sx?|css)$/.test(file) ||
+            /^domain\/i18n\/(?:ui|errors)\.(?:zh-CN|en-US)\.json$/.test(path.relative(path.join(framework,'src'),file).replaceAll('\\','/'))
+          );
           const dependency=inside(file,toolchainDependencies) || (projectDependencies && inside(file,projectDependencies));
           const optimizer=inside(file,cache) && /\.(?:js|map)$/.test(file);
           if (!(frameworkFile || dependency || optimizer || allowed.has(canonicalKey(file)))) {res.statusCode=404;res.end();return;}

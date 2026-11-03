@@ -108,6 +108,7 @@ pub(super) fn collect(root: &Path) -> Result<BTreeMap<String, Asset>> {
                 .replace('\\', "/");
             if name != "application.ir"
                 && name != "migrations.json"
+                && name != "i18n.json"
                 && name != "modules/server.json"
                 && !name.starts_with("client/")
             {

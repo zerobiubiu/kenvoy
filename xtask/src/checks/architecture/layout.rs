@@ -62,7 +62,8 @@ pub(super) fn inspect(root: &Path) -> Result<Stats> {
         &mut errors,
     )?;
     let mut sources = Vec::new();
-    collect(root, root, &mut sources)?;
+    let mut json_assets = BTreeSet::new();
+    collect(root, root, &mut sources, &mut json_assets)?;
     sources.sort_by(|left, right| left.path.cmp(&right.path));
     let mut stats = Stats {
         files: sources.len(),
@@ -79,7 +80,7 @@ pub(super) fn inspect(root: &Path) -> Result<Stats> {
         }
     }
     stats.rust = rust::inspect(&sources, &mut errors)?;
-    stats.typescript = typescript::inspect(&sources, &mut errors)?;
+    stats.typescript = typescript::inspect(&sources, &json_assets, &mut errors)?;
     if !errors.is_empty() {
         errors.sort();
         errors.dedup();
@@ -133,7 +134,12 @@ fn root_layout(
     Ok(())
 }
 
-fn collect(root: &Path, directory: &Path, sources: &mut Vec<Source>) -> Result<()> {
+fn collect(
+    root: &Path,
+    directory: &Path,
+    sources: &mut Vec<Source>,
+    json_assets: &mut BTreeSet<PathBuf>,
+) -> Result<()> {
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
         let name = entry.file_name();
@@ -153,16 +159,23 @@ fn collect(root: &Path, directory: &Path, sources: &mut Vec<Source>) -> Result<(
         {
             continue;
         }
+        let path = entry.path();
         if kind.is_symlink() {
-            return Err(format!("自有源码不允许符号链接：{}", entry.path().display()).into());
+            return Err(format!("自有源码不允许符号链接：{}", path.display()).into());
         }
         if kind.is_dir() {
-            collect(root, &entry.path(), sources)?;
-        } else if code_extension(&entry.path()) {
+            collect(root, &path, sources, json_assets)?;
+        } else if code_extension(&path) {
             sources.push(Source {
-                path: entry.path().strip_prefix(root)?.to_path_buf(),
-                text: fs::read_to_string(entry.path())?,
+                path: path.strip_prefix(root)?.to_path_buf(),
+                text: fs::read_to_string(&path)?,
             });
+        } else if kind.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension == "json")
+        {
+            json_assets.insert(path.strip_prefix(root)?.to_path_buf());
         }
     }
     Ok(())

@@ -1,6 +1,7 @@
 //! 显式构造浏览器 DTO；宿主源码位置、模块路径和服务端实现从不序列化。
 
 use crate::domain::authorization::permits;
+use crate::domain::i18n::I18nBundle;
 use crate::domain::model::{
     ApplicationIR, ComponentDefinition, ExecutionEnvironment, FieldDefinition, NavigationItem,
     PermissionTarget, Role,
@@ -8,7 +9,12 @@ use crate::domain::model::{
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(super) fn application(application: &ApplicationIR, role: Role, generation: u64) -> Value {
+pub(super) fn application(
+    application: &ApplicationIR,
+    role: Role,
+    generation: u64,
+    i18n: &I18nBundle,
+) -> Value {
     let mut visible = BTreeMap::<String, BTreeSet<String>>::new();
     let pages: Vec<_> = application.pages.iter().filter(|page| permits(role, page.permission)).map(|page| {
         json!({"path":page.path,"title":page.title,"permission":page.permission,"components":page.components.iter().map(|node|component(node,&mut visible)).collect::<Vec<_>>()})
@@ -52,7 +58,10 @@ pub(super) fn application(application: &ApplicationIR, role: Role, generation: u
         })
         .collect();
     let permissions: Vec<_> = application.permissions.iter().filter(|policy|permits(role,policy.role)).filter(|policy|match &policy.target {PermissionTarget::Resource(name)=>visible.contains_key(name),PermissionTarget::Action(_)=>true}).map(|policy|json!({"target":policy.target,"operation":policy.operation,"fields":policy.fields,"form":policy.form})).collect();
-    json!({"format_version":1,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions,"component_overrides":application.component_overrides})
+    let mut projection = json!({"format_version":2,"name":application.name,"generation":generation,"role":role,"pages":pages,"resources":resources,"navigation":navigation,"actions":actions,"permissions":permissions,"component_overrides":application.component_overrides});
+    let catalog = super::i18n::project(i18n, &projection);
+    projection["i18n"] = json!(catalog);
+    projection
 }
 
 fn field(field: &FieldDefinition) -> Value {

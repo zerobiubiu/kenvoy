@@ -197,6 +197,7 @@ impl Development {
                             next.output.application.clone(),
                             Some(next.output.client.clone()),
                             Some(next_js),
+                            next.output.i18n.clone(),
                         )
                         .await;
                     if let Err(error) = publication {

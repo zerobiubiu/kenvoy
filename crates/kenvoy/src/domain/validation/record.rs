@@ -24,20 +24,22 @@ pub fn validate_record(
     mode: WriteMode,
 ) -> Result<Map<String, Value>, ValidationErrors> {
     let Some(object) = input.as_object() else {
-        return Err(ValidationErrors(vec![ValidationError {
-            code: "KV4010".into(),
-            field: None,
-            message: "记录必须为 JSON 对象".into(),
-        }]));
+        return Err(ValidationErrors(vec![ValidationError::new(
+            "KV4010",
+            None,
+            "记录必须为 JSON 对象",
+            "validation.record.object",
+        )]));
     };
     let mut errors = Vec::new();
     for name in object.keys() {
         if resource.field(name).is_none() {
-            errors.push(ValidationError {
-                code: "KV4011".into(),
-                field: Some(name.clone()),
-                message: "字段未在资源中声明或属于只读系统字段".into(),
-            });
+            errors.push(ValidationError::new(
+                "KV4011",
+                Some(name.clone()),
+                "字段未在资源中声明或属于只读系统字段",
+                "validation.record.field",
+            ));
         }
     }
     let mut output = Map::new();
@@ -132,9 +134,12 @@ pub fn parse_record_json(input: &[u8]) -> Result<Value, ValidationError> {
                 ))
             }
         })
-        .map_err(|_| ValidationError {
-            code: "KV4012".into(),
-            field: None,
-            message: "请求必须为有效且不含重复字段的 JSON 对象".into(),
+        .map_err(|_| {
+            ValidationError::new(
+                "KV4012",
+                None,
+                "请求必须为有效且不含重复字段的 JSON 对象",
+                "validation.record.json",
+            )
         })
 }

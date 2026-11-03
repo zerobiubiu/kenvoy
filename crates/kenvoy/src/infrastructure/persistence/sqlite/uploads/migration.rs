@@ -85,7 +85,8 @@ pub(in super::super) fn validate_bindings(
                 }
                 let mut ids = BTreeSet::new();
                 for file in &files {
-                    validation::validate_uploaded_file(file).map_err(invalid)?;
+                    validation::validate_uploaded_file(file)
+                        .map_err(|error| invalid(error.message()))?;
                     if !ids.insert(file.id.as_str())
                         || file.size > constraints.max_size
                         || !validation::mime_matches_accept(&file.content_type, &constraints.accept)

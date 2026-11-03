@@ -62,8 +62,12 @@ file 重载额外取得 `uploadState/upload/removeUpload/cancelUpload`，复用�
 - `useField()`：字段重载中的同一字段绑定，避免额外维护脱离表单的值。
 - `useForm()`：资源表单状态；只在对应上下文使用。
 - `useAction/callAction`：沿用服务端 Action 通道。
+- `useI18n()`：框架原生语言状态、`t`、`formatNumber/formatDate/formatDateTime` 和语言切换；无需应用 Provider 或第三方国际化库，规则见[原生国际化](i18n.md)。
 
 普通展示组件无需绑定资源；涉及业务数据的自定义组件使用这些接口，不复制字段 Schema。原生协议要求无法靠 TypeScript 阻止恶意浏览器脚本，真正的类型、授权与选项验证始终在 Rust 服务端执行。
+
+资源和字段标签在显示层按原生键翻译；选项 `value`、远程选项业务标签、字段草稿和规范提交值不被翻译。自定义组件的任意 props 不自动当成文案，使用 `useI18n().t('custom.<键>', params, fallback)` 明确声明。重载继续消费同一绑定，不把本地化数字、日期或布尔标签写回业务值。
+
 
 ## React 组件库
 

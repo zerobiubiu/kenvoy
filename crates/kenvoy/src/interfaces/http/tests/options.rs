@@ -164,7 +164,9 @@ async fn option_projection_is_form_scoped_and_never_grants_source_crud() -> Test
         })
         .ok_or("缺少城市字段")?;
     city.options_source.as_mut().ok_or("缺少来源")?.permission = Role::Admin;
-    f.runtime.publish_prepared(restricted, None, None).await?;
+    f.runtime
+        .publish_prepared(restricted, None, None, Default::default())
+        .await?;
     for candidate in ["hz", "missing"] {
         assert_eq!(
             f.request(

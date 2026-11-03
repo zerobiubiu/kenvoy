@@ -201,6 +201,7 @@ async fn https_cookies_and_strict_origin_ignore_untrusted_forwarded_headers() ->
         f.auth.clone(),
         "https://example.test".into(),
         None,
+        Default::default(),
     )
     .await?;
     let request = Request::builder()
@@ -249,7 +250,8 @@ async fn https_cookies_and_strict_origin_ignore_untrusted_forwarded_headers() ->
             f.database.clone(),
             f.auth.clone(),
             "http://example.test".into(),
-            None
+            None,
+            Default::default(),
         )
         .await
         .is_err()

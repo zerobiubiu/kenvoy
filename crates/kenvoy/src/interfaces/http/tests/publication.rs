@@ -11,7 +11,11 @@ async fn publication_is_cancel_safe_and_failed_migrations_keep_the_previous_gene
     changed.name = "第二代".into();
     let guard = f.runtime.shared.model.write_for_test().await;
     let runtime = f.runtime.clone();
-    let task = tokio::spawn(async move { runtime.publish_prepared(changed, None, None).await });
+    let task = tokio::spawn(async move {
+        runtime
+            .publish_prepared(changed, None, None, Default::default())
+            .await
+    });
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             if f.runtime.shared.model.has_publications_for_test()? {
@@ -41,7 +45,7 @@ async fn publication_is_cancel_safe_and_failed_migrations_keep_the_previous_gene
     invalid.resources[0].fields.remove(0);
     assert!(
         f.runtime
-            .publish_prepared(invalid, None, None)
+            .publish_prepared(invalid, None, None, Default::default())
             .await
             .is_err()
     );
@@ -69,6 +73,7 @@ async fn real_loopback_http_serves_metadata_and_stops_gracefully() -> TestResult
         f.auth.clone(),
         format!("http://{address}"),
         None,
+        Default::default(),
     )
     .await?;
     let (stop, stopped) = oneshot::channel();

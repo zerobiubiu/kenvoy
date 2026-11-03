@@ -12,7 +12,9 @@ import type { GroupBinding, PageBinding } from './bindings';
 import { useRuntime } from './context';
 import { ComponentBoundary, OverrideView } from './overrides';
 
+import { useI18n } from '../i18n';
 function BoundForm({ node, resource }: { node: Extract<ComponentDefinition, { type: 'form' }>; resource: ResourceDefinition }) {
+  const { t } = useI18n();
   const { client } = useRuntime();
   const [search] = useSearchParams();
   const rawId = search.get('id');
@@ -30,8 +32,8 @@ function BoundForm({ node, resource }: { node: Extract<ComponentDefinition, { ty
     return () => { current = false; };
   }, [client, resource.name, node.mode, id, attempt]);
   if (node.mode === 'edit') {
-    if (id === null) return <Notice>请从数据列表选择记录，或使用包含有效记录编号的编辑链接。</Notice>;
-    if (busy) return <Loading label="正在加载编辑记录" height={260} />;
+    if (id === null) return <Notice>{t('ui.form.edit_link')}</Notice>;
+    if (busy) return <Loading label={t('ui.form.loading_edit')} height={260} />;
     if (failure != null) return <RequestError error={failure} retry={() => setAttempt(value => value + 1)} />;
     if (!record) return null;
   }
@@ -39,8 +41,9 @@ function BoundForm({ node, resource }: { node: Extract<ComponentDefinition, { ty
 }
 
 function RegisteredComponent({ node }: { node: Extract<ComponentDefinition, { type: 'custom' }> }) {
+  const { t } = useI18n();
   const Custom = components[node.module];
-  if (!Custom) return <Notice kind="error">页面组件尚未准备完成，请联系应用管理员。</Notice>;
+  if (!Custom) return <Notice kind="error">{t('ui.component.unavailable')}</Notice>;
   const props = Object.fromEntries(Object.entries(node.props).map(([name, value]) => {
     if (value.kind === 'literal') return [name, value.value];
     if (Object.hasOwn(expressions, value.value)) return [name, expressions[value.value]()];
@@ -51,6 +54,7 @@ function RegisteredComponent({ node }: { node: Extract<ComponentDefinition, { ty
 }
 
 export function RenderNode({ node }: { node: ComponentDefinition }) {
+  const { t } = useI18n();
   const { application } = useRuntime();
   if (node.type === 'text') return <p className="kv-text">{node.value}</p>;
   if (node.type === 'image') {
@@ -65,7 +69,7 @@ export function RenderNode({ node }: { node: ComponentDefinition }) {
   }
   if (node.type === 'custom') return <ComponentBoundary key={node.module}><RegisteredComponent node={node} /></ComponentBoundary>;
   const resource = application.resources.find(item => item.name === node.resource);
-  if (!resource) return <Notice kind="error">此页面的数据资源暂不可用，请刷新页面或联系管理员。</Notice>;
+  if (!resource) return <Notice kind="error">{t('ui.resource.unavailable')}</Notice>;
   if (node.type === 'form') return <BoundForm resource={resource} node={node} />;
   if (node.type === 'table') return <ResourceTable resource={resource} columns={node.columns} />;
   return null;

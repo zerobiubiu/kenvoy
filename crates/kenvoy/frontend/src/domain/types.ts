@@ -1,3 +1,5 @@
+import type { I18nBundle, MessageParams } from './i18n/model.ts';
+
 /** 浏览器协议只含公开投影；不含宿主路径、源码或服务端函数实现。 */
 export type JsonScalar = string | number | boolean | null;
 export type UploadedFile = { id: string; name: string; content_type: string; size: number };
@@ -27,7 +29,7 @@ export interface FieldDefinition {
   /** 缺失与显式 null 的默认值必须区分。 */
   default?: JsonValue;
 }
-export interface ResourceDefinition { name: string; fields: FieldDefinition[] }
+export interface ResourceDefinition { name: string; label?: string; fields: FieldDefinition[] }
 export type PropValue = { kind: 'literal'; value: JsonValue } | { kind: 'module'; value: string };
 export type ComponentDefinition =
   | { type: 'form'; id: string; resource: string; mode: 'create' | 'edit'; fields: string[]; labels: Record<string, string> }
@@ -47,7 +49,8 @@ export type Operation = 'create' | 'list' | 'read' | 'update' | 'delete' | 'exec
 export type PermissionTarget = { kind: 'resource' | 'action'; name: string };
 export interface PermissionDefinition { target: PermissionTarget; operation: Operation; fields: string[]; form: string | null }
 export interface ApplicationDescription {
-  format_version: 1;
+  format_version: 2;
+  i18n: I18nBundle;
   name: string;
   generation: number;
   /** 只有开发宿主主动开放状态端点；缺省及 false 均不轮询。 */
@@ -69,7 +72,7 @@ export interface DevelopmentStatus {
 }
 export interface UserView { id: number; username: string; role: 'user' | 'admin' }
 export interface SessionView { user: UserView | null; csrf_token: string; expires_at: number; generation: number }
-export interface FieldError { code: string; field: string | null; message: string }
+export interface FieldError { code: string; field: string | null; message: string; message_key?: string; params?: MessageParams }
 export interface RecordData { [key: string]: FieldValue; id: number; created_at: string; updated_at: string }
 export interface ListResult { data: RecordData[]; page: number; page_size: number; total: number; generation: number }
 export interface ListQuery {

@@ -2,6 +2,7 @@ import type { ApplicationDescription, DevelopmentStatus, FieldError, JsonValue, 
 import { isFieldValue, isFileConstraints, isSafeImageSource, isUploadedFile, MAX_FILE_SIZE, validFileName, validMime } from '../domain/files.ts';
 import { ApiError } from '../application/errors.ts';
 import type { Client } from '../application/ports.ts';
+import { isI18nBundle } from '../domain/i18n/model.ts';
 
 interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; file?: File; uploadMode?: 'create' | 'update'; form?: string; write?: boolean; csrf?: boolean }
 interface ResponseValue { value: unknown; requestId?: string }
@@ -50,11 +51,12 @@ function isNavigation(value: unknown, depth = 0): boolean {
   return value.type === 'group' && nullableString(value.label) && Array.isArray(value.items) && value.items.every(item => isNavigation(item, depth + 1));
 }
 function isApplication(value: unknown): value is ApplicationDescription {
-  return isObject(value) && value.format_version === 1 && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
+  return isObject(value) && value.format_version === 2 && isI18nBundle(value.i18n) && typeof value.name === 'string' && positiveInteger(value.generation) && role(value.role)
     && (value.component_overrides === undefined || (isObject(value.component_overrides) && Object.entries(value.component_overrides).every(([key, id]) => ['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'file', 'image', 'form', 'table', 'group', 'page'].includes(key) && typeof id === 'string')))
     && (!Object.hasOwn(value, 'development') || typeof value.development === 'boolean')
     && Array.isArray(value.pages) && value.pages.every(page => isObject(page) && typeof page.path === 'string' && typeof page.title === 'string' && role(page.permission) && Array.isArray(page.components) && page.components.every(node => isComponent(node)))
-    && Array.isArray(value.resources) && value.resources.every(resource => isObject(resource) && typeof resource.name === 'string' && Array.isArray(resource.fields) && resource.fields.every(isField))
+    && Array.isArray(value.resources) && value.resources.every(resource => isObject(resource) && typeof resource.name === 'string'
+      && (resource.label === undefined || typeof resource.label === 'string') && Array.isArray(resource.fields) && resource.fields.every(isField))
     && Array.isArray(value.navigation) && value.navigation.every(nav => isObject(nav) && nullableString(nav.label) && Array.isArray(nav.items) && nav.items.every(item => isNavigation(item)))
     && Array.isArray(value.actions) && value.actions.every(action => isObject(action) && typeof action.name === 'string' && role(action.permission)
       && (action.runtime === 'server' ? !Object.prototype.hasOwnProperty.call(action, 'handler') : (action.runtime === 'client' || action.runtime === 'shared') && typeof action.handler === 'string'))
@@ -70,16 +72,16 @@ export function developmentChange(previous: DevelopmentStatus | null, next: Deve
   return 'none';
 }
 const pathResource = (resource: string): string => {
-  if (!identifier(resource) || resource.startsWith('_kenvoy_')) throw new ApiError('资源名称无效');
+  if (!identifier(resource) || resource.startsWith('_kenvoy_')) throw new ApiError('资源名称无效', { message_key: 'ui.api.resource' });
   return `/api/${resource}`;
 };
 function pathRecord(resource: string, id: number): string {
-  if (!positiveInteger(id)) throw new ApiError('记录 id 必须为安全正整数');
+  if (!positiveInteger(id)) throw new ApiError('记录 id 必须为安全正整数', { message_key: 'ui.api.record_id' });
   return `${pathResource(resource)}/${id}`;
 }
 export function fileUrl(file: UploadedFile | string, download = false): string {
   const id = typeof file === 'string' ? file : file?.id;
-  if (typeof id !== 'string' || /^[a-f0-9]{64}$/.exec(id)?.[0] !== id) throw new ApiError('附件标识无效');
+  if (typeof id !== 'string' || /^[a-f0-9]{64}$/.exec(id)?.[0] !== id) throw new ApiError('附件标识无效', { message_key: 'ui.api.file_id' });
   return `/_kenvoy/files/${id}${download ? '?download=1' : ''}`;
 }
 function isRecord(value: unknown): value is RecordData {
@@ -92,7 +94,8 @@ function isSession(value: unknown): value is SessionView {
     && (value.user === null || (isObject(value.user) && positiveInteger(value.user.id) && typeof value.user.username === 'string' && (value.user.role === 'user' || value.user.role === 'admin')));
 }
 function protocolError(write: boolean, requestId?: string): ApiError {
-  return new ApiError(write ? '服务器响应无法确认，操作结果需要核对，请勿重复提交' : '服务器返回了无法识别的响应', { code: 'KV6002', request_id: requestId, outcomeUnknown: write });
+  return new ApiError(write ? '服务器响应无法确认，操作结果需要核对，请勿重复提交' : '服务器返回了无法识别的响应',
+    { code: 'KV6002', message_key: write ? 'ui.protocol.write' : 'ui.protocol.read', request_id: requestId, outcomeUnknown: write });
 }
 function serializable(value: unknown, ancestors = new Set<object>(), depth = 0): boolean {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
@@ -117,7 +120,7 @@ export class ApiClient implements Client {
   #generation: number | null = null;
   #timeoutMs: number;
   constructor(fetcher: typeof fetch = globalThis.fetch.bind(globalThis), timeoutMs = 30_000) {
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) throw new ApiError('请求期限必须在 1 至 30000 毫秒范围内');
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) throw new ApiError('请求期限必须在 1 至 30000 毫秒范围内', { message_key: 'ui.api.timeout' });
     this.#fetch = fetcher;
     this.#timeoutMs = timeoutMs;
   }
@@ -133,7 +136,7 @@ export class ApiClient implements Client {
     const pending = this.#request('/_kenvoy/session').then(response => {
       if (epoch !== this.#sessionEpoch) {
         if (this.#session) return this.#session;
-        throw new ApiError('会话状态已经变化，请重新获取会话', { code: 'KV6004' });
+        throw new ApiError('会话状态已经变化，请重新获取会话', { code: 'KV6004', message_key: 'ui.session.changed' });
       }
       return this.#acceptSession(response, false);
     });
@@ -161,7 +164,7 @@ export class ApiClient implements Client {
   }
   async logout(): Promise<SessionView> { return this.#changeSession('/_kenvoy/logout', {}); }
   #changeSession(path: string, body: unknown): Promise<SessionView> {
-    if (this.#authPending) return Promise.reject(new ApiError('登录或退出正在进行，本次请求尚未执行', { code: 'KV6004', status: 409 }));
+    if (this.#authPending) return Promise.reject(new ApiError('登录或退出正在进行，本次请求尚未执行', { code: 'KV6004', message_key: 'ui.session.pending', status: 409 }));
     const pending = this.#performSessionChange(path, body);
     this.#authPending = pending;
     void pending.finally(() => { if (this.#authPending === pending) this.#authPending = null; }).catch(() => {});
@@ -200,7 +203,7 @@ export class ApiClient implements Client {
     }
     if (query.descending !== undefined) search.set('direction', query.descending ? 'desc' : 'asc');
     if (query.filters) for (const [field, value] of Object.entries(query.filters)) {
-      if (!identifier(field) || !serializable(value) || (typeof value === 'object' && value !== null)) throw new ApiError('筛选字段或标量值无效');
+      if (!identifier(field) || !serializable(value) || (typeof value === 'object' && value !== null)) throw new ApiError('筛选字段或标量值无效', { message_key: 'ui.api.filter' });
       search.set(`filter_${field}`, JSON.stringify(value));
     }
     const { value, requestId } = await this.#request(`${pathResource(resource)}${search.size ? `?${search}` : ''}`);
@@ -215,7 +218,7 @@ export class ApiClient implements Client {
       || (query.search !== undefined && (typeof query.search !== 'string' || [...query.search].length > 256))
       || (query.page !== undefined && !positiveInteger(query.page))
       || (query.page_size !== undefined && (!positiveInteger(query.page_size) || query.page_size > 100))
-      || (query.selected !== undefined && typeof query.selected !== 'string')) throw new ApiError('选项查询参数无效');
+      || (query.selected !== undefined && typeof query.selected !== 'string')) throw new ApiError('选项查询参数无效', { message_key: 'ui.api.options' });
     await this.#ensureSession();
     const { value, requestId } = await this.#request(`${pathResource(resource)}/options/${field}`, { method: 'POST', body: query, form, csrf: true });
     if (!isObject(value) || !Array.isArray(value.data) || !value.data.every(isOption)
@@ -242,9 +245,9 @@ export class ApiClient implements Client {
   }
   async upload(resource: string, field: string, file: File, form?: string, mode: 'create' | 'update' = 'create'): Promise<UploadedFile> {
     pathResource(resource);
-    if (!identifier(field) || field.startsWith('_kenvoy_') || (mode !== 'create' && mode !== 'update')) throw new ApiError('上传字段或操作模式无效');
+    if (!identifier(field) || field.startsWith('_kenvoy_') || (mode !== 'create' && mode !== 'update')) throw new ApiError('上传字段或操作模式无效', { message_key: 'ui.api.upload_mode' });
     if (typeof File === 'undefined' || !(file instanceof File) || !validFileName(file.name) || !Number.isSafeInteger(file.size)
-      || file.size < 1 || file.size > MAX_FILE_SIZE || !validMime(file.type || 'application/octet-stream')) throw new ApiError('文件名称、大小或 MIME 类型无效；单个文件不得超过 10 MiB');
+      || file.size < 1 || file.size > MAX_FILE_SIZE || !validMime(file.type || 'application/octet-stream')) throw new ApiError('文件名称、大小或 MIME 类型无效；单个文件不得超过 10 MiB', { message_key: 'ui.api.file' });
     await this.#ensureSession();
     const { value, requestId } = await this.#request(`/_kenvoy/uploads/${resource}/${field}`, { method: 'POST', file, uploadMode: mode, form, write: true });
     if (!isObject(value) || !isUploadedFile(value.data) || !positiveInteger(value.generation)) throw protocolError(true, requestId);
@@ -257,7 +260,7 @@ export class ApiClient implements Client {
     if (response.value !== null) throw protocolError(true, response.requestId);
   }
   async executeAction(name: string, args: JsonValue[] = []): Promise<JsonValue> {
-    if (/^[A-Za-z][A-Za-z0-9_]*$/.exec(name)?.[0] !== name || !Array.isArray(args) || args.length > 32) throw new ApiError('动作名称或参数数量无效');
+    if (/^[A-Za-z][A-Za-z0-9_]*$/.exec(name)?.[0] !== name || !Array.isArray(args) || args.length > 32) throw new ApiError('动作名称或参数数量无效', { message_key: 'ui.api.action' });
     await this.#ensureSession();
     const response = await this.#request(`/api/actions/${name}`, { method: 'POST', body: { args }, write: true });
     if (!isObject(response.value) || !Object.prototype.hasOwnProperty.call(response.value, 'data') || !serializable(response.value.data)
@@ -279,13 +282,13 @@ export class ApiClient implements Client {
     if (options.form !== undefined) headers.set('x-kenvoy-form', encodeURIComponent(options.form));
     let body: BodyInit | undefined;
     if (options.body !== undefined) {
-      if (!isObject(options.body) || !serializable(options.body)) throw new ApiError('请求必须为有效 JSON 对象，不能含非有限数字、undefined 或循环引用');
+      if (!isObject(options.body) || !serializable(options.body)) throw new ApiError('请求必须为有效 JSON 对象，不能含非有限数字、undefined 或循环引用', { message_key: 'ui.api.json' });
       body = JSON.stringify(options.body);
-      if (new TextEncoder().encode(body).length > 1024 * 1024) throw new ApiError('请求数据超过 1 MiB 限制');
+      if (new TextEncoder().encode(body).length > 1024 * 1024) throw new ApiError('请求数据超过 1 MiB 限制', { message_key: 'ui.api.body_size' });
       headers.set('content-type', 'application/json');
     }
     if (options.file !== undefined) {
-      if (options.body !== undefined) throw new ApiError('二进制上传不能同时携带 JSON 请求体');
+      if (options.body !== undefined) throw new ApiError('二进制上传不能同时携带 JSON 请求体', { message_key: 'ui.api.upload_body' });
       body = options.file;
       headers.set('content-type', options.file.type || 'application/octet-stream');
       headers.set('x-kenvoy-filename', encodeURIComponent(options.file.name));
@@ -298,7 +301,8 @@ export class ApiClient implements Client {
         this.#perform(path, { method: options.method ?? 'GET', headers, body, credentials: 'same-origin', mode: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal }, write, this.#sessionEpoch),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            reject(new ApiError(write ? '请求超时，操作结果需要核对，请勿重复提交' : '请求超时，请稍后重新加载', { code: 'KV6003', outcomeUnknown: write }));
+            reject(new ApiError(write ? '请求超时，操作结果需要核对，请勿重复提交' : '请求超时，请稍后重新加载',
+              { code: 'KV6003', message_key: write ? 'ui.timeout.write' : 'ui.timeout.read', outcomeUnknown: write }));
             controller.abort();
           }, this.#timeoutMs);
         }),
@@ -310,7 +314,8 @@ export class ApiClient implements Client {
     try {
       response = await this.#fetch(path, options);
     } catch {
-      throw new ApiError(write ? '网络连接中断，操作结果需要核对，请勿重复提交' : '网络连接失败，请检查连接后重新加载', { code: 'KV6001', outcomeUnknown: write });
+      throw new ApiError(write ? '网络连接中断，操作结果需要核对，请勿重复提交' : '网络连接失败，请检查连接后重新加载',
+        { code: 'KV6001', message_key: write ? 'ui.network.write' : 'ui.network.read', outcomeUnknown: write });
     }
     const requestId = response.headers.get('x-request-id') ?? undefined;
     if (response.status === 204 && response.ok) return { value: null, requestId };
@@ -319,11 +324,17 @@ export class ApiClient implements Client {
     if (options.signal?.aborted) throw protocolError(write, requestId);
     if (!response.ok) {
       const error = isObject(value) && isObject(value.error) ? value.error : null;
-      if (!error || typeof error.code !== 'string' || typeof error.message !== 'string') throw protocolError(write, requestId);
-      const fields = Array.isArray(error.fields) ? error.fields.filter((item): item is FieldError => isObject(item) && typeof item.code === 'string' && (item.field === null || typeof item.field === 'string') && typeof item.message === 'string') : [];
+      const metadata = (item: Record<string, unknown>): boolean => (item.message_key === undefined || typeof item.message_key === 'string')
+        && (item.params === undefined || (isObject(item.params) && Object.values(item.params).every(scalar)));
+      if (!error || typeof error.code !== 'string' || typeof error.message !== 'string' || !metadata(error)) throw protocolError(write, requestId);
+      const fields = Array.isArray(error.fields) ? error.fields.filter((item): item is FieldError => isObject(item)
+        && typeof item.code === 'string' && (item.field === null || typeof item.field === 'string') && typeof item.message === 'string' && metadata(item)) : [];
       const unknown = write && (error.code === 'KV5051' || (response.status >= 500 && !['KV5053', 'KV5153'].includes(error.code)));
       if (response.status === 401 && error.code !== 'KV5101' && epoch === this.#sessionEpoch) this.#invalidateSession();
-      throw new ApiError(unknown ? '操作结果需要核对，请联系管理员确认，勿重复提交' : error.message, { code: error.code, status: response.status, fields, request_id: typeof error.request_id === 'string' ? error.request_id : requestId, outcomeUnknown: unknown });
+      throw new ApiError(unknown ? '操作结果需要核对，请联系管理员确认，勿重复提交' : error.message, {
+        code: error.code, message_key: error.message_key as string | undefined, params: error.params as FieldError['params'],
+        status: response.status, fields, request_id: typeof error.request_id === 'string' ? error.request_id : requestId, outcomeUnknown: unknown,
+      });
     }
     return { value, requestId };
   }

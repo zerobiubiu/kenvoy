@@ -4,6 +4,7 @@ mod actions;
 mod development;
 mod errors;
 mod handlers;
+mod i18n;
 mod middleware;
 mod projection;
 mod request;

@@ -10,9 +10,12 @@ import { FormContext } from '../runtime/bindings';
 import type { FormBinding } from '../runtime/bindings';
 import { useRuntime } from '../runtime/context';
 import { OverrideView } from '../runtime/overrides';
-import { errorMessage, RequestError } from '../RequestError';
+import { RequestError } from '../RequestError';
 import { Notice } from '../ui';
 import { FieldControl } from './FieldControl';
+import { useI18n } from '../i18n';
+import { translateError } from '../../domain/i18n/error';
+import type { LocalizedMessage } from '../../domain/i18n/error';
 
 export interface ResourceFormProps {
   resource: ResourceDefinition; fields?: string[]; labels?: Record<string, string>; formId?: string;
@@ -25,6 +28,7 @@ export function ResourceForm(props: ResourceFormProps) {
 }
 
 function ResourceFormContent({ resource, fields, labels, formId, initial, mode = 'create', onSaved, onCancel }: ResourceFormProps) {
+  const { t, formatNumber } = useI18n();
   const { client, refresh, application } = useRuntime();
   const selected = resource.fields.filter(field => !fields || fields.includes(field.name));
   const makeValues = () => Object.fromEntries(selected.map(field => [field.name, draftValue(field, initial ? initial[field.name] : field.default)]));
@@ -32,7 +36,8 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
   const [exactValues, setExactValues] = useState<Record<string, FieldValue>>({});
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
   const [unchanged, setUnchanged] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [fieldErrors, setErrors] = useState<Record<string, LocalizedMessage[]>>({});
+  const errors = Object.fromEntries(Object.entries(fieldErrors).map(([name, messages]) => [name, messages.map(item => translateError(item, t)).join(t('ui.separator'))]));
   const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<RecordData | null>(null);
@@ -58,7 +63,7 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
       setExactValues(current => ({ ...current, [name]: files }));
       setDirty(current => new Set([...current, name]));
       setUnchanged(false);
-      setErrors(current => ({ ...current, [name]: '' }));
+      setErrors(current => ({ ...current, [name]: [] }));
     },
   });
   const uploads = controller.current;
@@ -97,14 +102,14 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
     });
     setDirty(current => new Set([...current, field.name, ...cleared]));
     setUnchanged(false);
-    setErrors(current => ({ ...current, ...Object.fromEntries([field.name, ...cleared].map(name => [name, ''])) }));
+    setErrors(current => ({ ...current, ...Object.fromEntries([field.name, ...cleared].map(name => [name, []])) }));
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (pending.current || busy || saved || uncertain || uploads.blocked) return;
-    if (mode === 'edit' && !initial) { setFailure(new Error('请先选择需要编辑的记录。')); return; }
+    if (mode === 'edit' && !initial) { setFailure(new ApiError('请先选择需要编辑的记录。', { message_key: 'ui.form.pick_record' })); return; }
     if (mode === 'edit' && dirty.size === 0) { setUnchanged(true); return; }
-    const nextErrors: Record<string, string> = {};
+    const nextErrors: Record<string, LocalizedMessage[]> = {};
     const input: Record<string, JsonValue> = {};
     const complete: Record<string, FieldValue> = { ...jsonValues };
     for (const field of selected) {
@@ -115,12 +120,12 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
       if (result.ok) {
         complete[field.name] = result.value as FieldValue;
         if (touched) input[field.name] = result.value;
-      } else nextErrors[field.name] = result.errors.map(item => item.message).join('；');
+      } else nextErrors[field.name] = result.errors;
     }
     for (const field of selected) {
       const value = complete[field.name];
       if (field.kind === 'select' && value !== null && value !== undefined && !field.options_source
-        && !staticOptions(field, complete, resource).some(option => option.value === value)) nextErrors[field.name] = '当前值不属于所选上级字段的选项';
+        && !staticOptions(field, complete, resource).some(option => option.value === value)) nextErrors[field.name] = [{ message: '', message_key: 'ui.form.option_parent' }];
     }
     setErrors(nextErrors); setFailure(null);
     if (Object.keys(nextErrors).length) { focusFirst(Object.keys(nextErrors)); return; }
@@ -130,9 +135,9 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
       for (const field of selected.filter(item => item.options_source)) {
         const value = complete[field.name];
         if (value === null || value === undefined) continue;
-        if (!dependenciesReady(field, complete)) { nextErrors[field.name] = '请先填写选项依赖字段'; continue; }
+        if (!dependenciesReady(field, complete)) { nextErrors[field.name] = [{ message: '', message_key: 'ui.form.option_dependencies' }]; continue; }
         const result = await client.options(resource.name, field.name, { dependencies: dependencyValues(field, complete), selected: String(value), page_size: 1 }, formId);
-        if (!result.selected) nextErrors[field.name] = '当前选项已失效或不属于所选上级字段，请重新选择';
+        if (!result.selected) nextErrors[field.name] = [{ message: '', message_key: 'ui.form.option_invalid' }];
       }
       if (!live.current) return;
       if (Object.keys(nextErrors).length) { setErrors(nextErrors); focusFirst(Object.keys(nextErrors)); return; }
@@ -147,8 +152,8 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
       setFailure(error);
       if (error instanceof ApiError) {
         setUncertain(error.outcomeUnknown);
-        const serverErrors: Record<string, string> = {};
-        for (const item of error.fields ?? []) if (item.field) serverErrors[item.field] = item.message;
+        const serverErrors: Record<string, LocalizedMessage[]> = {};
+        for (const item of error.fields ?? []) if (item.field) serverErrors[item.field] = [...(serverErrors[item.field] ?? []), item];
         setErrors(serverErrors); focusFirst(Object.keys(serverErrors));
       }
     } finally { pending.current = false; if (live.current) setBusy(false); }
@@ -158,7 +163,7 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
     setValues(makeValues()); setExactValues({}); setDirty(new Set()); setUnchanged(false); setSaved(null);
     setFailure(null); setUncertain(false); setErrors({}); setCopyState(''); focusFirst(selected.map(field => field.name));
   };
-  const content = mode === 'edit' && !initial ? <Notice>请先从数据列表选择需要编辑的记录。</Notice> : <>
+  const content = mode === 'edit' && !initial ? <Notice>{t('ui.form.pick_from_list')}</Notice> : <>
     <div className="field-grid">{selected.map(field => <FieldControl key={field.name}
       field={{ ...field, label: labels?.[field.name] ?? field.label }} resource={resource} values={jsonValues} validity={validity} formId={formId}
       value={values[field.name] ?? ''} canonicalValue={jsonValues[field.name]} canonicalValid={validity[field.name]} disabled={busy || Boolean(saved) || uncertain} error={errors[field.name]}
@@ -170,24 +175,26 @@ function ResourceFormContent({ resource, fields, labels, formId, initial, mode =
         cancelUpload: () => uploads.cancel(field.name),
       } : undefined}
       onChange={value => change(field, value)} onValueChange={value => {
-        if (field.kind === 'file') void uploads.replace(field.name, Array.isArray(value) ? value : null).catch(error => setErrors(current => ({ ...current, [field.name]: errorMessage(error) })));
+        if (field.kind === 'file') void uploads.replace(field.name, Array.isArray(value) ? value : null).catch(error => setErrors(current => ({
+          ...current, [field.name]: [error instanceof Error ? error : { message: '', message_key: 'ui.files.failed' }],
+        })));
         else change(field, draftValue(field, value), { value });
       }} />)}</div>
     {failure != null && <RequestError error={failure} />}
-    {unchanged && <Notice>内容没有变化，无需保存。</Notice>}
-    {failure instanceof ApiError && !uncertain && [401, 403, 409].includes(failure.status) && <button type="button" className="kv-button" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>刷新登录与页面状态</button>}
-    {saved && <div ref={feedback} tabIndex={-1} className="form-feedback"><Notice kind="success" role="status" title={mode === 'edit' ? '修改已保存' : '提交成功'}>
-      记录编号：{String(saved.id)}。{mode === 'create' ? '您的信息已保存。' : '记录已更新。'}</Notice></div>}
+    {unchanged && <Notice>{t('ui.form.unchanged')}</Notice>}
+    {failure instanceof ApiError && !uncertain && [401, 403, 409].includes(failure.status) && <button type="button" className="kv-button" onClick={() => { void refresh().then(() => setFailure(null)).catch(setFailure); }}>{t('ui.form.refresh')}</button>}
+    {saved && <div ref={feedback} tabIndex={-1} className="form-feedback"><Notice kind="success" role="status" title={t(mode === 'edit' ? 'ui.form.updated' : 'ui.form.submitted')}>
+      {t(mode === 'create' ? 'ui.form.saved_create' : 'ui.form.saved_edit', { id: formatNumber(saved.id, { useGrouping: false }) })}</Notice></div>}
     <div className="kv-row kv-form-actions">
-      {!saved && <button type="submit" className="kv-button primary" disabled={busy || uncertain || uploads.blocked}>{busy ? '正在保存…' : uploads.blocked ? '请先完成文件操作' : mode === 'edit' ? '保存修改' : '提交信息'}</button>}
-      {saved && !onSaved && mode === 'create' && <button type="button" className="kv-button" onClick={reset}>再登记一条</button>}
-      {!saved && !uncertain && !onCancel && uploads.hasWork && <button type="button" className="kv-button" onClick={reset} disabled={busy}>取消本次填写</button>}
-      {onCancel && <button type="button" className="kv-button" onClick={() => { uploads.dispose(); onCancel(); }} disabled={busy}>{saved ? '返回列表' : '取消'}</button>}
+      {!saved && <button type="submit" className="kv-button primary" disabled={busy || uncertain || uploads.blocked}>{t(busy ? 'ui.form.saving' : uploads.blocked ? 'ui.form.files_pending' : mode === 'edit' ? 'ui.form.save' : 'ui.form.submit')}</button>}
+      {saved && !onSaved && mode === 'create' && <button type="button" className="kv-button" onClick={reset}>{t('ui.form.another')}</button>}
+      {!saved && !uncertain && !onCancel && uploads.hasWork && <button type="button" className="kv-button" onClick={reset} disabled={busy}>{t('ui.form.reset')}</button>}
+      {onCancel && <button type="button" className="kv-button" onClick={() => { uploads.dispose(); onCancel(); }} disabled={busy}>{t(saved ? 'ui.form.back' : 'ui.cancel')}</button>}
       {uncertain && <button type="button" className="kv-button" onClick={() => {
-        void navigator.clipboard.writeText(JSON.stringify({ ...values, ...exactValues }, null, 2)).then(() => setCopyState('填写内容已复制，可交给管理员核对。')).catch(() => setCopyState('无法访问剪贴板，请保留当前页面并联系管理员。'));
-      }}>复制填写内容</button>}
+        void navigator.clipboard.writeText(JSON.stringify({ ...values, ...exactValues }, null, 2)).then(() => setCopyState('ui.form.copied')).catch(() => setCopyState('ui.form.copy_failed'));
+      }}>{t('ui.form.copy')}</button>}
     </div>
-    {copyState && <p role="status" className="kv-hint">{copyState}</p>}
+    {copyState && <p role="status" className="kv-hint">{t(copyState)}</p>}
   </>;
   const binding: FormBinding = { resource: immutable(resource), mode, formId, fields: selected.map(field => field.name),
     values: immutable(jsonValues), validity: immutable(validity), errors: immutable(errors), busy: busy || uploads.blocked, saved: saved ? immutable(saved) : null, submit, children: content };

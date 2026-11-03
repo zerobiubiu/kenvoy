@@ -95,14 +95,16 @@ fn format_gate_is_independent_from_minimum_cli_gate() {
         ("0.2.1", "0.1.99", false),
         ("0.2.1", "0.2.0", true),
         ("0.2.1", "0.2.999", true),
-        ("0.2.1", "0.3.0", false),
+        ("0.3.0", "0.3.0", true),
+        ("0.3.0", "0.3.999", true),
+        ("0.3.0", "0.4.0", false),
         ("0.2.1", "1.0.0", false),
         ("0.2.1", "0.2.0+schema.1", true),
         ("0.2.1", "0.2.1-alpha", false),
         ("0.2.1-alpha", "0.2.0-alpha", false),
         ("0.2.1-alpha", "0.2.1-alpha", true),
         ("0.2.1-alpha", "0.3.0-alpha", true),
-        ("0.2.1-alpha", "0.3.0", false),
+        ("0.3.0-alpha", "0.4.0", false),
     ] {
         assert_eq!(
             check(&config("0.2.0", format), cli).is_ok(),
@@ -110,7 +112,7 @@ fn format_gate_is_independent_from_minimum_cli_gate() {
             "CLI={cli}, format={format}"
         );
     }
-    let error = check(&config("0.9.0", "0.3.0"), "0.2.1")
+    let error = check(&config("0.9.0", "0.4.0"), "0.3.0")
         .expect_err("两个门禁必须同时报告")
         .to_string();
     assert!(error.contains("低于项目要求"));
@@ -133,7 +135,7 @@ fn missing_legacy_fields_stay_missing_and_diagnostic_explains_upgrade() -> TestR
             "实际 Kenvoy CLI：0.2.1",
             "最低 CLI：",
             "项目格式：",
-            ">=0.2.0, <0.3.0",
+            ">=0.2.0, <0.4.0",
             "旧配置升级路径",
             "migrate baseline",
             "migrate history",
@@ -182,7 +184,7 @@ fn load_keeps_legacy_history_accessible_but_new_templates_are_explicit() -> Test
         new.config.project.min_cli_version.as_deref(),
         Some(env!("CARGO_PKG_VERSION"))
     );
-    assert_eq!(new.config.project.format_version.as_deref(), Some("0.2.0"));
+    assert_eq!(new.config.project.format_version.as_deref(), Some("0.3.0"));
     new.check_compatibility()?;
     Ok(())
 }

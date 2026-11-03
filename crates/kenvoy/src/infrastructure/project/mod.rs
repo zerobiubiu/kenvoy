@@ -4,6 +4,7 @@ mod compatibility;
 mod config;
 mod create;
 mod error;
+pub mod i18n;
 mod paths;
 mod snapshot;
 
@@ -117,13 +118,15 @@ impl Project {
                     .into(),
             ));
         }
-        Ok(Self {
+        let project = Self {
             root,
             config,
             entry,
             database,
             out_dir,
             snapshot: false,
-        })
+        };
+        i18n::messages_dir(&project)?;
+        Ok(project)
     }
 }

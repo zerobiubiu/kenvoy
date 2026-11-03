@@ -15,16 +15,16 @@ pub use load::{activate, load};
 pub use staging::Staging;
 
 use crate::{
-    domain::model::ApplicationIR,
+    domain::{i18n::I18nBundle, model::ApplicationIR},
     infrastructure::persistence::sqlite::migration::{self, catalog::Catalog},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-const FORMAT_VERSION: u32 = 2;
-const INPUT_HASH_VERSION: &str = "sha256-input-v2";
-const BUILD_HASH_VERSION: &str = "sha256-build-v2";
+const FORMAT_VERSION: u32 = 3;
+const INPUT_HASH_VERSION: &str = "sha256-input-v3";
+const BUILD_HASH_VERSION: &str = "sha256-build-v3";
 const MAX_FILE: u64 = 32 * 1024 * 1024;
 const MAX_TOTAL: u64 = 256 * 1024 * 1024;
 
@@ -66,6 +66,13 @@ fn valid_hash(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+fn i18n_config_hash(project: &crate::infrastructure::project::Project) -> Result<String> {
+    Ok(digest(&serde_json::to_vec(&(
+        "kenvoy-i18n-config-v1",
+        &project.config.i18n,
+    ))?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
@@ -88,6 +95,7 @@ pub struct Manifest {
     pub framework_fingerprint: String,
     pub build_id: String,
     pub input_fingerprint: String,
+    pub i18n_config_hash: String,
     pub files: BTreeMap<String, Asset>,
     pub dependencies: BTreeMap<String, String>,
 }
@@ -106,6 +114,7 @@ impl Manifest {
             &self.framework_version,
             &self.framework_fingerprint,
             &self.input_fingerprint,
+            &self.i18n_config_hash,
             &self.files,
             &self.dependencies,
         ))?))
@@ -117,6 +126,7 @@ pub struct Loaded {
     pub manifest: Manifest,
     pub application: ApplicationIR,
     pub migrations: Catalog,
+    pub i18n: Arc<I18nBundle>,
     pub server_modules: Vec<u8>,
     pub client: PathBuf,
 }

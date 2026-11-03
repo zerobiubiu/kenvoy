@@ -14,6 +14,8 @@ pub struct Config {
     pub frontend: FrontendConfig,
     pub runtime: RuntimeConfig,
     pub build: BuildConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub i18n: Option<I18nConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -36,6 +38,25 @@ impl Default for ProjectConfig {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct I18nConfig {
+    pub default_locale: String,
+    pub locales: Vec<String>,
+    pub messages_dir: PathBuf,
+}
+
+impl Default for I18nConfig {
+    fn default() -> Self {
+        Self {
+            default_locale: "zh-CN".into(),
+            locales: vec!["zh-CN".into(), "en-US".into()],
+            messages_dir: "locales".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ApplicationConfig {

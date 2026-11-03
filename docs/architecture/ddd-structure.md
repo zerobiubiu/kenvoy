@@ -63,6 +63,8 @@ Context/SDK 不得回引虚拟组件注册表的页面树；注册组件与递�
 
 新增或迁移前端模块必须同步 Rust 内嵌 SOURCES、框架源码缓存、Vite 入口/白名单、开发镜像与真实 HMR URL；保持安全镜像，不能退回直接公开用户源文件。外部 SDK 模块标识仍为 `@kenvoy/client`。
 
+框架源码显式导入的 JSON 作为真实数据资产进入相对依赖解析，仍按目标路径执行相同分层约束；文件缺失不能忽略，domain 不能借 JSON 回引 presentation。JSON 不交给 TypeScript AST 解析，也不计入代码 500 行限制，不因引入词典把锁文件或数据误当源码。原生词典与开发白名单衔接见[国际化契约](../contracts/i18n.md)及[0027](../changes/0027-native-project-i18n.md)。
+
 ## 规模与拆分
 
 1. 自有 Rust/TS/TSX/MJS/CSS 代码每文件最多 500 物理行，目标 400 行内；测试同样受限，避免生产文件靠内嵌测试膨胀。

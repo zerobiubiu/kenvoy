@@ -88,7 +88,12 @@ pub(super) fn field(element: &StaticElement) -> Result<FieldDefinition> {
                 .unwrap_or(defaults.max_files),
         };
         validation::validate_file_constraints(&constraints).map_err(|message| {
-            error(element, "KV2007", message, "检查文件数量、大小与 MIME 限制")
+            error(
+                element,
+                "KV2007",
+                message.message(),
+                "检查文件数量、大小与 MIME 限制",
+            )
         })?;
         Some(constraints)
     } else {

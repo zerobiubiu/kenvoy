@@ -29,8 +29,12 @@ pub(super) async fn application(
     no_query(&uri)?;
     let session = identity(&shared, &headers).await?;
     let model = shared.model.read().await;
-    let mut projection =
-        projection::application(&model.application, role(session.as_ref()), model.generation);
+    let mut projection = projection::application(
+        &model.application,
+        role(session.as_ref()),
+        model.generation,
+        &model.i18n,
+    );
     if shared.development.read().await.is_some() {
         projection["development"] = json!(true);
     }

@@ -12,9 +12,9 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录及已固化的初始迁移；不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖，采用原子 create_dir 及 create_new 文件写入；失败保留本次部分产物并报告路径，不删除未知内容。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及 `locales/zh-CN.json`、`locales/en-US.json`；默认项目格式和最低 CLI 为 0.3.0，自动启用原生双语。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖，采用原子 create_dir 及 create_new 文件写入；失败保留本次部分产物并报告路径，不删除未知内容。
 
-check 验证语法、模块、DSL、资源、路由、字段与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
+check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 
 ```text
 kenvoy check --resource customers --input record.json
@@ -26,6 +26,18 @@ kenvoy check --resource customers --input patch.json --patch
 ## 查看解析结果
 
 inspect 默认输出宿主 Application IR；指定资源输出字段、表名、API 注册计划、后台地址和权限策略。CLI 没有 Session，不声称当前用户有管理权限。--generic 含源码和宿主路径，只供本地检查，不能直接发给浏览器。
+
+## 原生国际化工具
+
+```text
+kenvoy i18n
+kenvoy i18n check
+kenvoy i18n extract
+kenvoy i18n extract --locale en-US
+```
+
+裸 `i18n` 默认只读检查。`check` 输出语言、默认语言和逐语言缺失键；单条缺失允许回退，损坏词典和缺少整份非默认文件失败。`extract` 向标准输出提取当前声明默认文案及内置系统词条，不自动翻译、不合并或覆盖已有文件、不连接数据库。`--locale` 必须是已配置语言；缺少源码时可读取完整产物。键名、回退与文件维护流程见[原生国际化契约](../contracts/i18n.md)。
+
 
 ## 数据库迁移
 
@@ -79,9 +91,9 @@ dev 先校验兼容性并构建有效候选，再按正式迁移链初始化 SQL
 
 仅使用内置 DSL 的项目直接使用 CLI 携带的 React 原生 CSS Runtime，不启动 Node/Vite。自定义组件使用已验证源文件和资产的开发镜像，候选发布后才通知 Vite 更新；浏览器通过同一个 Kenvoy Origin 访问代理与 HMR。正式组件/CSS 状态保持与错误恢复已验收，详见 [运行时设计](../architecture/runtime-design.md)。
 
-build 不连接业务数据库，也不补迁移。它检查完整项目和正式链目标、构建客户端及服务端函数包，写入独立版本目录，验证文件清单、大小和哈希后激活 dist/manifest.json。输出包括 application.ir、client/、modules/server.json 与完整 migrations.json；旧产物和持久化数据不自动清理。已有非框架管理的输出目录拒绝接管。
+build 不连接业务数据库，也不补迁移。它检查完整项目、词典和正式链目标，构建客户端及服务端函数包，写入独立版本目录，验证文件清单、大小和哈希后激活格式 3 的 dist/manifest.json。输出包括 application.ir、client/、modules/server.json、完整 migrations.json 与私有 i18n.json；旧产物和持久化数据不自动清理。已有非框架管理的输出目录拒绝接管。
 
-run 不要求事先执行 build。源码存在时核对输入指纹、项目/CLI 双重兼容及独立产物协议，缺失或过期才构建；失败返回错误，不静默运行旧产物。源码不存在时加载已验证产物，部署只需要 CLI、匹配的 kenvoy.toml、完整 dist 和独立数据目录，迁移不依赖源码 migrations/。空库也执行完整链；已有库必须是有效前缀。生产不启动 watcher、Vite 或 HMR，开发状态与代理路由返回 404。没有源码时 inspect、admin 和 migrate status/apply 可使用产物；check、inspect --generic、迁移生成及固化需要源码。
+run 不要求事先执行 build。源码存在时核对输入指纹、项目/CLI 双重兼容及独立产物协议，缺失或过期才构建；失败返回错误，不静默运行旧产物。源码不存在时加载已验证产物，部署只需要 CLI、匹配的 kenvoy.toml、完整 dist 和独立数据目录，不依赖源码 migrations/ 或词典目录。空库也执行完整链；已有库必须是有效前缀。生产不启动 watcher、Vite 或 HMR，开发状态与代理路由返回 404。没有源码时 inspect、admin、i18n 和 migrate status/apply 可使用产物；check、inspect --generic、迁移生成及固化需要源码。
 
 三个命令都支持显式 --install-deps，为已经声明但缺失的用户 npm 依赖安装提供入口；没有该参数则缺失依赖明确报错。框架使用隔离的锁定工具链缓存，不修改用户 package.json，不读取用户 Vite 配置，不运行用户 npm 生命周期脚本。基础 DSL 和已有完整生产产物不要求 Node。构建缓存命中不重复安装全部依赖。
 

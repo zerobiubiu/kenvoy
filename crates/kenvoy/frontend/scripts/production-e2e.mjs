@@ -6,11 +6,14 @@ import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture = await projectFixture();
 let browser;
 try {
+  const chinesePath=join(fixture.project,'locales/zh-CN.json');
+  const chinese=JSON.parse(await readFile(chinesePath,'utf8'));delete chinese['pages./customers.title'];
+  await writeFile(chinesePath,JSON.stringify(chinese));
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'production-test-password-295\n');
   assert.equal(await stat(join(fixture.project,'dist/manifest.json')).then(()=>true,()=>false),false);
   let server=await fixture.start('run');
   const manifest=JSON.parse(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'));
-  browser=await chromium.launch({headless:true});const page=await browser.newPage();
+  browser=await chromium.launch({headless:true});const page=await browser.newPage({locale:'zh-CN'});
   await page.goto(server.origin+'/customers');
   await page.getByLabel('客户姓名',{exact:false}).fill('生产客户');
   const pending=page.waitForResponse(response=>response.url().endsWith('/api/customers')&&response.request().method()==='POST');
@@ -24,8 +27,9 @@ try {
   await page.goto(server.origin+'/customers');await expect(page.getByRole('heading',{name:'生产登记',exact:true})).toBeVisible();
   assert.equal((await page.request.get(server.origin+`/api/customers/${id}`)).status(),200);
   const started=Date.now();await server.stop();
-  // 两个移动目标都由本夹具创建，且仍在同一个 mkdtemp 根中，保留源码与缓存供最后清理。
+  // 移动目标都由本夹具创建，且仍在同一个 mkdtemp 根中，保留源码、词典与缓存供最后清理。
   await rename(join(fixture.project,'src'),join(fixture.root,'source-archive'));
+  await rename(join(fixture.project,'locales'),join(fixture.root,'locales-archive'));
   await rename(join(fixture.project,'.kenvoy'),join(fixture.root,'cache-archive'));
   const pathWithoutNode=process.platform==='win32'?join(process.env.SystemRoot,'System32'):'/usr/bin:/bin';
   server=await fixture.start('run',[],45000,{PATH:pathWithoutNode,Path:pathWithoutNode});

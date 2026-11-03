@@ -32,7 +32,8 @@ async fn first_navigation_waits_for_publication_without_holding_model_lock() -> 
         .permission = Role::Admin;
     tokio::time::timeout(
         Duration::from_secs(2),
-        f.runtime.publish_prepared(next, None, None),
+        f.runtime
+            .publish_prepared(next, None, None, Default::default()),
     )
     .await??;
     f.runtime

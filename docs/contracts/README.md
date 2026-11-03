@@ -12,7 +12,7 @@
 
 ## 文档清单
 
-以下共 7 篇主题文档，均为可持续维护的参考现状文档。清单说明契约覆盖面，不额外宣称实现或验收通过；已实现、受限及待验证行为以正文、当前实现和原始证据为准。
+以下共 8 篇主题文档，均为可持续维护的参考现状文档。清单说明契约覆盖面，不额外宣称实现或验收通过；已实现、受限及待验证行为以正文、当前实现和原始证据为准。
 
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
@@ -23,6 +23,7 @@
 | [项目配置与路径规则](project-configuration.md) | 参考 | `kenvoy.toml` 默认值、严格校验、路径保护、开发重载和生产部署输入。 |
 | [组件重载、数据绑定与联动选项](component-bindings.md) | 参考 | 系统组件重载、字段及表单绑定、静态与跨资源选项接口、权限和 `@kenvoy/client` SDK。 |
 | [多文件上传与图片展示](file-uploads.md) | 参考 | file 数组、SQLite 附件绑定与清理、上传/访问授权、图片节点及 SDK Image。 |
+| [kenvoy 项目原生国际化](i18n.md) | 参考 | 语言配置、自动词条、内置界面与 SDK、回退/格式化、提取检查、权限投影与无源码交付。 |
 
 ## 推荐阅读顺序
 
@@ -30,6 +31,7 @@
 2. 接入 KEngine 时按 [API](kengine-api.md) → [Generic IR](generic-ir.md)阅读；结果所有权和调用方式对应 [KEngine 设计](../architecture/kengine-design.md)，解析与缓存流程对应[编译管线](../architecture/compiler-design.md)。
 3. 编写应用时先读[项目配置](project-configuration.md)，再读 [DSL 规范](dsl-specification.md)；设计原则见 [DSL 设计](../architecture/dsl-design.md)，业务对象和客户端格式查 [Application IR](application-ir.md)。
 4. 扩展 UI 或访问资源时读[组件绑定与 SDK](component-bindings.md)，结合[前端设计](../architecture/frontend-runtime.md)、[JavaScript Runtime](../architecture/javascript-runtime.md)和[安全设计](../architecture/security-design.md)核对客户端、服务端及权限边界。
+   多语言应用联读[原生国际化](i18n.md)：直接使用框架语言状态和自动键，不另建 Provider、路由或数据库版本。
 5. 涉及启动、更新或迁移时，联读[运行时设计](../architecture/runtime-design.md)、[数据库设计](../architecture/database-design.md)及[运维入口](../operations/README.md)；判断能力是否已验证时只引用[验证索引](../verification/README.md)对应记录，不把计划或历史阶段结果视为新接口的验收。
 
 ## 相关代码、配置与示例
@@ -43,6 +45,7 @@
 | 配置 | [项目加载与校验](../../crates/kenvoy/src/infrastructure/project/mod.rs)、[客户应用配置](../../examples/customer-app/kenvoy.toml) |
 | 组件绑定、SDK 与选项 | [绑定类型](../../crates/kenvoy/frontend/src/presentation/runtime/bindings.ts)、[SDK 入口](../../crates/kenvoy/frontend/src/sdk.ts)、[客户端 API](../../crates/kenvoy/frontend/src/infrastructure/api.ts)、[服务端选项规则](../../crates/kenvoy/src/domain/options.rs)、[组件扩展示例](../../examples/extensions-app/README.md) |
 | 附件与图片 | [附件存储](../../crates/kenvoy/src/infrastructure/persistence/sqlite/uploads/mod.rs)、[上传与访问 HTTP](../../crates/kenvoy/src/interfaces/http/uploads.rs)、[上传字段](../../crates/kenvoy/frontend/src/presentation/forms/FileField.tsx)、[图片组件](../../crates/kenvoy/frontend/src/presentation/images.tsx) |
+| 原生国际化 | [领域词条](../../crates/kenvoy/src/domain/i18n/mod.rs)、[项目词典加载](../../crates/kenvoy/src/infrastructure/project/i18n/mod.rs)、[HTTP 授权投影](../../crates/kenvoy/src/interfaces/http/i18n.rs)、[语言上下文](../../crates/kenvoy/frontend/src/presentation/i18n.tsx) |
 
 上述链接用于定位实现和回归；实际执行范围从[验证索引](../verification/README.md)进入，不由链接存在推定已通过。
 

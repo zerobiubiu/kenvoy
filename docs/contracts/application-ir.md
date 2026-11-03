@@ -1,6 +1,6 @@
 # Application IR 与客户端描述协议
 
-状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述契约；实际类型位于 `crates/kenvoy/src/domain/model/mod.rs`。同代发布、文件监听与 build/run 已接入，覆盖范围见[生命周期验收](../verification/0011-cli-lifecycle.md)。
+状态：参考（现状文档）。本文维护 Application IR v1 与客户端描述格式 2；实际类型位于 `crates/kenvoy/src/domain/model/mod.rs`。同代发布、文件监听与 build/run 已接入，早期覆盖范围见[生命周期验收](../verification/0011-cli-lifecycle.md)，原生国际化见[0027](../changes/0027-native-project-i18n.md)。
 
 ## 单一业务模型
 
@@ -37,18 +37,20 @@ Application IR 属于 Kenvoy。输入来自 KEngine 的 ProgramIR、模块绑定
 
 客户端投影由 HTTP 显式构造，使用独立格式版本，只包含当前身份可见页面、所需字段约束、导航、动作公开标识以及组件注册表所需信息。它不携带源码、绝对路径、密码哈希、Session、数据库路径、服务端函数实现或环境变量。匿名可见页面所需字段的展示合并不改变单条表单权限规则。
 
+客户端描述格式 2 增加独立格式 1 的 `i18n`（默认语言、语言列表和词典）。宿主 Application IR 仍为 1，DSL 默认文案和 Schema 哈希不因此改变。词典与模型、客户端资产、JavaScript 包同代封存和发布；原生资源/字段/页面词条按当前授权投影过滤，项目自定义公共词条不得包含秘密。语言切换不改变 generation、Session 或服务端权限；详细契约见[原生国际化](i18n.md)。
+
 前端通过统一 Runtime 解释页面组件树，通过同一 Field 定义实现创建与编辑表单。Admin 使用相同 Resource 描述，不创建第二套字段模型。服务器仍逐请求验证权限和字段；客户端的允许操作列表只用于展示。
 
 默认公开 create form 只授予对应资源的受控新增能力。声明 table 不授予公开列表；声明资源也不授予匿名读取、更新或删除。Schema 中存在某字段不代表任何用户可任意写入该字段。
 
 ## 激活与产物
 
-构建产物保存宿主 `application.ir`、`client/` 资产和 `modules/server.json`，manifest 校验格式、框架版本和内容摘要。客户端投影由 HTTP 在运行时按身份构造，没有独立的静态投影文件。新增资源及安全增列通过迁移后，再发布同代业务模型；不允许数据库用新结构而请求仍按旧字段策略写入。
+构建产物格式 3 保存宿主 `application.ir`、`client/` 资产、`modules/server.json`、完整 `migrations.json` 和私有 `i18n.json`，manifest 校验格式、框架版本、配置身份和内容摘要。客户端投影由 HTTP 在运行时按身份构造，没有独立的静态投影文件。结构变更在停服执行已固化迁移后激活模型，不在持久化 dev 热更新时迁移数据库。
 
 ComponentDefinition 使用 type 字段区分 form/table/group/custom/text/image。Form 包含资源、字段名投影及页面 labels；Image 包含 src、alt、可选 width/height 和 fit，不推导资源字段。PropValue 使用 kind=literal/module 区分 JSON 值和注册 ID。ModuleReference 保存模块导出或表达式来源，属于宿主数据。SourceLocation 仅用于宿主诊断。未知 Application IR 版本反序列化失败；Field.default 区分未声明与显式 null。
 
 ModuleReference.kind 明确区分 ClientComponent、ClientFunction、ServerFunction、SharedFunction 和 ClientExpression。普通运行引用保留原模块门面与导出名；表达式保存原始 span，客户端经词法依赖切片生成工厂。组件/函数/表达式注册表与当前应用代际一起构建，不把运行期函数对象放入 JSON，也不承诺 module_1 等注册 ID 在不同分析代际不变。
 
-服务端 PreparedBundle v1 与 Application IR 分开版本化。HTTP 初始化及发布验证所有 Server/Shared handler 均已编译登记；请求持同代读锁，发布将模型、静态目录、函数包和 generation 同时替换。开发协调器准备完整候选后调用该接口；取消安全与失败恢复已有测试。
+服务端 PreparedBundle v1 与 Application IR 分开版本化。HTTP 初始化及发布验证所有 Server/Shared handler 均已编译登记；请求持同代读锁，发布将模型、静态目录、函数包、词典和 generation 同时替换。开发协调器准备完整候选后调用该接口；取消安全与失败恢复已有测试。
 
 相关语义见 [DSL 设计](../architecture/dsl-design.md)，运行与切换见 [Runtime 设计](../architecture/runtime-design.md)、[JavaScript Runtime](../architecture/javascript-runtime.md)，持久化见 [数据库设计](../architecture/database-design.md)，实际验证见 [阶段 03](../verification/0005-dsl-cli.md)及[阶段 08](../verification/0010-typescript-extensions.md)。

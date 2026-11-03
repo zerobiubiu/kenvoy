@@ -2,12 +2,14 @@
 
 将 TypeScript/JSX 声明解释为 React 页面、受控 API、管理后台和 SQLite 持久化应用的 Rust 原生 CLI。
 
+当前源码版本为 **0.3.0**，原生国际化与正式迁移契约已在 dev 实施，尚未合并 main 或发布。下列默认安装命令获取已发布版本；需要本次功能时按仓库说明构建 dev 源码，不将本地版本标签当作线上可安装证据。
+
 ## 安装
 
 从源码安装：
 
 ```text
-cargo install kenvoy --version 0.2.1 --locked
+cargo install kenvoy --locked
 ```
 
 需要 Rust 1.98 或以上及对应平台的原生 C 构建环境。发布包已经包含通用前端资产；安装 CLI 和运行基础 DSL 应用不需要先执行 npm 构建。
@@ -15,10 +17,10 @@ cargo install kenvoy --version 0.2.1 --locked
 使用预编译二进制：
 
 ```text
-cargo binstall kenvoy --version 0.2.1
+cargo binstall kenvoy
 ```
 
-二进制归档来自 [GitHub Release v0.2.1](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.2.1)，提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。交叉编译产物不代表在全部架构完成运行测试。
+预编译归档来自 [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)，正式发布提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。0.3.0 尚未发布；交叉编译产物不代表在全部架构完成运行测试。
 
 ## 创建并运行
 
@@ -32,6 +34,8 @@ kenvoy dev
 管理员密码由你自行输入，没有默认账号或默认密码。隐藏输入不显示字符或星号，输入完成后按回车并再次确认。
 
 访问启动日志中的应用地址；未显式声明根页时自动进入当前身份首个可访问页面。默认客户示例的登记页为 `/customers`，后台为 `/admin/customers`。
+
+0.3.0 的 create 同时生成原生 i18n 配置和中英文业务词典。DSL 的标签/标题自动绑定词条，框架提供内置界面翻译、语言选择、数字/日期显示和 `@kenvoy/client` 的 `useI18n()`，不要求应用安装翻译库或编写 Provider。`kenvoy i18n extract/check` 只读提取和检查；词典随完整产物交付，语言不改变业务字段值或数据库结构。旧未启用配置保持单中文。
 
 停止 dev 后可运行：
 
@@ -56,8 +60,8 @@ dev/run 使用同一持久化数据库；不要通过删除 data 目录修复前
 ## 文档
 
 - [仓库与完整使用说明](https://github.com/zerobiubiu/kenvoy)
-- [文档中心](https://github.com/zerobiubiu/kenvoy/blob/v0.2.1/docs/README.md)
-- [示例项目](https://github.com/zerobiubiu/kenvoy/tree/v0.2.1/examples)
+- [文档中心](https://github.com/zerobiubiu/kenvoy/tree/dev/docs)
+- [示例项目](https://github.com/zerobiubiu/kenvoy/tree/dev/examples)
 
 ## 许可证
 

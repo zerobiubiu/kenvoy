@@ -83,7 +83,13 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let id = request_id();
-        let mut error = json!({"code":self.code,"message":self.message,"request_id":id});
+        let mut error = json!({
+            "code": self.code,
+            "message": self.message,
+            "message_key": self.code,
+            "params": {},
+            "request_id": id,
+        });
         if let Some(fields) = self.fields {
             error["fields"] = json!(fields);
         }
@@ -215,4 +221,74 @@ pub(super) fn request_id() -> String {
         "request-{}",
         REQUEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{
+        body::to_bytes,
+        http::{StatusCode, header},
+        response::IntoResponse,
+    };
+    use serde_json::{Value, json};
+
+    use crate::{
+        application::resources::RepositoryFailure,
+        domain::validation::{ValidationError, ValidationErrors},
+    };
+
+    use super::ApiError;
+
+    #[tokio::test]
+    async fn validation_metadata_reaches_http_without_changing_status_or_default_message()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let field = ValidationError::new(
+            "KV4005",
+            Some("quantity".into()),
+            "数字不满足 min/max 包含边界",
+            "validation.number.min",
+        )
+        .with_param("min", 3);
+        let response = ApiError::from(RepositoryFailure::Validation(ValidationErrors(vec![field])))
+            .into_response();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let request_id = response.headers()["x-request-id"].to_str()?.to_owned();
+        let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), 4096).await?)?;
+        let error = &body["error"];
+        assert_eq!(error["code"], "KV5022");
+        assert_eq!(error["message_key"], "KV5022");
+        assert_eq!(error["params"], json!({}));
+        assert_eq!(error["request_id"], request_id);
+        assert_eq!(error["fields"][0]["code"], "KV4005");
+        assert_eq!(error["fields"][0]["field"], "quantity");
+        assert_eq!(error["fields"][0]["message_key"], "validation.number.min");
+        assert_eq!(error["fields"][0]["params"], json!({"min": 3}));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unknown_write_outcome_remains_distinct_from_unexecuted_busy_request()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for (failure, status, code) in [
+            (
+                RepositoryFailure::WorkerLost,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "KV5051",
+            ),
+            (
+                RepositoryFailure::Busy,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "KV5053",
+            ),
+        ] {
+            let response = ApiError::from(failure).into_response();
+            assert_eq!(response.status(), status);
+            assert!(response.headers().get(header::RETRY_AFTER).is_none());
+            let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), 4096).await?)?;
+            assert_eq!(body["error"]["code"], code);
+            assert_eq!(body["error"]["message_key"], code);
+            assert_eq!(body["error"]["params"], json!({}));
+        }
+        Ok(())
+    }
 }

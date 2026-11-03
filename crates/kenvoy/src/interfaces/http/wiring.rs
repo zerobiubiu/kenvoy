@@ -23,7 +23,7 @@ use crate::{
         publication::{Publication, PublicationError},
         resources::{ResourceRepository, ResourceService},
     },
-    domain::model::ApplicationIR,
+    domain::{i18n::I18nBundle, model::ApplicationIR},
     infrastructure::{
         identity::SystemCredentials,
         javascript::JavascriptRuntime,
@@ -74,7 +74,10 @@ impl HttpRuntime {
         auth: HttpAuth,
         origin: String,
         assets: Option<PathBuf>,
+        i18n: Arc<I18nBundle>,
     ) -> Result<Self, SetupError> {
+        i18n.validate()
+            .map_err(|error| SetupError::Configuration(error.to_string()))?;
         let parsed = Url::parse(&origin).map_err(|_| {
             SetupError::Configuration("public_origin 必须为完整 HTTP(S) origin".into())
         })?;
@@ -109,7 +112,7 @@ impl HttpRuntime {
         let assets = canonical_assets(assets)?;
         Ok(Self {
             shared: Arc::new(Shared {
-                model: Publication::new(application, database.clone(), generation, assets),
+                model: Publication::new(application, database.clone(), generation, assets, i18n),
                 resources: ResourceService::new(database),
                 auth,
                 origin,
@@ -134,12 +137,13 @@ impl HttpRuntime {
         application: ApplicationIR,
         assets: Option<PathBuf>,
         javascript: Option<JavascriptRuntime>,
+        i18n: Arc<I18nBundle>,
     ) -> Result<u64, SetupError> {
         let assets = canonical_assets(assets)?;
         Ok(self
             .shared
             .model
-            .publish_prepared(application, assets, javascript)
+            .publish_prepared(application, assets, javascript, i18n)
             .await?)
     }
 }
