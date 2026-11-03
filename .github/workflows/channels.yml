@@ -401,11 +401,11 @@ jobs:
           cat > "$RUNNER_TEMP/repo/rpm/kenvoy.repo" <<EOF
           [kenvoy]
           name=Kenvoy
-          baseurl=https://${OWNER}.github.io/kenvoy-packages/rpm/\$basearch
+          baseurl=https://raw.githubusercontent.com/${OWNER}/kenvoy-packages/gh-pages/rpm/\$basearch
           enabled=1
           gpgcheck=1
           repo_gpgcheck=1
-          gpgkey=https://${OWNER}.github.io/kenvoy-packages/rpm/RPM-GPG-KEY-kenvoy
+          gpgkey=https://raw.githubusercontent.com/${OWNER}/kenvoy-packages/gh-pages/rpm/RPM-GPG-KEY-kenvoy
           EOF
           for db in "$RUNNER_TEMP"/repo/arch/*/*.db.tar.gz "$RUNNER_TEMP"/repo/arch/*/*.files.tar.gz; do
             [ -f "$db" ] && gpg "${sign[@]}" --detach-sign -o "$db.sig" "$db"

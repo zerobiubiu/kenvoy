@@ -79,7 +79,9 @@ scoop install kenvoy
 
 ## APT / RPM / Alpine / Arch 仓库
 
-托管在公共仓库 `zerobiubiu/kenvoy-packages` 的 `gh-pages`，通过 GitHub Pages 提供（`https://zerobiubiu.github.io/kenvoy-packages/`）。四个仓库共用一份站点，按版本累加，旧版本文件不删除。
+托管在公共仓库 `zerobiubiu/kenvoy-packages` 的 `gh-pages` 分支，通过 raw.githubusercontent 提供文件（该账号 Pages 绑定的自定义域 DNS 不在 GitHub，暂不使用 Pages 地址）。四个仓库共用一份站点，按版本累加，旧版本文件不删除。
+
+基础地址：`https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages`。raw 不提供目录浏览，但 `apt/dnf/apk/pacman` 只需按固定路径取索引与包文件，因此可直接使用。
 
 | 仓库 | 路径 | 索引与签名 |
 |---|---|---|
@@ -92,20 +94,27 @@ scoop install kenvoy
 
 ```text
 # Debian/Ubuntu
-curl -fsSL https://zerobiubiu.github.io/kenvoy-packages/apt/key.asc | sudo gpg --dearmor -o /etc/apt/keyrings/kenvoy.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kenvoy.gpg] https://zerobiubiu.github.io/kenvoy-packages/apt stable main" | sudo tee /etc/apt/sources.list.d/kenvoy.list
+BASE=https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages
+curl -fsSL "$BASE/apt/key.asc" | sudo gpg --dearmor -o /etc/apt/keyrings/kenvoy.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kenvoy.gpg] $BASE/apt stable main" | sudo tee /etc/apt/sources.list.d/kenvoy.list
 sudo apt update && sudo apt install kenvoy
 
 # Fedora/RHEL
-sudo rpm --import https://zerobiubiu.github.io/kenvoy-packages/rpm/RPM-GPG-KEY-kenvoy
-sudo dnf config-manager --add-repo https://zerobiubiu.github.io/kenvoy-packages/rpm/kenvoy.repo
+BASE=https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages
+sudo rpm --import "$BASE/rpm/RPM-GPG-KEY-kenvoy"
+sudo curl -fsSL "$BASE/rpm/kenvoy.repo" -o /etc/yum.repos.d/kenvoy.repo
+sudo dnf install kenvoy
 
 # Alpine
-wget -O /etc/apk/keys/kenvoy.rsa.pub https://zerobiubiu.github.io/kenvoy-packages/alpine/kenvoy.rsa.pub
-echo "https://zerobiubiu.github.io/kenvoy-packages/alpine/v3.20/main" >> /etc/apk/repositories
+BASE=https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages
+wget -O /etc/apk/keys/kenvoy.rsa.pub "$BASE/alpine/kenvoy.rsa.pub"
+echo "$BASE/alpine/v3.20/main" >> /etc/apk/repositories
+apk update && apk add kenvoy
 
 # Arch
-# /etc/pacman.conf: [kenvoy] Server = https://zerobiubiu.github.io/kenvoy-packages/arch/$arch
+# /etc/pacman.conf:
+# [kenvoy]
+# Server = https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages/arch/$arch
 ```
 
 `kenvoy.repo`、`key.asc`、`RPM-GPG-KEY-kenvoy`、`kenvoy.rsa.pub` 由仓库发布脚本随索引生成。

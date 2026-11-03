@@ -11,7 +11,8 @@
 - 辅助仓库已创建（公共）：`zerobiubiu/homebrew-tap`、`zerobiubiu/scoop-bucket`、`zerobiubiu/kenvoy-packages`。
 - 新增渠道工作流 [channels.yml](../../.github/workflows/channels.yml)：由 `main 最新版本自动发布` 成功结束触发，也支持按已发布版本手动补发；只消费已存在的 Release 归档，不重新编译或改动 Release。
 - 新增资产与产物生成脚本：`assets.py` 读取 Release 官方 digest；`npm_packages.py` 生成 7 个 npm 包（主包 JS shim + 六平台包）；`manifests.py` 生成 Homebrew/Scoop/WinGet/Chocolatey/AUR 文件；`linux_packages.py` 生成 8 份 nfpm 配置与 Arch PKGBUILD；`linux_repo.py` 生成四类仓库索引。
-- 渠道 job 独立：npm（`NPM_TOKEN`，已存在版本跳过）、Homebrew/Scoop（`PACKAGES_TOKEN` 推送辅助仓库）、WinGet（`WINGET_TOKEN` fork + PR）、Chocolatey（Windows runner，`CHOCOLATEY_API_KEY`）、AUR（`AUR_SSH_PRIVATE_KEY`）、APT/RPM/Alpine/Arch（`GPG_PRIVATE_KEY`/`APK_SIGNING_KEY`，Pages `gh-pages` 累积发布）。
+- 渠道 job 独立：npm（`NPM_TOKEN`，已存在版本跳过）、Homebrew/Scoop（`PACKAGES_TOKEN` 推送辅助仓库）、WinGet（`WINGET_TOKEN` fork + PR）、Chocolatey（Windows runner，`CHOCOLATEY_API_KEY`）、AUR（`AUR_SSH_PRIVATE_KEY`）、APT/RPM/Alpine/Arch（`GPG_PRIVATE_KEY`/`APK_SIGNING_KEY`，`gh-pages` 累积发布）。
+- APT/RPM/Alpine/Arch 发布到 `kenvoy-packages` 的 `gh-pages` 分支。该账号 Pages 绑定的自定义域 `zerobiubiu.top` 指向 Cloudflare，`github.io` 被 301 到该域且返回 404，因此不使用 Pages 地址；仓库文件通过 `https://raw.githubusercontent.com/zerobiubiu/kenvoy-packages/gh-pages` 提供，`kenvoy.repo` 与文档安装命令均使用该 base URL。
 - 新增 `assets.py` 与 `channels/` 目录；`AGENTS.md`、文档中心与运维索引同步。未改产品源码或版本号。
 
 ## 改动文件清单
