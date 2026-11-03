@@ -46,4 +46,4 @@
 
 ## 后续验证建议
 
-合并到 main 并完成一次真实发布后，逐项核对：npm `npm install -g kenvoy`、`brew install zerobiubiu/tap/kenvoy`、`scoop install kenvoy`、WinGet PR 合并与 `winget install Kenvoy.Kenvoy`、Chocolatey 审核通过、AUR `yay -S kenvoy-bin`、四类 Linux 仓库的 `apt/dnf/apk/pacman` 安装与签名校验。任何一项失败只记录该项，不把渠道整体写成已可用。
+合并到 main 并完成一次真实发布后，逐项核对：npm `npm install -g kenvoy`、`brew install zerobiubiu/tap/kenvoy`、`scoop install kenvoy`、WinGet PR 合并与 `winget install Kenvoy.Kenvoy`、Chocolatey 审核通过、AUR `yay -S kenvoy-bin`、四类 Linux 仓库的 `apt/dnf/apk/pacman` 安装与签名校验。任何一项失败只记录该项，不把渠道整体写成已可用。当前进度、待配凭据与执行顺序维护在[渠道发布进度](../development/channel-rollout-status.md)。

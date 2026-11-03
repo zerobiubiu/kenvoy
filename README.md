@@ -2,6 +2,8 @@
 
 **面向 AI 时代的语义化低代码平台 · 写语义，出全端。**
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/kenvoy.svg)](https://repology.org/project/kenvoy/versions)
+
 Kenvoy 把 TypeScript/JSX 声明解释为具有页面、API、后台管理和 SQLite 持久化的完整应用。KEngine 是其中独立、通用的 Rust 源码解析库，不包含 Web 业务语义。
 
 ## 定位与命名
@@ -66,7 +68,7 @@ kenvoy/
 
 构建产物、依赖目录与运行数据不入库：`target/`、`node_modules/`、`dist/`、`.kenvoy/`、`artifacts/`、`*.sqlite*` 由 `.gitignore` 排除。
 
-开发统一在 `dev`，版本变更提交后自动补本地 `vMAJOR.MINOR.PATCH` 标签；用户批准发布时先逐个推送标签，再合并并推送 `main`。只发布 main 当前版本（包括 PATCH），不补发历史版本；dev 可手动单平台、单架构打包而不发布。规则、钩子启用与 main 手动兜底见[Git 与发布操作](docs/operations/releasing.md)。
+开发统一在 `dev`，版本变更提交后自动补本地 `vMAJOR.MINOR.PATCH` 标签；用户批准发布时先逐个推送标签，再合并并推送 `main`。只发布 main 当前版本（包括 PATCH），不补发历史版本；dev 可手动单平台、单架构打包而不发布。规则、钩子启用与 main 手动兜底见[Git 与发布操作](docs/operations/releasing.md)。多渠道发布的当前完成度、待配凭据与首次真实发布步骤见[渠道发布进度](docs/development/channel-rollout-status.md)。
 
 ## 核心设计
 
