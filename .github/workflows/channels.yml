@@ -289,7 +289,7 @@ jobs:
           ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
           export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes'
           if ! git clone "ssh://aur@aur.archlinux.org/kenvoy-bin.git" aur; then
-            echo 'AUR 仓库尚不存在：请先在 https://aur.archlinux.org 提交一次 kenvoy-bin 空仓库（外部前置条件）' >&2
+            echo 'AUR 克隆失败：请确认 AUR 账号已在 My Account 登记该 SSH 公钥，且 SSH 可访问 aur.archlinux.org' >&2
             exit 1
           fi
           cp "$RUNNER_TEMP/manifests/aur/PKGBUILD" aur/PKGBUILD
@@ -300,7 +300,8 @@ jobs:
           git add PKGBUILD .SRCINFO
           if git diff --cached --quiet; then echo 'AUR 已是最新'; exit 0; fi
           git commit -m "kenvoy ${{ needs.prepare.outputs.version }}"
-          git push origin master
+          # AUR 只接受 master；空仓库首次推送即创建包。
+          git push origin HEAD:master
 
   linux_repos:
     needs: prepare

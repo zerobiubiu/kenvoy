@@ -42,7 +42,7 @@
 
 仓库 Secret：`NPM_TOKEN`、`PACKAGES_TOKEN`（对三个辅助仓库可写）、`WINGET_TOKEN`（`public_repo`）、`CHOCOLATEY_API_KEY`、`AUR_SSH_PRIVATE_KEY`、`GPG_PRIVATE_KEY`（base64 私钥）、`GPG_PASSPHRASE`、`APK_SIGNING_KEY`（base64 RSA 私钥）。缺任一凭据时对应 job 明确失败并指出名称。
 
-外部前置：AUR 需先在网页创建一次 `kenvoy-bin` 空仓库；WinGet PR、Chocolatey 审核由上游决定；npm 首次发布需账号拥有 `kenvoy` 及六个平台包名。渠道从采用新归档命名的版本开始，0.2.0 旧命名不回溯。
+外部前置：AUR 账号需登记 CI 的 SSH 公钥；AUR 无网页建包流程，首次推送 `master` 自动创建 `kenvoy-bin`。WinGet PR、Chocolatey 审核由上游决定；npm 首次发布需账号拥有 `kenvoy` 及六个平台包名。渠道从采用新归档命名的版本开始，0.2.0 旧命名不回溯。
 
 ## 后续验证建议
 

@@ -75,7 +75,7 @@ scoop install kenvoy
 
 生成 `kenvoy-bin` 的 `PKGBUILD` 与 `.SRCINFO`，`arch=(x86_64 aarch64)`，直接安装 Release 二进制。使用 `AUR_SSH_PRIVATE_KEY` 推送到 `ssh://aur@aur.archlinux.org/kenvoy-bin.git`。
 
-**外部前置**：AUR 不接受纯 SSH 首次建仓，需要先在 AUR 网页提交一次空 `kenvoy-bin` 仓库；之后 CI 才能自动更新。
+**外部前置**：AUR 账号需在 *My Account → SSH Public Key* 登记 CI 使用的公钥。AUR 没有网页建包流程：CI 首次 `git clone ssh://aur@aur.archlinux.org/kenvoy-bin.git` 后推送 `HEAD:master` 即自动创建 `kenvoy-bin`；只接受 `master` 分支，且必须同时包含 `PKGBUILD` 与 `.SRCINFO`。
 
 ## APT / RPM / Alpine / Arch 仓库
 
@@ -133,6 +133,52 @@ apk update && apk add kenvoy
 | `APK_SIGNING_KEY` | APK 包与索引签名 | RSA 私钥 PEM 后 base64 |
 
 `prepare` 之后各 job 在缺 Secret 时明确失败并指出名称，不伪造成功。所有密钥只在对应 job 注入，不打印、不写入制品。
+
+### 配置步骤（Windows / Git Bash）
+
+凭据只在本机生成或复制，用 `gh secret set` 直接写入仓库，不经过聊天、源码或命令输出。
+
+```bash
+# 1. npm：npmjs.com → Access Tokens → Generate New Token → Automation
+gh secret set NPM_TOKEN --repo zerobiubiu/kenvoy
+
+# 2. 辅助仓库：Classic PAT 勾选 repo；或 Fine-grained 授权三个辅助仓库 Contents: Read and write
+gh secret set PACKAGES_TOKEN --repo zerobiubiu/kenvoy
+
+# 3. WinGet：Classic PAT 勾选 public_repo（需要 fork 并向上游开 PR）
+gh secret set WINGET_TOKEN --repo zerobiubiu/kenvoy
+
+# 4. Chocolatey：community.chocolatey.org → Account → API Keys
+gh secret set CHOCOLATEY_API_KEY --repo zerobiubiu/kenvoy
+```
+
+仓库签名与 AUR 使用专用密钥（不要复用个人主密钥）：
+
+```bash
+# GPG：仅签名用途，有效期按需；导出 base64 单行
+gpg --batch --quick-generate-key "Kenvoy Release <release@users.noreply.github.com>" rsa4096 sign 5y
+KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
+gpg --armor --export-secret-keys "$KEY" | base64 -w0 > gpg-private.b64
+gh secret set GPG_PRIVATE_KEY --repo zerobiubiu/kenvoy < gpg-private.b64
+gh secret set GPG_PASSPHRASE --repo zerobiubiu/kenvoy   # 生成密钥时设置的口令值（建议设置）
+
+# APK：RSA 私钥，CI 推导公钥并发布
+openssl genrsa -out kenvoy.rsa 4096
+base64 -w0 kenvoy.rsa > apk-signing.b64
+gh secret set APK_SIGNING_KEY --repo zerobiubiu/kenvoy < apk-signing.b64
+
+# AUR：专用 SSH 密钥，公钥登记到 AUR，私钥写入 Secret
+ssh-keygen -t ed25519 -C "aur-kenvoy-ci" -f ~/.ssh/aur_kenvoy -N ""
+gh secret set AUR_SSH_PRIVATE_KEY --repo zerobiubiu/kenvoy < ~/.ssh/aur_kenvoy
+```
+
+写入后不要保留临时文件中的私钥副本；`gpg-private.b64`、`apk-signing.b64`、`kenvoy.rsa` 用后删除。核对：
+
+```bash
+gh secret list --repo zerobiubiu/kenvoy
+```
+
+AUR 建包不需要网页操作：登录 aur.archlinux.org，在 *My Account → SSH Public Key* 粘贴 `~/.ssh/aur_kenvoy.pub`，确认 `ssh aur@aur.archlinux.org help` 可用即可；`kenvoy-bin` 在 CI 首次推送 `master` 时自动创建。
 
 ## 验证边界
 
