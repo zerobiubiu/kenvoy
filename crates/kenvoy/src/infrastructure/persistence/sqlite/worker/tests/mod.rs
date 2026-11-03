@@ -1,8 +1,10 @@
+mod delivery;
 mod lifecycle;
 mod migrations;
 mod options;
 mod queue;
 mod records;
+mod snapshot_origin;
 mod upload_integrity;
 mod uploads;
 
@@ -14,6 +16,7 @@ use serde_json::Value;
 use serde_json::json;
 use std::{
     error::Error,
+    fs,
     sync::atomic::AtomicUsize,
     time::{SystemTime, UNIX_EPOCH},
 };

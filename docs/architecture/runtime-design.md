@@ -8,7 +8,7 @@
 
 HttpRuntime 持有 Application IR、generation、client 目录与不可变 JavaScript 模块包，使用 RwLock 保证资源请求使用同代模型；Database 和 Auth 通过受控句柄访问专属连接线程。页面/路由/权限来自该 IR，客户端描述按身份显式投影，不在请求内解析 TSX、构建 React 或重新初始化数据库。构建清单独立封存、校验并激活，不把磁盘清单替换误认为数据库事务的一部分。
 
-可变运行资源由明确所有者持有：HTTP 生命周期持有监听与退出信号；数据库线程持有连接；JS worker 持有 Runtime/Context；开发监督器持有 watcher、构建进程与刷新连接。共享的是不可变快照和有界消息通道，不是全局可变业务状态。
+可变运行资源由明确所有者持有：HTTP 生命周期持有监听与退出信号；数据库线程持有连接和覆盖迁移/服务运行期的 OS 文件锁；JS worker 持有 Runtime/Context；开发监督器持有 watcher、构建进程与刷新连接。共享的是不可变快照和有界消息通道，不是全局可变业务状态。生命周期锁不替代 SQLite 写锁，也不能协调尚未采用新协议的旧 CLI，部署仍须先停止旧服务。
 
 ## 项目配置
 
@@ -22,13 +22,13 @@ HttpRuntime 持有 Application IR、generation、client 目录与不可变 JavaS
 
 | 命令 | 责任 | 关键失败策略 |
 |---|---|---|
-| create（已实现） | 准备项目配置、入口、数据目录及 README/ignore | 目标已有内容则拒绝覆盖；不自动装包 |
+| create | 准备配置、入口、数据目录、README/ignore 与已固化初始迁移 | 目标已有内容则拒绝覆盖；不装包、不创建数据库 |
 | check | 语法、模块、DSL、路由、字段、环境边界检查 | 输出结构化诊断；非零退出；不迁移 |
 | inspect | 展示 Generic/Application IR 或指定资源、注册路由、策略 | 无 Session 不声称“当前用户有管理权限” |
 | build | 完整分析、客户端打包、server 转换、产物校验、manifest | 不连接业务数据库；不导出业务数据 |
-| dev | 构建候选、SQLite/Auth/HTTP、notify、开发状态和可选 Vite 镜像 | 错误保留最后有效模型；恢复活动配置清理错误但不重复迁移 |
-| run | 新鲜度/兼容性检查、必要时构建、数据库与 HTTP | 不要求先 build；无 watcher/HMR |
-| migrate（已实现） | 默认 status、apply、history | 明确展示 diff；破坏性计划未确认不执行 |
+| dev | 校验正式链并启动 SQLite/Auth/HTTP、notify、开发状态和可选 Vite 镜像 | 保留数据；链或物理 Schema 改动要求停服重启；一次性快照须显式隔离 |
+| run | 双重兼容/产物检查、必要时构建、顺序迁移和应用激活 | 未固化 Schema、历史异常、领先版本或锁冲突时停止对外服务 |
+| migrate | generate/seal/status/apply/history/baseline | 生成与固化不连接业务库；危险执行须精确确认；旧库只显式接入 |
 
 已实现 `kenvoy admin init --username <name>` 与 `admin add-user --username <name> --role user|admin`。本机终端隐藏密码并二次确认，自动化必须显式 `--password-stdin`；不提供密码命令参数，不写凭据日志。账号创建使用事务和已有管理员检查，重复初始化不能覆盖已有账号。详细输入限制见 [安全设计](security-design.md)。
 
@@ -82,28 +82,24 @@ Kenvoy 管理 TS 去类型、ESM 模块准备、action 注册及 rquickjs 执行
 
 ## dev 更新与失败恢复
 
-notify 回调只唤醒容量 1 的协调队列，180ms 去抖后比较内容指纹。KEngine AnalysisSession 重用未变化模块；构建候选经过 DSL、边界、服务端转换、前端构建、源码/资产指纹复核后封存。安全迁移与运行态发布由 HttpRuntime.publish_prepared 在同一写锁和被跟踪任务中完成；数据库成功后同步替换 IR/generation/assets/JS，没有新的可失败 await。调用者取消不打断已接受迁移，迁移失败不发布新状态。
+notify 回调只唤醒容量 1 的协调队列，180ms 去抖后比较内容指纹。KEngine AnalysisSession 重用未变化模块；候选通过兼容、DSL、边界、服务端转换、前端构建、源码/迁移/资产指纹复核后封存。持久化 dev 不在热更新时执行迁移：正式链必须不变，物理 Schema 必须与活动模型相同。HttpRuntime.publish_prepared 的同代写锁与被跟踪任务继续保证模型、JavaScript 和资产同步替换，调用者取消不打断已接受发布。
 
 ```mermaid
 flowchart TD
   W[notify 事件/内容变化] --> C[变更模块 + 反向依赖失效]
-  C --> V[候选 IR/权限/路由/Schema Diff/产物验证]
-  V -->|失败| OLD[保留活动快照\n报告诊断/错误覆盖层]
-  V -->|成功| Q[取得同代写锁并等待旧请求完成]
-  Q --> M[事务应用允许的安全迁移]
-  M -->|失败回滚| OLD
-  M -->|成功| PUB[发布同代快照并通知浏览器]
+  C --> V[候选 IR/权限/路由/产物验证]
+  V -->|编译失败或链/Schema变化| OLD[保留活动快照\n报告诊断/要求停服迁移]
+  V -->|同一正式链与物理Schema| Q[取得同代写锁并等待旧请求完成]
+  Q --> PUB[发布同代快照并通知浏览器]
   PUB --> D[提交开发镜像及激活磁盘清单]
   D -->|收尾失败| REC[保留已提交运行态并停用失败代理]
 ```
 
 监听项目内 TSX/TS/JS、mts/cts、CSS、配置和已支持静态资产，忽略独立数据/输出目录以及 .git/target/node_modules/.kenvoy/.env。事件以内容 hash 合并；当前使用 RecommendedWatcher，没有自动 PollWatcher 回退。源码、数据及输出必须彼此独立，不能把数据库直接配置在项目根。数据库路径、输出目录、host/port/public_origin 改动要求重启，其余合法配置按候选重新分析。
 
-标题/布局更新投影，普通 UI/CSS 交给经实测的开发适配；UI 修改不重新初始化 SQLite。Schema 新字段先预览并判定安全；删除、改类型和无法证明安全的约束变化阻止激活，不自动破坏旧状态。语法错误期间继续服务最后有效快照，修复后重试分析，不迁移、不重建数据库。
+标题/布局及普通 UI/CSS 修改保持原热更新流程，不重新初始化 SQLite。Schema 改变但未固化迁移时构建拒绝；已经固化新链也须停服后重启 dev，以免旧服务与新迁移位置混用。开发快照同样不隐式重建，结构变化须选择新的隔离空路径。
 
-所有可失败编译/打包先完成，再进入数据库迁移屏障；旧代请求有界排空，迁移和 Schema 版本记录同事务。新写请求在发布前暂停或返回可重试状态，不能用旧字段规则写新 Schema。前端提交携带代次以识别过期表单，必要时返回冲突并要求刷新。
-
-数据库提交后崩溃或切换异常不能宣称回滚。协调器在提交成功后更新自身快照；Vite 镜像更新失败时停用代理，回到已验证静态产物，并报告需要重载。清单激活失败明确提示运行态已更新、收尾失败。重启通过产物完整性和实际 Schema 校验处理差异；没有承诺跨 SQLite 与文件系统的两阶段事务，完整故障恢复仍需继续注入验证。
+前端提交携带代次识别过期表单，必要时返回冲突要求刷新。运行态提交后 Vite 镜像更新失败时停用代理，回到已验证静态产物；清单激活失败明确提示运行态已更新、收尾失败。文件系统清单与 SQLite 不是两阶段事务，不能因后续资源失败宣称已提交状态回滚。
 
 基础 DSL 不启动 Vite。自定义客户端由 Vite/React 插件读取已校验镜像，原始用户源码不会被直接监听；候选提交后 Rust 通过私有 stdin 控制更新。普通 UI/CSS 使用 HMR，结构变化允许完整重载。正式 Kenvoy 浏览器已验证组件、CSS、错误保存及修复期间保持 Hooks 计数；不保证混合导出和结构变更均保留状态。
 
@@ -113,13 +109,25 @@ Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，�
 
 ## build 与 run
 
-产物保存为 dist/manifest.json 和 dist/versions/构建ID/，每个版本含 application.ir、client/index.html/assets 与 modules/server.json。manifest 记录格式、框架版本与指纹、源/配置/锁文件输入指纹、依赖版本、每文件大小及 SHA-256。宿主源码位置转换为相对路径；浏览器描述不包含这些位置。页面/API 来自 Application IR，不生成重复业务 Controller 或独立页面源码。
+产物保存为 dist/manifest.json 和 dist/versions/构建ID/，每个版本含 application.ir、client/index.html/assets、modules/server.json 和完整 migrations.json。Manifest 格式为 2，独立核验框架版本/指纹、应用名称与版本、最低 CLI/项目格式、开发快照标识、哈希协议及文件清单；配置身份必须匹配。宿主源码位置转换为相对路径，浏览器描述不包含这些位置。页面/API 来自 Application IR，不生成重复业务 Controller 或独立页面源码。
 
 构建使用 OS 文件锁与独占 staging，校验后只追加版本目录，再通过临时文件及 rename 激活清单；不清空活动产物、不清理业务数据。已有同 ID 文件内容不一致则拒绝覆盖，外来输出目录也拒绝接管。单文件最多 32 MiB、总计 256 MiB、最多 10000 文件；拒绝路径链接、越根和大小写别名冲突。旧版本不自动回收。
 
+哈希协议明确分工：
+
+| 标识 | 算法与规范化范围 | 排除内容 |
+|---|---|---|
+| `sha256-input-v2` | 规范相对路径及排序输入文件哈希、受检配置、CLI/框架指纹、快照身份；包括正式迁移文件 | 时间戳、数据库、数据目录、环境密钥、缓存、依赖安装目录、构建输出 |
+| `sha256-build-v2` | Manifest 固定字段、输入指纹、排序的完整交付文件大小/哈希及依赖版本的确定性 JSON；不含自身 build_id | 构建时间、进程与机器临时路径 |
+| `sha256-schema-v1` | 排序的 SchemaModel JSON 的 SHA-256；类型/默认值/约束/索引进入结构，枚举排序、零值规范化 | 标签、源码位置、应用版本和字段显示顺序；保持旧 Schema 哈希字节契约 |
+
+构建前后比较输入指纹；迁移链读取也位于该窗口内。Schema 哈希不代表数据迁移完成，迁移 ID/checksum 独立推进。
+
 源码存在时，run 校验输入指纹及产物完整性，缺失/过期才构建；构建失败不静默运行旧产物。无需事先 build。用户依赖缺失须显式 --install-deps，不能隐式补装或修改其声明。
 
-已接入只有产物的部署：配置、完整 manifest、客户端/server 产物和独立 data 目录足够启动，不强制源码存在。校验格式/Runtime 兼容性、路径、哈希、依赖和 Schema 状态；不兼容或缺损报错，不在请求中解析源码。生产不启动 watcher、开发服务器或 HMR。
+只有产物的部署保留匹配配置、完整 manifest/版本目录和独立 data 目录即可，不要求源码 migrations/ 存在。宿主先验证项目/CLI 与产物协议、链格式/执行器和目标 Schema，再由数据库线程取得跨进程锁、核验实际结构/历史并逐步执行待办。每步独立提交，空库执行完整链；现存未接入库必须先显式 baseline，领先版本拒绝自动降级。校验和备份/危险确认规则见[迁移执行协议](../operations/migration-design.md)。
+
+迁移提交之后才绑定业务端口并初始化完整运行态；就绪条件为监听端口已取得、模型/认证/JavaScript/可选开发任务初始化成功。`<数据库>.kenvoy-startups.jsonl` 追加 `migrated`、`ready`、`startup_failed`、`runtime_failed`、`stopped` 或 `shutdown_failed`，包含应用版本、构建哈希、CLI 版本及当时真实迁移位置。迁移成功但应用失败明确报告“数据库已迁移，应用未就绪”；此前成功步骤不会自动回滚，也不会自动恢复备份。迁移恢复始终读取 SQLite 成功记录，而非启动日志。
 
 ## 关闭与日志
 

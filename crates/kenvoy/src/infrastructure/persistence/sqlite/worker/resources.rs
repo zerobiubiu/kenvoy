@@ -125,7 +125,7 @@ impl Database {
         .await
     }
 
-    /// 写队列内串行执行迁移；迁移失败时保留旧 ApplicationIR。
+    /// 写队列内发布同一物理 Schema 的应用；正式库和快照均不在线生成迁移。
     /// HTTP/前端代际发布由宿主在调用前后另设屏障，不能仅依赖本方法。
     pub async fn replace_application(
         &self,
@@ -134,6 +134,13 @@ impl Database {
     ) -> Result<migration::MigrationOutcome> {
         self.submit(move |state| {
             migration::schema_model(&application)?;
+            if state.strict_schema
+                && migration::schema_model(&state.application)? != migration::schema_model(&application)?
+            {
+                return Err(DatabaseError::InvalidState(
+                    "持久化开发数据库不接受在线 Schema 变更；请固化迁移、停止服务后重新启动。开发快照请改用新的独立空路径".into(),
+                ));
+            }
             let generation = state
                 .generation
                 .checked_add(1)

@@ -29,7 +29,7 @@
 | axum | 0.8.9 | 默认 + ws；正式 HTTP 与开发 WebSocket |
 | tokio | 1.54.1 | macros、rt-multi-thread、net、io-util、sync、time、signal、process |
 | tower、tower-http | 0.5.3、0.7.1 | 分别启用 util；fs、limit |
-| rusqlite | 0.41.1 | bundled、backup |
+| rusqlite | 0.41.1 | bundled、backup、hooks；一致性备份及受限迁移 SQL 授权 |
 | notify | 8.2.1 | 正式开发文件监听；默认 |
 | clap、toml | 4.6.7、0.9.8 | clap 启用 derive；CLI/配置，toml 同时解析发布包构建元数据 |
 | chrono | 0.4.45 | default-features=false；std |
@@ -37,6 +37,7 @@
 | argon2、getrandom、rpassword | 0.6.0、0.4.3、7.5.4 | 密码哈希、系统随机源、隐藏密码输入 |
 | tracing、tracing-subscriber | 0.1.44、0.3.23 | subscriber 启用 env-filter、json |
 | url | 2.5.8 | 公共 Origin 等 URL 边界 |
+| semver | 1.0.28 | 完整版本解析与 precedence 比较；项目/CLI/迁移执行器兼容 |
 | reqwest | 0.13.5 | default-features=false；受控回环开发代理 |
 | tokio-tungstenite | 0.29.0 | default-features=false；connect、handshake |
 | futures-util | 0.3.34 | 默认 + sink；开发代理流处理 |
@@ -89,7 +90,7 @@ rquickjs/rquickjs-sys 0.14.0 发布包内核在阶段 00 核对为 QuickJS-NG 0.
 
 正式 worker 独占 rusqlite Connection，队列容量 64，启用 WAL、Foreign Keys 和 5 秒 busy timeout；不在 Tokio 请求线程无约束共享连接。实际 bundled 内核已核对为 SQLite 3.54.1。WAL 仍有单写者约束，不能当作分布式/网络文件系统数据库方案；切换系统 SQLite 或升级时重新核验实际内核及 WAL 修复范围。[rusqlite Connection](https://docs.rs/rusqlite/latest/rusqlite/struct.Connection.html)、[SQLite WAL](https://www.sqlite.org/wal.html)、[Tokio 阻塞任务](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html)
 
-阶段 04 已完成通用 Schema Diff、确认 checksum、历史、结构漂移检查、backup API、数据预检、事务回滚和重复迁移空操作。新增表/安全列/索引按策略应用；破坏性变更默认阻断，显式确认也不能跳过数据校验。候选重命名可识别，但尚无映射执行；大表、磁盘耗尽和断电未专项验收，见[数据库设计](../architecture/database-design.md)。
+通用 Schema Diff、checksum、漂移、backup API、预检和事务机制由正式交付链复用；生成/固化与运行分开，同 Schema 数据操作有独立记录，空库执行完整链。改名/回填/转换通过显式冻结规则处理，危险候选与执行计划分别确认；旧库只显式基线接入。最低 CLI 与项目格式双重门禁、完整迁移产物及锁/快照契约见[配置](../contracts/project-configuration.md)、[数据库设计](../architecture/database-design.md)和[迁移操作](../operations/migration-design.md)。大表、磁盘耗尽和断电不因新增链而成为已验收能力。
 
 Axum 已正式提供注册表驱动 CRUD、Action、认证、授权与静态资源。Argon2id 初始化、服务端 Session、HttpOnly/SameSite Cookie、Origin/CSRF、表单字段范围、输入查重与分页/请求限额已经验证。只服务版本产物 client，API 错误不进入 SPA fallback，modules/server.json 不公开。详见[安全契约](../architecture/security-design.md)与[阶段 05](../verification/0007-http-auth.md)。[Axum](https://docs.rs/axum/latest/axum/)、[ServeDir](https://docs.rs/tower-http/latest/tower_http/services/struct.ServeDir.html)、[notify](https://docs.rs/notify/latest/notify/)
 

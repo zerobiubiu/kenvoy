@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-fn compile(
+pub(super) fn compile(
     project: &Project,
     session: &mut kengine::AnalysisSession,
 ) -> std::result::Result<
@@ -22,6 +22,16 @@ fn compile(
     )?)
 }
 
+pub(super) fn freeze_catalog(
+    project: &Project,
+    application: &crate::domain::model::ApplicationIR,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use crate::infrastructure::persistence::sqlite::migration::catalog;
+    catalog::generate(&project.root, application, "初始 Schema", None)?;
+    catalog::seal(&project.root, application, None)?;
+    Ok(())
+}
+
 #[test]
 fn immutable_versions_detect_tampering_and_preserve_data()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -31,6 +41,7 @@ fn immutable_versions_detect_tampering_and_preserve_data()
     let project = Project::load(&path)?;
     let result = (|| -> std::result::Result<(), Box<dyn std::error::Error>> {
         let (application, _) = compile(&project, &mut kengine::AnalysisSession::new())?;
+        freeze_catalog(&project, &application)?;
         let before = input_fingerprint(&project)?;
         fs::write(&project.database, "用户数据保护夹具".as_bytes())?;
         assert_eq!(before, input_fingerprint(&project)?);
@@ -76,6 +87,7 @@ fn failed_build_keeps_unmanaged_output_and_source_changes_change_fingerprint()
     let project = Project::load(&path)?;
     let result = (|| -> std::result::Result<(), Box<dyn std::error::Error>> {
         let (application, _) = compile(&project, &mut kengine::AnalysisSession::new())?;
+        freeze_catalog(&project, &application)?;
         let initial = input_fingerprint(&project)?;
         fs::write(project.root.join(".env"), "SECRET=not-for-client")?;
         assert_eq!(initial, input_fingerprint(&project)?);

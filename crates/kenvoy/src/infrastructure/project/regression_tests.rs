@@ -102,6 +102,29 @@ fn relative_external_is_validated_per_importer_and_removed_stylesheets_fail()
 }
 
 #[test]
+fn regression_reserved_migrations_directory_cannot_be_data_source_or_output()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    let scratch = Scratch::new()?;
+    for config in [
+        "[database]\npath='migrations/app.sqlite'",
+        "[database]\npath='migrations/data/app.sqlite'",
+        "[application]\nentry='migrations/src/app.tsx'",
+        "[build]\nout_dir='migrations/dist'",
+    ] {
+        scratch.write("kenvoy.toml", config)?;
+        assert!(
+            Project::load(&scratch.0).is_err(),
+            "正式迁移输入不能被其他目录职责覆盖：{config}"
+        );
+        assert!(
+            !scratch.0.join("migrations").exists(),
+            "拒绝配置不得创建迁移或数据目录"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn reserved_paths_and_nonexistent_case_aliases_cannot_overlap_data_or_sources()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
     let scratch = Scratch::new()?;

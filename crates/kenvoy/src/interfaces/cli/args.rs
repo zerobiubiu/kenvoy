@@ -42,7 +42,7 @@ pub(crate) enum Command {
         #[arg(long)]
         generic: bool,
     },
-    /// 预览、应用数据库迁移或读取迁移历史。
+    /// 生成、固化、预览和执行正式迁移，或显式接入旧数据库。
     Migrate {
         #[command(subcommand)]
         action: Option<MigrationCommand>,
@@ -63,12 +63,21 @@ pub(crate) enum Command {
         /// 自动构建时明确允许安装用户已声明的 npm 依赖。
         #[arg(long)]
         install_deps: bool,
+        /// 确认 status 显示的完整危险迁移计划校验值。
+        #[arg(long)]
+        confirm: Option<String>,
     },
     /// 启动开发服务。
     Dev {
         /// 明确允许安装用户已声明的 npm 依赖。
         #[arg(long)]
         install_deps: bool,
+        /// 创建独立的一次性空开发快照，例如 dev-snapshots/try.sqlite。
+        #[arg(long)]
+        snapshot: Option<PathBuf>,
+        /// 确认 status 显示的完整危险迁移计划校验值。
+        #[arg(long)]
+        confirm: Option<String>,
     },
 }
 
@@ -101,13 +110,35 @@ pub(crate) enum AdminCommand {
 
 #[derive(Subcommand)]
 pub(crate) enum MigrationCommand {
-    /// 只读预览差异；数据库不存在时不创建文件。
+    /// 只读预览正式迁移链与数据库状态；不创建数据库。
     Status,
-    /// 应用安全迁移；破坏性计划需要精确校验值和一致性备份。
+    /// 按顺序执行已固化迁移；危险计划需要精确校验值。
     Apply {
         #[arg(long)]
         confirm: Option<String>,
     },
     /// 只读显示已执行迁移及校验记录。
     History,
+    /// 比较上一正式 Schema 与当前声明，生成可审查候选；不连接数据库。
+    Generate {
+        #[arg(long)]
+        description: String,
+        /// 明确的数据转换、改名、回填及前后断言规则文件。
+        #[arg(long)]
+        rules: Option<PathBuf>,
+    },
+    /// 验证并追加固化候选；危险候选需要精确校验值。
+    Seal {
+        #[arg(long)]
+        confirm: Option<String>,
+    },
+    /// 显式核验旧库基线；省略 confirm 时只输出接入报告。
+    Baseline {
+        #[arg(long)]
+        at: String,
+        #[arg(long)]
+        rules: Option<PathBuf>,
+        #[arg(long)]
+        confirm: Option<String>,
+    },
 }

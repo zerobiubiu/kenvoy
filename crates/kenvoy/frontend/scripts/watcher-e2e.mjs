@@ -6,7 +6,7 @@ import { projectFixture } from '../../../kenvoy-tests/browser/fixture.mjs';
 const fixture=await projectFixture();let browser;
 try {
   await fixture.command(['--project','app','admin','init','--username','admin','--password-stdin'],'watcher-test-password-725\n');
-  const server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage();
+  let server=await fixture.start();browser=await chromium.launch({headless:true});const page=await browser.newPage();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(server.origin+'/customers');
   await page.getByLabel('客户姓名',{exact:false}).fill('监听前已保存');await page.getByLabel('联系电话',{exact:false}).fill('13800000000');
@@ -23,11 +23,11 @@ try {
   assert.match(await server.logs(), /code=KE\d+/);assert.match(await server.logs(), /app\.tsx/);assert.match(await server.logs(), /line=/);assert.match(await server.logs(), /suggestion=/);
   await expect(page.getByLabel('客户姓名',{exact:false})).toHaveValue('尚未提交的输入');
   assert.equal((await status()).generation,initial.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),initialManifest);
-  const valid=original.replace('客户登记','更新后登记').replace('<text name="phone" label="联系电话" />','<text name="phone" label="联系电话" /><text name="nickname" label="昵称" />');
+  const valid=original.replace('客户登记','更新后登记');
   await writeFile(entry,valid);
   await expect.poll(async()=>(await status()).generation,{timeout:15000}).toBeGreaterThan(initial.generation);
   await expect(page.getByRole('heading',{name:'更新后登记',exact:true})).toBeVisible();
-  await expect(page.getByLabel('昵称',{exact:false})).toBeVisible();await expect(page.getByText('开发更新未通过',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('昵称',{exact:false})).toHaveCount(0);await expect(page.getByText('开发更新未通过',{exact:true})).toHaveCount(0);
   const active=await status();const activeManifest=await readFile(join(fixture.project,'dist/manifest.json'),'utf8');
   await writeFile(entry,valid.replace('<text name="phone" label="联系电话" />',''));
   await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
@@ -50,8 +50,19 @@ try {
   }
   await page.goto(server.origin+'/admin/login');await page.getByLabel('用户名',{exact:false}).fill('admin');await page.getByLabel('密码',{exact:false}).fill('watcher-test-password-725');await page.getByRole('button',{name:'登录',exact:true}).click();
   await expect(page.getByRole('cell',{name:'监听前已保存',exact:true})).toBeVisible();
-  const record=await(await page.request.get(server.origin+`/api/customers/${id}`)).json();assert.equal(record.data.phone,'13800000000');assert.equal(record.data.nickname,null);
+  const record=await(await page.request.get(server.origin+`/api/customers/${id}`)).json();assert.equal(record.data.phone,'13800000000');assert.equal(record.data.nickname,undefined);
+  const schemaChange=valid.replace('<text name="phone" label="联系电话" />','<text name="phone" label="联系电话" /><text name="nickname" label="昵称" />');
+  await writeFile(entry,schemaChange);await expect.poll(async()=>(await status()).state,{timeout:15000}).toBe('error');
+  assert.equal((await status()).generation,active.generation);assert.equal(await readFile(join(fixture.project,'dist/manifest.json'),'utf8'),activeManifest);
+  const migration=await fixture.sealMigration('监听夹具停服后发布昵称字段');assert.equal(migration.pending.length,1);
+  const activeModel=await(await page.request.get(server.origin+'/_kenvoy/application')).json();
+  assert.equal(activeModel.resources[0].fields.some(field=>field.name==='nickname'),false,'已固化的新Schema仍不能在线热迁移');
+  await server.stop();
+  server=await fixture.start('dev',migration.confirmation_checksum?['--confirm',migration.confirmation_checksum]:[]);
+  await page.goto(server.origin+'/customers');await expect(page.getByLabel('昵称',{exact:false})).toBeVisible();
+  await page.goto(server.origin+'/admin/login');await page.getByLabel('用户名',{exact:false}).fill('admin');await page.getByLabel('密码',{exact:false}).fill('watcher-test-password-725');await page.getByRole('button',{name:'登录',exact:true}).click();
+  const upgraded=await(await page.request.get(server.origin+`/api/customers/${id}`)).json();assert.equal(upgraded.data.phone,'13800000000');assert.equal(upgraded.data.nickname,null);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({status:'通过',native_notify:true,syntax_error_keeps_input_and_model:true,terminal_source_diagnostics:true,configuration_restore_clears_error:true,safe_schema_addition:true,destructive_change_blocked:true,active_manifest_preserved:true,recovery_and_data_preserved:true},null,2));
+  console.log(JSON.stringify({status:'通过',native_notify:true,syntax_error_keeps_input_and_model:true,terminal_source_diagnostics:true,configuration_restore_clears_error:true,ui_only_hot_reload:true,schema_requires_seal_and_restart:true,destructive_change_blocked:true,active_manifest_preserved:true,recovery_and_data_preserved:true},null,2));
   await server.stop();
 } finally {try {if(browser)await browser.close();} finally {await fixture.close();}}

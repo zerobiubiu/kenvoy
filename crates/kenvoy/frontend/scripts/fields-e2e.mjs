@@ -18,6 +18,8 @@ try {
       <select name="category" label="类别" required><option value="a" label="甲类"/><option value="b" label="乙类"/></select>
     </resource><page path="/entries" title="字段验收"><form resource="entries" mode="create"/></page>
   </app>;`);
+  const migration = await fixture.sealMigration('字段浏览器夹具的显式Schema迁移', { format: 1, resolved_risks: ['drop_table:customers'] });
+  await fixture.command(['--project', 'app', 'migrate', 'apply', ...(migration.confirmation_checksum ? ['--confirm', migration.confirmation_checksum] : [])]);
   const server = await fixture.start();
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ locale: 'zh-CN', viewport: { width: 1280, height: 1000 } });

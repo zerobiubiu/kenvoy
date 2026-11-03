@@ -26,6 +26,7 @@
 | [changes/0021：双分支与当前版本发布](../changes/0021-dev-main-release-rules.md#执行验证记录) | 已执行；真实 Git 标签回归、发布策略回归、六目标既有二进制归档、只读远端空跑、源包 dry-run；本轮未推送或运行远端发布 | [Git 与发布操作](../operations/releasing.md)、[工程流程](../development/engineering-workflow.md) |
 | [changes/0024：多渠道软件包发布](../changes/0024-package-channels.md#执行验证记录) | 已执行；渠道产物生成、npm shim 实测、nfpm 四格式打包与内容核对；未上传或运行远端渠道 | [多渠道软件包发布](../operations/distribution-channels.md) |
 | [changes/0025：dev/run 优雅退出](../changes/0025-graceful-shutdown.md#执行验证记录) | 已执行；Windows 基础/自定义 dev、生产 run 的真实 Ctrl+C，端口/子进程/临时目录清理与定向测试；Unix SIGTERM 与超时路径未实测 | [Runtime 设计](../architecture/runtime-design.md)、[CLI](../operations/cli-design.md)、[前端 Runtime](../architecture/frontend-runtime.md) |
+| [changes/0026：应用兼容与正式迁移](../changes/0026-application-migration-lifecycle.md#执行验证记录) | 已执行；SemVer/产物、真实临时 CLI/SQLite/HTTP、分步恢复、启动失败、进程互斥、无源码交付、旧库与快照边界；范围以正文命令为准 | [迁移操作](../operations/migration-design.md)、[配置契约](../contracts/project-configuration.md)、[测试策略](../development/testing-strategy.md) |
 
 ## 初始审查与准备计划
 

@@ -15,7 +15,7 @@ KEngine 是其中独立、通用的 Rust 源码解析库，提供 JS/TS/JSX/TSX 
 
 - **语义化声明**：`resource`、`page`、`form`、`table`、`action` 等元素描述业务，严格静态校验引用、权限与路由。
 - **单一业务模型**：同一份声明驱动页面、管理后台、受控 HTTP API 与 SQLite 表结构，不为每个资源手写 CRUD。
-- **真实持久化**：SQLite 文件数据库、事务化迁移与 checksum 确认；开发与生产共用同一数据路径。
+- **真实持久化**：SQLite 文件数据库、追加式正式迁移链、逐步事务与 checksum 确认；开发与生产共用同一数据路径，不因切换模式重置。
 - **内置管理后台**：登录、会话、资源查询、分页、排序、编辑与删除，复用同一权限模型。
 - **可扩展前端**：原生 React + TypeScript + CSS；支持组件重载、自定义组件、联动选项、多文件上传与图片展示。
 - **受限 JavaScript**：服务端函数与 Action 运行在 QuickJS 中，客户端代码按依赖切片，不把服务端私有模块带入浏览器。
@@ -59,6 +59,10 @@ kenvoy run      # 加载生产产物并启动；有源码且需要更新时自�
 ```
 
 基础 DSL 运行不需要 Node/npm；只有使用自定义组件库时才需要 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`。
+
+`create` 已固化模板的初始迁移。之后改变数据库结构，先 `kenvoy migrate generate --description "变更说明"`，审查候选后 `kenvoy migrate seal`，再构建或启动；危险变更还需显式规则、精确确认和一致性备份。`run` 只执行已固化步骤，空库也执行完整链，不在启动时临时生成方案。
+
+旧配置和旧库不会自动接入：配置必须显式声明 `project.min_cli_version`、`project.format_version`，数据库通过只读报告和 checksum 确认选择真实基线。一次性开发可用 `dev --snapshot dev-snapshots/try.sqlite`；快照不可直接用于生产。步骤和恢复边界见[迁移操作](docs/operations/migration-design.md)。
 
 ## 声明示例
 

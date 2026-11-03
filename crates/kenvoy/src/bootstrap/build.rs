@@ -32,8 +32,8 @@ pub async fn candidate(
 ) -> Result<Candidate> {
     // 显式安装用户依赖可能首次生成 lock；最多重新分析一次，不发布前后不一致的源码。
     for attempt in 0..2 {
-        let stage = artifact::Staging::new(project)?;
         let before = artifact::input_fingerprint(project)?;
+        let stage = artifact::Staging::new(project)?;
         let (application, program) = super::compile(project, session)?;
         let server = javascript::prepare(&program, &application, project.config.runtime.trust)?;
         let client = client_build::build(

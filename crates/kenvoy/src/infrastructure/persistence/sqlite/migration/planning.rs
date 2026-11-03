@@ -26,7 +26,7 @@ pub(super) fn plan_checksum(plan: &MigrationPlan) -> Result<String> {
     hash(&plan)
 }
 
-fn diff(previous: &SchemaModel, target: &SchemaModel) -> Vec<SchemaChange> {
+pub(super) fn diff(previous: &SchemaModel, target: &SchemaModel) -> Vec<SchemaChange> {
     let mut changes = vec![];
     for (name, table) in &target.tables {
         let Some(old) = previous.tables.get(name) else {

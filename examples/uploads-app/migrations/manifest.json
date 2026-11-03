@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "schema_hash_version": "sha256-schema-v1",
+  "steps": [
+    {
+      "id": "000001",
+      "file": "steps/000001.json",
+      "checksum": "60e2580143b581542beb1d12920a04bdf1451a9126899e025c47342ed9ed1cba"
+    }
+  ]
+}

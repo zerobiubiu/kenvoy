@@ -11,11 +11,12 @@ use crate::domain::{
     source::SourceLocation,
 };
 use kengine::{Position, SourceSpan};
+use rusqlite::OpenFlags;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 struct DatabaseFile {

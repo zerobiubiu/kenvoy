@@ -1,27 +1,30 @@
 //! SQLite Schema 差异、漂移核验和事务迁移。所有 SQL 标识符来自受检模型。
 
+pub mod catalog;
 mod execution;
 mod files;
 mod planning;
-mod state;
+pub(super) mod state;
 
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
+use rusqlite::{Connection, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::{ApplicationIR, FieldKind};
 
+#[cfg(test)]
+pub use super::schema::SchemaModel;
 use super::schema::hash;
-pub use super::schema::{SchemaModel, schema_model};
+pub use super::schema::schema_model;
 use execution::{execute_changes, preflight_data};
 use files::{absolute_path, backup_database, connection_is_memory};
 use planning::plan;
+#[cfg(test)]
+use state::State;
+#[cfg(test)]
 pub use state::history_path;
-use state::{METADATA_DDL, State, actual_objects, read_state};
+use state::{METADATA_DDL, actual_objects, read_state};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MigrationError {
@@ -53,6 +56,13 @@ pub enum MigrationError {
     InvalidData(String),
     #[error("一致性备份超过时间限制，迁移尚未执行")]
     BackupTimeout,
+    #[error("正式迁移步骤 {step} 失败：{source}；{state}")]
+    CatalogStepFailed {
+        step: String,
+        state: String,
+        #[source]
+        source: Box<MigrationError>,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MigrationError>;
@@ -135,7 +145,11 @@ pub struct MigrationRecord {
 }
 
 /// 只读预览；不存在的文件和父目录都不会被创建。
+#[cfg(test)]
 pub fn preview(path: &Path, application: &ApplicationIR) -> Result<MigrationPlan> {
+    use rusqlite::OpenFlags;
+    use std::time::Duration;
+
     let path = absolute_path(path)?;
     let target = schema_model(application)?;
     if !path.exists() {

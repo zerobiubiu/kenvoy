@@ -13,6 +13,9 @@
 *.sqlite3-wal
 *.sqlite3-shm
 /**/data/backups/
+*.kenvoy.lock
+*.kenvoy-snapshot.json
+*.kenvoy-startups.jsonl
 /artifacts/
 
 /**/node_modules/

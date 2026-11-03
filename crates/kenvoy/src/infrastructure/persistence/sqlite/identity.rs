@@ -44,15 +44,38 @@ fn snapshot(connection: &Connection) -> Result<Vec<SchemaObject>> {
         .collect::<std::result::Result<_, _>>()?)
 }
 
-pub(crate) fn initialize(connection: &mut Connection) -> Result<()> {
+/// 迁移预检使用只读核验，不因缺少认证表而初始化或修复数据库。
+pub(super) fn validate_schema(connection: &Connection) -> Result<()> {
+    let actual = snapshot(connection)?;
+    if actual.is_empty() {
+        return Ok(());
+    }
     let expected = Connection::open_in_memory()?;
     for sql in [USERS, SESSIONS, META, EXPIRY, USER_INDEX] {
         expected.execute_batch(sql)?;
     }
-    let expected = snapshot(&expected)?;
+    if actual != snapshot(&expected)? {
+        return Err(StoreError::Schema("固定认证表、索引或触发器发生漂移".into()).into());
+    }
+    let versions: Vec<(i64, i64)> = connection
+        .prepare("SELECT id,version FROM _kenvoy_auth_schema")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    if versions != [(1, 1)] {
+        return Err(StoreError::Schema("不支持的认证版本或版本记录损坏".into()).into());
+    }
+    if connection
+        .prepare("PRAGMA foreign_key_check('_kenvoy_sessions')")?
+        .exists([])?
+    {
+        return Err(StoreError::Schema("Session 存在失效的账号外键".into()).into());
+    }
+    Ok(())
+}
+
+pub(crate) fn initialize(connection: &mut Connection) -> Result<()> {
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let actual = snapshot(&transaction)?;
-    if actual.is_empty() {
+    if snapshot(&transaction)?.is_empty() {
         for sql in [USERS, SESSIONS, META, EXPIRY, USER_INDEX] {
             transaction.execute_batch(sql)?;
         }
@@ -60,24 +83,8 @@ pub(crate) fn initialize(connection: &mut Connection) -> Result<()> {
             "INSERT INTO _kenvoy_auth_schema(id,version) VALUES(1,1)",
             [],
         )?;
-    } else {
-        if actual != expected {
-            return Err(StoreError::Schema("固定认证表、索引或触发器发生漂移".into()).into());
-        }
-        let versions: Vec<(i64, i64)> = transaction
-            .prepare("SELECT id,version FROM _kenvoy_auth_schema")?
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<std::result::Result<_, _>>()?;
-        if versions != [(1, 1)] {
-            return Err(StoreError::Schema("不支持的认证版本或版本记录损坏".into()).into());
-        }
     }
-    if transaction
-        .prepare("PRAGMA foreign_key_check('_kenvoy_sessions')")?
-        .exists([])?
-    {
-        return Err(StoreError::Schema("Session 存在失效的账号外键".into()).into());
-    }
+    validate_schema(&transaction)?;
     transaction.commit()?;
     Ok(())
 }

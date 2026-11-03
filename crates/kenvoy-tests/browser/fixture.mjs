@@ -1,5 +1,7 @@
 // Playwright 仅发送夹具请求；临时项目、CLI 和服务进程由 Rust 测试拥有。
 import { createInterface } from 'node:readline';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const prefix = 'KENVOY_FIXTURE_RPC:';
 
@@ -45,6 +47,18 @@ export async function projectFixture() {
     return {
       ...paths,
       command: (args, input = '', timeout = 45000) => request('command', { args, input, timeout }),
+      async sealMigration(description, rules) {
+        const invoke = async args => JSON.parse(await request('command', { args: ['--project', 'app', 'migrate', ...args], input: '', timeout: 45000 }));
+        const args = ['generate', '--description', description];
+        if (rules) {
+          const path = join(paths.project, 'migration-rules.json');
+          await writeFile(path, JSON.stringify(rules));
+          args.push('--rules', path);
+        }
+        const draft = await invoke(args);
+        await invoke(['seal', '--confirm', draft.confirmation_checksum]);
+        return invoke(['status']);
+      },
       async start(mode = 'dev', args = [], timeout = 45000, env = {}) {
         const server = await request('start', { mode, args, timeout, env });
         return {

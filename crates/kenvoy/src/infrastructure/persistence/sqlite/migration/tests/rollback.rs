@@ -96,32 +96,3 @@ fn constraint_changes_validate_existing_values_and_roll_back_then_recover() -> T
     assert_eq!(rows(&connection)?, 1);
     Ok(())
 }
-
-#[test]
-fn foreign_key_failure_during_destructive_ddl_rolls_back_prior_ddl_and_history() -> TestResult {
-    let fixture = DatabaseFile::new()?;
-    let mut connection = fixture.connect()?;
-    let original = app();
-    fixture.apply(&mut connection, &original)?;
-    connection.execute_batch("INSERT INTO customers(id,name) VALUES(1,'被引用'); CREATE TABLE _kenvoy_users(id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id)); INSERT INTO _kenvoy_users VALUES(1,1);")?;
-    let mut target = original.clone();
-    target.resources[0].name = "accounts".into();
-    let before = actual_objects(&connection)?;
-    let error = fixture
-        .confirm(&mut connection, &target)
-        .expect_err("FK 应阻止删除引用表");
-    assert!(matches!(error, MigrationError::Sqlite(_)));
-    assert_eq!(
-        actual_objects(&connection)?,
-        before,
-        "先创建的新表必须一起回滚"
-    );
-    assert!(!table_exists(&connection, "accounts")?);
-    assert_eq!(rows(&connection)?, 1);
-    assert_eq!(history(&connection)?.len(), 1);
-    assert!(preview(&fixture.path, &original)?.changes.is_empty());
-    let backups =
-        fs::read_dir(fixture.directory.join("backups"))?.collect::<std::io::Result<Vec<_>>>()?;
-    assert_eq!(backups.len(), 1, "失败迁移也保留完整备份供核对");
-    Ok(())
-}

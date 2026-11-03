@@ -2,6 +2,11 @@
 
 mod constraints;
 pub(super) mod ddl;
+pub(super) mod frozen;
+mod frozen_data;
+
+/// 旧版 Schema 哈希字节保持不变，仅显式标记算法契约。
+pub const SCHEMA_HASH_VERSION: &str = "sha256-schema-v1";
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,17 +22,20 @@ use crate::domain::{
 use constraints::validate_constraints;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SchemaModel {
     pub tables: BTreeMap<String, TableModel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TableModel {
     pub columns: BTreeMap<String, ColumnModel>,
     pub indexes: BTreeMap<String, IndexModel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ColumnModel {
     pub name: String,
     pub kind: FieldKind,
@@ -54,6 +62,7 @@ fn deserialize_default<'de, D: serde::Deserializer<'de>>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IndexModel {
     pub column: String,
     pub unique: bool,
@@ -191,7 +200,7 @@ pub(super) fn quoted(name: &str) -> String {
 pub fn schema_hash(model: &SchemaModel) -> Result<String> {
     hash(model)
 }
-pub(super) fn hash<T: Serialize>(value: &T) -> Result<String> {
+pub(super) fn hash<T: Serialize + ?Sized>(value: &T) -> Result<String> {
     Ok(Sha256::digest(serde_json::to_vec(value)?)
         .iter()
         .map(|byte| format!("{byte:02x}"))

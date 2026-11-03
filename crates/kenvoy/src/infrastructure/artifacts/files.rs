@@ -107,6 +107,7 @@ pub(super) fn collect(root: &Path) -> Result<BTreeMap<String, Asset>> {
                 .ok_or_else(|| invalid("产物路径必须为 UTF-8"))?
                 .replace('\\', "/");
             if name != "application.ir"
+                && name != "migrations.json"
                 && name != "modules/server.json"
                 && !name.starts_with("client/")
             {

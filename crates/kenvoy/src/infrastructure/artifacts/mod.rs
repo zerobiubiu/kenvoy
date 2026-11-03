@@ -6,18 +6,25 @@ mod relocate;
 mod staging;
 
 #[cfg(test)]
+mod catalog_tests;
+#[cfg(test)]
 mod tests;
 
 pub use fingerprint::input_fingerprint;
 pub use load::{activate, load};
 pub use staging::Staging;
 
-use crate::domain::model::ApplicationIR;
+use crate::{
+    domain::model::ApplicationIR,
+    infrastructure::persistence::sqlite::migration::{self, catalog::Catalog},
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
+const INPUT_HASH_VERSION: &str = "sha256-input-v2";
+const BUILD_HASH_VERSION: &str = "sha256-build-v2";
 const MAX_FILE: u64 = 32 * 1024 * 1024;
 const MAX_TOTAL: u64 = 256 * 1024 * 1024;
 
@@ -33,6 +40,8 @@ pub enum ArtifactError {
     Invalid(String),
     #[error("构建产物序列化失败：{0}")]
     Json(#[from] serde_json::Error),
+    #[error("构建产物迁移链无效：{0}")]
+    Migration(#[from] migration::MigrationError),
 }
 pub type Result<T> = std::result::Result<T, ArtifactError>;
 fn io(path: impl Into<PathBuf>, source: std::io::Error) -> ArtifactError {
@@ -67,6 +76,14 @@ pub struct Asset {
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub format_version: u32,
+    pub project_name: String,
+    pub project_version: String,
+    pub min_cli_version: String,
+    pub project_format_version: String,
+    pub development_snapshot: bool,
+    pub input_hash_version: String,
+    pub build_hash_version: String,
+    pub schema_hash_version: String,
     pub framework_version: String,
     pub framework_fingerprint: String,
     pub build_id: String,
@@ -78,6 +95,14 @@ impl Manifest {
     fn identity(&self) -> Result<String> {
         Ok(digest(&serde_json::to_vec(&(
             self.format_version,
+            &self.project_name,
+            &self.project_version,
+            &self.min_cli_version,
+            &self.project_format_version,
+            self.development_snapshot,
+            &self.input_hash_version,
+            &self.build_hash_version,
+            &self.schema_hash_version,
             &self.framework_version,
             &self.framework_fingerprint,
             &self.input_fingerprint,
@@ -91,6 +116,7 @@ impl Manifest {
 pub struct Loaded {
     pub manifest: Manifest,
     pub application: ApplicationIR,
+    pub migrations: Catalog,
     pub server_modules: Vec<u8>,
     pub client: PathBuf,
 }

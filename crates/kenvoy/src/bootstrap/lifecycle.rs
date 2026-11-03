@@ -69,14 +69,21 @@ impl Development {
             .parent()
             .unwrap_or(&project.root)
             .to_owned();
+        let persistent = project.root.join(
+            project
+                .config
+                .database
+                .path
+                .parent()
+                .unwrap_or(Path::new("data")),
+        );
         let mut native: RecommendedWatcher =
             notify::recommended_watcher(move |result: notify::Result<Event>| match result {
                 Ok(event)
                     if !matches!(event.kind, EventKind::Access(_))
-                        && event
-                            .paths
-                            .iter()
-                            .any(|path| relevant(path, &root, &output, &data)) =>
+                        && event.paths.iter().any(|path| {
+                            !path.starts_with(&persistent) && relevant(path, &root, &output, &data)
+                        }) =>
                 {
                     let _ = events.try_send(());
                 }
@@ -108,7 +115,17 @@ impl Development {
                 while receive.try_recv().is_ok() {}
                 let mut committed = false;
                 let changed = async {
-                    let current = Project::load(&project.root)?;
+                    let mut current = Project::load(&project.root)?;
+                    current.check_compatibility()?;
+                    if project.snapshot {
+                        if current.config.database.path != project.config.database.path {
+                            return Err(Error::InvalidConfig(
+                                "正式数据库路径变更需要停止 dev；快照不会隐式接入正式数据库".into(),
+                            ));
+                        }
+                        current.database = project.database.clone();
+                        current.snapshot = true;
+                    }
                     if current.database != project.database
                         || current.out_dir != project.out_dir
                         || current.config.server.host != project.config.server.host
@@ -131,6 +148,13 @@ impl Development {
                     http.set_development_status(DevelopmentPhase::Building, None, false)
                         .await?;
                     let next = Box::pin(build::candidate(&current, &mut session, false)).await?;
+                    if serde_json::to_value(&next.output.migrations)?
+                        != serde_json::to_value(&candidate.output.migrations)?
+                    {
+                        return Err(Error::InvalidConfig(
+                            "正式迁移链发生变化，请停止 dev 后重新启动；运行期间不执行迁移，旧服务继续使用原迁移位置".into(),
+                        ));
+                    }
                     let structural = next.application != candidate.application;
                     let bundle: PreparedBundle =
                         serde_json::from_slice(&next.output.server_modules)?;

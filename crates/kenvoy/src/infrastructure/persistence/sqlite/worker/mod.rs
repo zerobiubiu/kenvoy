@@ -1,8 +1,8 @@
 mod identity;
+mod opening;
 mod resources;
 
 use std::{
-    fs,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::domain::model::{ApplicationIR, ResourceDefinition};
 
 use super::{DatabaseError, Result, migration};
+use opening::Opening;
 
 const QUEUE_CAPACITY: usize = 64;
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(6);
@@ -39,6 +40,8 @@ struct WorkerState {
     path: PathBuf,
     application: ApplicationIR,
     generation: u64,
+    strict_schema: bool,
+    _lease: Option<super::lifecycle::DatabaseLease>,
 }
 
 impl WorkerState {
@@ -104,17 +107,48 @@ pub struct Database {
 }
 
 impl Database {
+    pub async fn open_catalog(
+        path: PathBuf,
+        application: ApplicationIR,
+        catalog: migration::catalog::Catalog,
+        confirmation: Option<String>,
+    ) -> Result<Self> {
+        Self::open_mode(
+            path,
+            application,
+            Opening::Catalog {
+                catalog,
+                confirmation,
+            },
+        )
+        .await
+    }
+
+    pub async fn open_snapshot(path: PathBuf, application: ApplicationIR) -> Result<Self> {
+        Self::open_mode(path, application, Opening::Snapshot).await
+    }
+
+    #[cfg(test)]
     pub async fn open(path: PathBuf, application: ApplicationIR) -> Result<Self> {
         Self::open_confirmed(path, application, None).await
     }
 
+    #[cfg(test)]
     pub async fn open_confirmed(
         path: PathBuf,
         application: ApplicationIR,
         confirmation: Option<String>,
     ) -> Result<Self> {
-        // 即使调用方从生产产物反序列化 ApplicationIR，也重新检查 Schema 名称和约束。
-        migration::schema_model(&application)?;
+        Self::open_mode(path, application, Opening::Legacy { confirmation }).await
+    }
+
+    async fn open_mode(
+        path: PathBuf,
+        application: ApplicationIR,
+        opening: Opening,
+    ) -> Result<Self> {
+        // 在创建数据库或目录之前验证交付链和受检 Schema。
+        opening.validate(&path, &application)?;
         let (sender, mut receiver) = mpsc::channel(QUEUE_CAPACITY);
         let (ready_sender, ready) = oneshot::channel();
         let closing = Arc::new(AtomicBool::new(false));
@@ -124,32 +158,7 @@ impl Database {
         let thread = thread::Builder::new()
             .name("kenvoy-sqlite".into())
             .spawn(move || {
-                let initialize = || -> Result<WorkerState> {
-                    if let Some(parent) = path.parent() {
-                        fs::create_dir_all(parent).map_err(|source| DatabaseError::Io {
-                            path: parent.into(),
-                            source,
-                        })?;
-                    }
-                    let mut connection = Connection::open(&path)?;
-                    connection.busy_timeout(Duration::from_secs(5))?;
-                    connection.pragma_update(None, "foreign_keys", true)?;
-                    connection.pragma_update(None, "journal_mode", "WAL")?;
-                    connection.pragma_update(None, "synchronous", "NORMAL")?;
-                    migration::apply_connection(
-                        &mut connection,
-                        &application,
-                        Some(&path),
-                        confirmation.as_deref(),
-                    )?;
-                    super::uploads::initialize(&mut connection, super::uploads::now()?)?;
-                    Ok(WorkerState {
-                        connection,
-                        path,
-                        application,
-                        generation: 1,
-                    })
-                };
+                let initialize = || opening::initialize(path, application, opening);
                 let mut state = match initialize() {
                     Ok(state) => state,
                     Err(error) => {

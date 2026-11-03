@@ -39,3 +39,23 @@ cargo xtask browser
 跨层重构另保留旧 CLI 基线，逐字比较示例 `inspect` 与 `--help`；用重构前真实程序创建独立 SQLite/会话/附件，再由新程序读取并比较记录与文件字节。结构门禁不能替代运行回归；本轮实际证据见 [0016](../changes/0016-ddd-structure-and-module-split.md)，不据此扩大平台或真实 Ctrl+C 验收范围。
 
 最终 E2E 已覆盖完整后台、自定义 UI/Server Function、错误恢复、热更新、生产自动构建与 artifact-only 部署；专项终端测试另验真实 Ctrl+C。阶段 10 的命令、计数与平台边界见[首版验收](../verification/0012-final-acceptance.md)，本次 Rust 工程入口的实际验证见[0013 变更记录](../changes/0013-rust-test-workspace-and-tools-retirement.md)，不以阶段 06 的初次表单证据替代最终结果。
+
+## 正式迁移与兼容性验收
+
+正式交付链的跨层入口为 `crates/kenvoy-tests/tests/migration_contract.rs`，场景按 catalog、transactions、runtime、adoption 分拆；低层执行器和冻结 Schema 断言位于 SQLite 模块测试。沿用 `cargo xtask test` 构建真实 CLI 并传递 `KENVOY_BINARY`，不得因旧二进制恰好存在而误验。
+
+| 场景 | 需要观察的事实 |
+|---|---|
+| 空库和有数据库升级 | 按步骤到达目标结构；原记录、约束、索引和 ID 高水位正确 |
+| 同 Schema 数据迁移和重复启动 | ID/checksum 推进，数据转换仅执行一次；不靠 Schema hash 猜测已执行 |
+| 历史异常 | 改写、缺失、重复、分叉、实际结构漂移和数据库领先均在对外服务前失败 |
+| 双重兼容 | 最低 CLI 条件通过但项目格式不支持仍拒绝；缺字段与预发布边界明确 |
+| 冻结数据可读性 | 存量 CHECK/NOT NULL、系统 ID/时间与 UTF-8 直接核验；非法文本不能提交后才让 API 报错 |
+| 未固化 Schema | run/dev/build 不修改数据库、不自动生成执行方案 |
+| 分步失败恢复 | 当前步回滚，前缀保持提交；修复前提后从真实位置继续，不改历史文件 |
+| 迁移成功但应用失败 | 端口占用等故障不能伪称回滚；启动日志区分 migrated、startup_failed 与 ready |
+| 进程互斥 | 同库第二服务、迁移写入被拒绝；第一服务继续有效，退出后新实例可取得使用权 |
+| 无源码交付 | 去掉源码/迁移目录且 PATH 无 Node 后，完整产物仍可给空库执行全链 |
+| 基线与开发快照 | 接入证明/确认/旧历史保留；空快照不复制正式数据；单文件复制不丢失来源，不能借 baseline 转正 |
+
+测试只能使用独占临时项目和数据库；备份恢复不覆盖用户业务库。浏览器 fields/options/watcher 夹具须显式固化 Schema 变更，watcher 区分 UI 热更新和停服迁移，不能把旧“启动时动态 Diff”断言重新固定为正式行为。实际执行命令、结果与未覆盖故障见[实施记录 0026](../changes/0026-application-migration-lifecycle.md)。

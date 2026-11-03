@@ -26,10 +26,11 @@ axum = { version = "=0.8.9", features = ["ws"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "net", "io-util", "sync", "time", "signal", "process"] }
 tower = { version = "=0.5.3", features = ["util"] }
 tower-http = { version = "=0.7.1", features = ["fs", "limit"] }
-rusqlite = { version = "=0.41.1", features = ["bundled", "backup"] }
+rusqlite = { version = "=0.41.1", features = ["bundled", "backup", "hooks"] }
 notify = "=8.2.1"
 clap = { version = "=4.6.7", features = ["derive"] }
 toml = "=0.9.8"
+semver = "=1.0.28"
 chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
 sha2 = "=0.11.1"
 argon2 = "=0.6.0"

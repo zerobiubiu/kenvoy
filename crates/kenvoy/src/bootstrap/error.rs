@@ -53,6 +53,12 @@ pub enum Error {
     Javascript(#[from] crate::application::execution::JsError),
     #[error("{0}未能在期限内关闭；已继续回收其余资源，进程退出前可能仍有未回收线程")]
     ShutdownTimeout(&'static str),
+    #[error("{state}：{source}")]
+    Activation {
+        state: &'static str,
+        #[source]
+        source: Box<Error>,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

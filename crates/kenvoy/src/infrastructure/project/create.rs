@@ -39,6 +39,8 @@ pub fn create(target: &Path) -> Result<()> {
     let target = parent.join(name);
     let mut config = Config::default();
     config.project.name = name.to_owned();
+    config.project.min_cli_version = Some(env!("CARGO_PKG_VERSION").into());
+    config.project.format_version = Some(super::compatibility::CURRENT_PROJECT_FORMAT.into());
     let encoded =
         toml::to_string_pretty(&config).map_err(|error| Error::InvalidConfig(error.to_string()))?;
     // 原子保留目标目录，跨平台都不会用 rename 替换已存在的空目录。
@@ -53,11 +55,11 @@ pub fn create(target: &Path) -> Result<()> {
         ("src/app.tsx", CUSTOMER_APP),
         (
             ".gitignore",
-            "data/*.sqlite*\ndist/\n.kenvoy/\nnode_modules/\n.env*\n",
+            "data/*.sqlite*\n*.kenvoy.lock\n*.kenvoy-snapshot.json\n*.kenvoy-startups.jsonl\ndist/\n.kenvoy/\nnode_modules/\n.env*\n",
         ),
         (
             "README.md",
-            "# Kenvoy 应用\n\n执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 预览迁移。\n\n`kenvoy build` 准备产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
+            "# Kenvoy 应用\n\n`kenvoy create` 已固化初始迁移，尚未写入业务数据库。执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 查看数据库迁移位置，`kenvoy migrate history` 查看历史。\n\nSchema 变化后执行 `kenvoy migrate generate --description \"说明本次变化\"`，审查候选并通过 `kenvoy migrate seal` 固化，再停服重启 `kenvoy dev` 或 `kenvoy run`。构建和热重载不会隐式生成正式迁移。\n\n`kenvoy build` 准备包含完整迁移链的产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
         ),
     ] {
         let path = target.join(path);

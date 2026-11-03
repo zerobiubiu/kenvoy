@@ -6,20 +6,32 @@ use std::{
 };
 
 use super::{
-    FORMAT_VERSION, Loaded, Manifest, Result,
+    BUILD_HASH_VERSION, FORMAT_VERSION, INPUT_HASH_VERSION, Loaded, Manifest, Result,
     files::{collect, directory, reject_link, write_new},
     invalid, io,
     load::load_manifest,
     relocate::relocate,
     valid_hash,
 };
-use crate::{domain::model::ApplicationIR, infrastructure::project::Project};
+use crate::{
+    domain::model::ApplicationIR,
+    infrastructure::{
+        persistence::sqlite::{migration::catalog, schema::SCHEMA_HASH_VERSION},
+        project::Project,
+    },
+};
 
 /// OS 文件锁随进程退出释放；不会留下阻止恢复的 PID 锁。
 pub struct Staging {
     directory: PathBuf,
     root: PathBuf,
     out_dir: PathBuf,
+    project_name: String,
+    project_version: String,
+    min_cli_version: String,
+    project_format_version: String,
+    development_snapshot: bool,
+    migrations: catalog::Catalog,
     _lock: fs::File,
 }
 impl Staging {
@@ -28,6 +40,20 @@ impl Staging {
             .root
             .canonicalize()
             .map_err(|error| io(&project.root, error))?;
+        let min_cli_version = project
+            .config
+            .project
+            .min_cli_version
+            .clone()
+            .ok_or_else(|| invalid("缺少 project.min_cli_version；请先完成项目兼容性升级"))?;
+        let project_format_version = project
+            .config
+            .project
+            .format_version
+            .clone()
+            .ok_or_else(|| invalid("缺少 project.format_version；请先完成项目兼容性升级"))?;
+        let migrations = catalog::read(&root)?;
+        migrations.validate()?;
         let cache = directory(&root, &root.join(".kenvoy/artifacts"))?;
         let lock_path = cache.join("build.lock");
         reject_link(&lock_path)?;
@@ -51,6 +77,12 @@ impl Staging {
             directory: stage,
             root,
             out_dir: project.out_dir.clone(),
+            project_name: project.config.project.name.clone(),
+            project_version: project.config.project.version.clone(),
+            min_cli_version,
+            project_format_version,
+            development_snapshot: project.snapshot,
+            migrations,
             _lock: lock,
         })
     }
@@ -68,7 +100,7 @@ impl Staging {
         self.finish(application, server_modules, input_fingerprint, dependencies)
     }
     fn finish(
-        self,
+        mut self,
         application: &ApplicationIR,
         server_modules: &[u8],
         input_fingerprint: String,
@@ -77,11 +109,18 @@ impl Staging {
         if !valid_hash(&input_fingerprint) {
             return Err(invalid("输入指纹不是 SHA-256"));
         }
+        if !self.development_snapshot {
+            self.migrations.validate_target(application)?;
+        }
         let mut application = application.clone();
         relocate(&mut application, &self.root)?;
         write_new(
             &self.directory.join("application.ir"),
             &serde_json::to_vec(&application)?,
+        )?;
+        write_new(
+            &self.directory.join("migrations.json"),
+            &serde_json::to_vec(&self.migrations)?,
         )?;
         fs::create_dir(self.directory.join("modules"))
             .map_err(|error| io(&self.directory, error))?;
@@ -96,6 +135,14 @@ impl Staging {
         }
         let mut manifest = Manifest {
             format_version: FORMAT_VERSION,
+            project_name: std::mem::take(&mut self.project_name),
+            project_version: std::mem::take(&mut self.project_version),
+            min_cli_version: std::mem::take(&mut self.min_cli_version),
+            project_format_version: std::mem::take(&mut self.project_format_version),
+            development_snapshot: self.development_snapshot,
+            input_hash_version: INPUT_HASH_VERSION.into(),
+            build_hash_version: BUILD_HASH_VERSION.into(),
+            schema_hash_version: SCHEMA_HASH_VERSION.into(),
             framework_version: env!("CARGO_PKG_VERSION").into(),
             framework_fingerprint: crate::infrastructure::frontend::FRAMEWORK_FINGERPRINT.into(),
             build_id: String::new(),
@@ -106,6 +153,7 @@ impl Staging {
         manifest.build_id = manifest.identity()?;
         let out = directory(&self.root, &self.out_dir)?;
         let owner = out.join(".kenvoy-artifacts");
+        // 此标记只证明目录归属；Manifest 版本独立校验，升级后仍保留只追加的旧版本。
         reject_link(&owner)?;
         if owner.exists() {
             if fs::read(&owner).map_err(|error| io(&owner, error))? != b"kenvoy-artifacts-v1\n" {
@@ -133,7 +181,7 @@ impl Staging {
         } else {
             fs::rename(&self.directory, &target).map_err(|error| io(&target, error))?;
         }
-        load_manifest(&self.root, &out, manifest)
+        load_manifest(&self.root, &out, manifest, self.development_snapshot)
     }
 }
 impl Drop for Staging {

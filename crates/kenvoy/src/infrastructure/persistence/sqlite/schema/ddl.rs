@@ -1,4 +1,6 @@
 //! Schema 列、表和索引的固定 SQLite DDL 生成。
+//! 这些表达式构成 sqlite-schema-v1 的冻结执行语义；不兼容变更必须新增执行器版本，
+//! 不得原地改变已固化迁移的类型、默认值、约束或索引语义。
 
 use rusqlite::Connection;
 use serde_json::Value;
@@ -26,6 +28,29 @@ pub(in super::super) fn column_sql(column: &ColumnModel) -> String {
         FieldKind::Boolean => "INTEGER",
         _ => "TEXT",
     };
+    let checks = column_checks(column, &name);
+    format!(
+        "{name} {storage}{}{} CHECK ({name} IS NULL OR ({}))",
+        if column.required { " NOT NULL" } else { "" },
+        column
+            .default
+            .as_ref()
+            .map(|value| format!(" DEFAULT {}", sql_literal(value)))
+            .unwrap_or_default(),
+        checks.join(" AND ")
+    )
+}
+
+/// 与建表 CHECK 共用固定规则，直接证明存量行约束，不以结构一致替代数据核验。
+pub(in super::super) fn column_check(column: &ColumnModel) -> String {
+    let name = quoted(&column.name);
+    format!(
+        "{name} IS NULL OR ({})",
+        column_checks(column, &name).join(" AND ")
+    )
+}
+
+fn column_checks(column: &ColumnModel, name: &str) -> Vec<String> {
     let mut checks = match column.kind {
         FieldKind::Number if column.integer => vec![
             format!("typeof({name})='integer'"),
@@ -89,16 +114,7 @@ pub(in super::super) fn column_sql(column: &ColumnModel) -> String {
     if column.kind == FieldKind::Datetime {
         checks.push(format!("strftime('%Y-%m-%dT%H:%M:%fZ',{name}) IS NOT NULL AND strftime('%Y-%m-%dT%H:%M:%fZ',{name})={name}"));
     }
-    format!(
-        "{name} {storage}{}{} CHECK ({name} IS NULL OR ({}))",
-        if column.required { " NOT NULL" } else { "" },
-        column
-            .default
-            .as_ref()
-            .map(|value| format!(" DEFAULT {}", sql_literal(value)))
-            .unwrap_or_default(),
-        checks.join(" AND ")
-    )
+    checks
 }
 
 fn sql_string(value: &str) -> String {

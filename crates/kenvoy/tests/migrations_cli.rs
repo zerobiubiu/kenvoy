@@ -42,6 +42,13 @@ impl Fixture {
         command.extend(args);
         Ok(serde_json::from_slice(&self.success(&command)?.stdout)?)
     }
+    fn seal(&self, description: &str) -> Result<Value> {
+        let generated = self.migrate(&["generate", "--description", description])?;
+        let checksum = generated["confirmation_checksum"]
+            .as_str()
+            .ok_or("缺少候选确认值")?;
+        self.migrate(&["seal", "--confirm", checksum])
+    }
     fn db(&self) -> PathBuf {
         self.0.join("app/data/app.sqlite")
     }
@@ -62,14 +69,16 @@ impl Drop for Fixture {
 fn migration_cli_preserves_data_and_history_across_processes() -> Result {
     let fixture = Fixture::new()?;
     let plan = fixture.migrate(&["status"])?;
-    assert_eq!(plan["from_version"], 0);
-    assert_eq!(plan["destructive"], false);
+    assert_eq!(plan["status"], "pending");
+    assert_eq!(plan["pending"].as_array().ok_or("缺少待执行链")?.len(), 1);
     assert!(!fixture.db().exists());
-    assert_eq!(fixture.migrate(&["history"])?, serde_json::json!([]));
+    let history = fixture.migrate(&["history"])?;
+    assert_eq!(history["applied"], serde_json::json!([]));
+    assert_eq!(history["legacy_history"], serde_json::json!([]));
     assert!(!fixture.db().exists());
-    let applied = fixture.migrate(&["apply"])?;
-    assert_eq!(applied["database"]["journal_mode"], "wal");
-    assert_eq!(applied["database"]["foreign_keys"], true);
+    fixture.migrate(&["apply"])?;
+    let current = fixture.migrate(&["status"])?;
+    assert_eq!(current["status"], "current");
     {
         let connection = Connection::open(fixture.db())?;
         connection.execute(
@@ -79,8 +88,7 @@ fn migration_cli_preserves_data_and_history_across_processes() -> Result {
     }
     fixture.migrate(&["apply"])?;
     assert_eq!(
-        fixture
-            .migrate(&["history"])?
+        fixture.migrate(&["history"])?["legacy_history"]
             .as_array()
             .ok_or("缺少历史")?
             .len(),
@@ -91,8 +99,11 @@ fn migration_cli_preserves_data_and_history_across_processes() -> Result {
         fixture.source(),
         original.replace("</resource>", "<text name=\"notes\" index /></resource>"),
     )?;
+    let unsealed = fixture.run(&["--project", "app", "migrate", "apply"])?;
+    assert!(!unsealed.status.success(), "不得由源码临时推导并应用迁移");
+    fixture.seal("增加客户备注")?;
     let plan = fixture.migrate(&["status"])?;
-    assert_eq!(plan["destructive"], false);
+    assert_eq!(plan["pending"].as_array().ok_or("缺少待执行链")?.len(), 1);
     fixture.migrate(&["apply"])?;
     let connection = Connection::open(fixture.db())?;
     let record: (String, i64, Option<String>) =
@@ -102,8 +113,7 @@ fn migration_cli_preserves_data_and_history_across_processes() -> Result {
     assert_eq!(record, ("张三".into(), 25, None));
     drop(connection);
     assert_eq!(
-        fixture
-            .migrate(&["history"])?
+        fixture.migrate(&["history"])?["legacy_history"]
             .as_array()
             .ok_or("缺少历史")?
             .len(),
@@ -111,8 +121,7 @@ fn migration_cli_preserves_data_and_history_across_processes() -> Result {
     );
     fs::write(fixture.source(), "export default <app>")?;
     assert_eq!(
-        fixture
-            .migrate(&["history"])?
+        fixture.migrate(&["history"])?["legacy_history"]
             .as_array()
             .ok_or("缺少历史")?
             .len(),
@@ -143,11 +152,50 @@ fn destructive_cli_requires_current_checksum_and_retains_backup() -> Result {
         .find(|line| line.contains("name=\"phone\""))
         .ok_or("缺少电话字段")?;
     fs::write(fixture.source(), source.replace(line, ""))?;
+    fixture.migrate(&["generate", "--description", "移除客户电话"])?;
+    let failed = fixture.run(&["--project", "app", "migrate", "seal"])?;
+    assert!(!failed.status.success());
+    let rules = fixture.0.join("reviewed-drop.json");
+    fs::write(
+        &rules,
+        r#"{"format":1,"resolved_risks":["drop_column:customers.phone"]}"#,
+    )?;
+    let candidate = fixture.migrate(&[
+        "generate",
+        "--description",
+        "明确删除客户电话",
+        "--rules",
+        rules.to_str().ok_or("规则路径不是 UTF-8")?,
+    ])?;
+    assert!(
+        !fixture
+            .run(&["--project", "app", "migrate", "seal"])?
+            .status
+            .success()
+    );
+    assert!(
+        !fixture
+            .run(&[
+                "--project",
+                "app",
+                "migrate",
+                "seal",
+                "--confirm",
+                "过期计划"
+            ])?
+            .status
+            .success()
+    );
+    let checksum = candidate["confirmation_checksum"]
+        .as_str()
+        .ok_or("缺少候选校验值")?;
+    fixture.migrate(&["seal", "--confirm", checksum])?;
     let plan = fixture.migrate(&["status"])?;
-    assert_eq!(plan["destructive"], true);
+    let checksum = plan["confirmation_checksum"]
+        .as_str()
+        .ok_or("缺少执行校验值")?;
     let failed = fixture.run(&["--project", "app", "migrate", "apply"])?;
     assert!(!failed.status.success());
-    assert!(String::from_utf8(failed.stderr)?.contains("checksum"));
     assert!(
         !fixture
             .run(&[
@@ -161,10 +209,9 @@ fn destructive_cli_requires_current_checksum_and_retains_backup() -> Result {
             .status
             .success()
     );
-    let checksum = plan["checksum"].as_str().ok_or("缺少校验值")?;
     fixture.migrate(&["apply", "--confirm", checksum])?;
     let history = fixture.migrate(&["history"])?;
-    let backup = history[1]["backup"].as_str().ok_or("缺少备份")?;
+    let backup = history["applied"][1]["backup"].as_str().ok_or("缺少备份")?;
     let connection = Connection::open(backup)?;
     let phone: String =
         connection.query_row("SELECT phone FROM customers", [], |row| row.get(0))?;

@@ -21,12 +21,18 @@ pub struct Config {
 pub struct ProjectConfig {
     pub name: String,
     pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_cli_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<String>,
 }
 impl Default for ProjectConfig {
     fn default() -> Self {
         Self {
             name: "kenvoy-app".into(),
             version: "0.1.0".into(),
+            min_cli_version: None,
+            format_version: None,
         }
     }
 }

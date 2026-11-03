@@ -28,6 +28,8 @@ try {
       {b.error&&<span role="alert">{b.error}</span>}</div>;}
   `);
   for (const name of ['package.json', 'package-lock.json']) await cp(join(example, name), join(fixture.project, name));
+  const migration = await fixture.sealMigration('选项与字段重载夹具的显式Schema迁移', { format: 1, resolved_risks: ['drop_table:customers'] });
+  await fixture.command(['--project', 'app', 'migrate', 'apply', ...(migration.confirmation_checksum ? ['--confirm', migration.confirmation_checksum] : [])]);
   await fixture.command(['--project', 'app', 'admin', 'init', '--username', 'admin', '--password-stdin'], password + '\n');
   let server = await fixture.start('run', ['--install-deps'], 240000);
   browser = await chromium.launch({ headless: true });

@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "id": "000001",
+  "previous": null,
+  "description": "示例初始正式结构",
+  "schema_hash_version": "sha256-schema-v1",
+  "from_hash": "d4fdaf3ef6e7b78dc1a224d36c8f3530f79170316cdaadf83a757322bb82badc",
+  "to_hash": "6b83175295a93fe1dfe2942ac45775384e963d24c998cdae19bba18e0c2d91b3",
+  "checksum": "b2b9637c92b38f498f214f64f8be20a6f3ee9f9231bd9f604158ced7184b8481",
+  "executor": "sqlite-schema-v1",
+  "executor_format": 1,
+  "min_cli": "0.2.1",
+  "schema": {
+    "tables": {
+      "customers": {
+        "columns": {
+          "age": {
+            "name": "age",
+            "kind": "number",
+            "required": false,
+            "integer": true,
+            "min": 0.0,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "name": {
+            "name": "name",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": 100,
+            "options": []
+          },
+          "phone": {
+            "name": "phone",
+            "kind": "text",
+            "required": false,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          }
+        },
+        "indexes": {}
+      }
+    }
+  },
+  "rules": {
+    "format": 1,
+    "renames": [],
+    "backfills": [],
+    "conversions": [],
+    "before_sql": [],
+    "after_sql": [],
+    "preconditions": [],
+    "assertions": [],
+    "baseline_proofs": [],
+    "resolved_risks": []
+  },
+  "risk_level": "safe",
+  "risks": []
+}

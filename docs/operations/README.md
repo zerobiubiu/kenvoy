@@ -13,7 +13,7 @@
 | 文档 | 状态 | 内容概览 |
 |---|---|---|
 | [CLI 当前行为](cli-design.md) | 参考 | 项目创建、检查与解析结果、迁移、账号管理、dev/build/run、依赖安装、产物部署、退出和日志 |
-| [迁移执行协议](migration-design.md) | 参考 | Schema Diff、只读预览、漂移检查、安全应用、checksum 确认、一致性备份、事务与恢复边界 |
+| [正式迁移与旧库接入](migration-design.md) | 参考 | 生成/固化、冻结规则、完整链交付、双重确认、逐步事务、备份、显式基线、快照与生命周期锁 |
 | [Git、版本标签与产品发布](releasing.md) | 参考 | dev/main 双分支、自动本地 tag、main 当前版本自动发布及手动兜底、单目标下载 artifact、六目标 registry 构建与安装边界 |
 | [多渠道软件包发布](distribution-channels.md) | 参考 | npm、Homebrew、Scoop、WinGet、Chocolatey、AUR、APT/RPM/Alpine/Arch Pages 仓库的产物流、Secret 与外部审核边界 |
 
@@ -37,10 +37,10 @@
 
 - 迁移的阶段证据见[阶段 04 SQLite 验证](../verification/0006-sqlite-runtime.md)，开发、构建、生产与真实 Ctrl+C 见[阶段 09 生命周期验证](../verification/0011-cli-lifecycle.md)，第一版综合范围见[阶段 10 最终验收](../verification/0012-final-acceptance.md)。
 - 首版后组件与选项行为的专项证据见[变更 0012](../changes/0012-native-components-and-options.md)，工程与测试入口替代证据见[变更 0013](../changes/0013-rust-test-workspace-and-tools-retirement.md)，不将其混入早期阶段验收。历史测试计数不代表当前修订计数。
-- 当前没有候选重命名的映射执行接口或自动恢复命令；确认不能绕过预检。磁盘满、断电与极大数据集等未覆盖条件见[技术风险](../development/technical-risks.md)。本入口不额外授予迁移、删除或覆盖用户数据的权限。
+- 改名、回填和转换通过显式冻结规则处理，确认不能绕过数据预检；旧库接入保留原始历史，不伪造步骤执行。没有自动恢复或降级命令；磁盘满、断电与极大数据集等边界见[技术风险](../development/technical-risks.md)。本入口不额外授予迁移、删除或覆盖用户数据的权限。
 
 ## 维护、废弃与替代关系
 
-本目录三个主题均为可持续维护的现状参考，当前无废弃主题。CLI 参数、配置、默认行为、迁移、恢复或发布边界变化时，同步维护操作正文、相应契约与实现设计，并在[变更记录](../changes/README.md)保存当次事实；设计或待验证内容不得写作已验收能力。
+本目录各主题均为可持续维护的现状参考，当前无废弃主题。CLI 参数、配置、默认行为、迁移、恢复或发布边界变化时，同步维护操作正文、相应契约与实现设计，并在[变更记录](../changes/README.md)保存当次事实；设计或待验证内容不得写作已验收能力。
 
 定稿 ADR、变更和验证正文不合并、不删除、不重编号，后续变化或勘误另建记录并更新索引。原 tools 已退役，历史记录中的旧路径与命令仅保留历史事实；当前工程操作使用 Rust xtask，测试与进程夹具使用 kenvoy-tests，不恢复旧工具链作为现行依赖。

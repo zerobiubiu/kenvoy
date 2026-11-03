@@ -41,6 +41,10 @@ kenvoy run
 
 dev/run 使用同一持久化数据库；不要通过删除 data 目录修复前端或更新问题。`kenvoy build` 只构建产物，不改业务数据库。
 
+`create` 同时固化初始迁移。后续 Schema 变化须先 `kenvoy migrate generate --description "变更说明"`、审查并 `kenvoy migrate seal`；构建产物携带完整链，run 对空库也按顺序逐步执行，不会临时生成迁移。危险候选与执行计划分别要求精确校验值确认，必要时先备份；失败只回滚当前步骤。
+
+配置中的应用版本、最低 CLI 版本和项目格式相互独立；缺少兼容字段的旧配置明确诊断，不自动提高版本。旧库通过 `migrate baseline --at <步骤ID>` 预览和确认接入，原历史保留。一次性 `dev --snapshot dev-snapshots/try.sqlite` 使用隔离空路径，正式 run 不接受快照。部署必须停旧服务；生命周期锁不能协调未实现该协议的旧 CLI。
+
 `dev`/`run` 支持 Ctrl+C、SIGTERM 与 Windows 控制台关闭事件：先停止接收和开发连接，再按期限回收 watcher/Vite、JavaScript 与 SQLite；重复发送终止信号会立即退出。已接受但结果不明的写入仍需核对。
 
 ## 自定义组件与依赖

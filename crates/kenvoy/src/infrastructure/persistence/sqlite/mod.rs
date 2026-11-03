@@ -1,17 +1,19 @@
 //! SQLite 宿主运行时；连接仅由专属线程持有，资源名只从已验证 Application IR 获取。
 
 mod identity;
+pub mod lifecycle;
 pub mod migration;
 mod options;
 mod query;
 mod repositories;
 pub mod schema;
+pub mod snapshot;
 mod uploads;
 mod worker;
 
 use std::path::PathBuf;
 
-pub use worker::{Database, DatabaseInfo};
+pub use worker::Database;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {

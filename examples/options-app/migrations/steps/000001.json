@@ -1,0 +1,132 @@
+{
+  "format": 1,
+  "id": "000001",
+  "previous": null,
+  "description": "示例初始正式结构",
+  "schema_hash_version": "sha256-schema-v1",
+  "from_hash": "d4fdaf3ef6e7b78dc1a224d36c8f3530f79170316cdaadf83a757322bb82badc",
+  "to_hash": "79ca1d6dfc3fae1553553939857d6af4101554ec2b615e6ba12374a5b116872d",
+  "checksum": "9c5a365b495e4d91af64df6921577aacdd28c41a1e9d115c57f9a6d21cfb141e",
+  "executor": "sqlite-schema-v1",
+  "executor_format": 1,
+  "min_cli": "0.2.1",
+  "schema": {
+    "tables": {
+      "cities": {
+        "columns": {
+          "code": {
+            "name": "code",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "name": {
+            "name": "name",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "private_note": {
+            "name": "private_note",
+            "kind": "text",
+            "required": false,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "province": {
+            "name": "province",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          }
+        },
+        "indexes": {
+          "uq_cities_code": {
+            "column": "code",
+            "unique": true
+          }
+        }
+      },
+      "entries": {
+        "columns": {
+          "city": {
+            "name": "city",
+            "kind": "select",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "name": {
+            "name": "name",
+            "kind": "text",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": []
+          },
+          "province": {
+            "name": "province",
+            "kind": "select",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": [
+              "js",
+              "zj"
+            ]
+          },
+          "service": {
+            "name": "service",
+            "kind": "select",
+            "required": true,
+            "integer": false,
+            "min": null,
+            "max": null,
+            "max_length": null,
+            "options": [
+              "east",
+              "north"
+            ]
+          }
+        },
+        "indexes": {}
+      }
+    }
+  },
+  "rules": {
+    "format": 1,
+    "renames": [],
+    "backfills": [],
+    "conversions": [],
+    "before_sql": [],
+    "after_sql": [],
+    "preconditions": [],
+    "assertions": [],
+    "baseline_proofs": [],
+    "resolved_risks": []
+  },
+  "risk_level": "safe",
+  "risks": []
+}

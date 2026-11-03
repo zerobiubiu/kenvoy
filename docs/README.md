@@ -14,6 +14,7 @@
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
 | 开发分支、版本标签与发布 | [Git 与发布操作](operations/releasing.md) → [多渠道软件包](operations/distribution-channels.md) → [分支与发布规则实施记录](changes/0021-dev-main-release-rules.md) → [标签规则定稿](changes/0023-version-tag-rules.md) |
+| 应用兼容、正式迁移与旧库接入 | [配置版本契约](contracts/project-configuration.md#四类版本与兼容规则) → [迁移操作](operations/migration-design.md) → [数据库设计](architecture/database-design.md) → [实施与证据 0026](changes/0026-application-migration-lifecycle.md) |
 | 核对完成范围与未完成项 | [阶段状态](development/development-roadmap.md) → [后续实施与验证待办](development/implementation-backlog.md) → [验证证据](verification/README.md) → [技术风险](development/technical-risks.md) |
 | 追溯方案与实施 | [架构决策](decisions/README.md) → [变更记录](changes/README.md) → [验证记录](verification/README.md) |
 

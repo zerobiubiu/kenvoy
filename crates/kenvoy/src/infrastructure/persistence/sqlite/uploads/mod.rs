@@ -1,6 +1,7 @@
 //! 附件与业务记录共用 SQLite；暂存配额、归属校验和绑定清理均在写事务内完成。
 
 mod binding;
+mod migration;
 mod schema;
 
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
@@ -15,6 +16,7 @@ use crate::{
 
 use super::{DatabaseError, Result};
 pub(super) use binding::{cleanup_removed_uploads, delete_record, synchronize};
+pub(super) use migration::{migrate_bindings, validate_bindings};
 pub(super) use schema::{ensure_schema, validate_schema};
 
 pub(super) fn now() -> Result<i64> {

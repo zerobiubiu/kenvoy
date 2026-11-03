@@ -4,9 +4,9 @@
 
 ## 职责与连接
 
-全部实现位于 `crates/kenvoy/src/database/`，不进入 KEngine。输入为 Application IR；重载构建产物时仍复核资源名、字段名、默认值和约束。默认路径为项目根的 `data/app.sqlite`，独立于构建目录。迁移预览和历史只打开已有数据库；路径不存在时返回初始计划或空历史，不创建文件与目录。
+全部实现位于 `crates/kenvoy/src/infrastructure/persistence/sqlite/`，不进入 KEngine。输入为已验证 Application IR 和正式交付链；加载产物仍复核资源/字段名、默认值和约束。默认数据库为项目根的 `data/app.sqlite`，独立于构建目录。迁移状态、历史和基线预览只读现有数据库，路径不存在不会创建文件与目录。
 
-`Database` 是可克隆异步句柄，专属线程独占 rusqlite Connection，Tokio 队列容量 64。初始化设置 foreign_keys=ON、WAL、busy_timeout=5000ms、synchronous=NORMAL。锁定 rusqlite 0.41.1 bundled/backup，当前 Windows MSVC 实测 SQLite 3.54.1。同步 SQL 不在异步请求线程执行；WAL 用于本机持久化文件系统，不据此宣称支持网络盘或多写者并行执行。
+`Database` 是可克隆异步句柄，专属线程独占 rusqlite Connection，Tokio 队列容量 64。正式初始化先验证交付链，取得 OS 生命周期锁，再设置 foreign_keys=ON、WAL、busy_timeout=5000ms、synchronous=NORMAL 并逐步迁移。锁定 rusqlite 0.41.1 bundled/backup/hooks，hooks 用于受限数据规则 SQL 的授权；WAL 不代表网络盘或多写者部署已受支持。SQLite 写锁只保护事务，不替代覆盖服务运行期的生命周期锁。
 
 队列满返回 Busy，表示请求尚未接受；已接受写入不施加声称“已取消”的响应超时。丢弃响应不取消已接受操作，线程异常导致响应丢失返回 WorkerLost，结果需核对。显式 shutdown 拒绝新任务并等待已接受任务，超过 6 秒请求 SQLite 中断及取消未执行队列，再有界等待 6 秒；返回 ShutdownTimeout 时保留线程句柄，不能宣称已释放。Drop 只是兜底，正常宿主必须显式关闭并检查结果。
 
@@ -37,36 +37,36 @@ CRUD 复用 validation 的 Create/Patch 规则，提供 create/get/list/update/d
 
 附件通过同一专属连接线程管理，二进制与元数据保存在固定内部表；暂存归属会话摘要，绑定归属资源/字段/记录。CRUD 的校验、绑定、替换清理和记录删除共用写事务；已确认的字段/资源删除与附件清理共用迁移事务，失败保留旧状态，备份包含附件。启动及上传回收过期暂存，不创建公开文件目录。限额、访问接口及明确限制见[文件与图片契约](../contracts/file-uploads.md)。
 
-## Diff、确认与历史
+## 正式交付链、Diff 与历史
 
-`preview(path, app)` 返回 MigrationPlan，含数据库绝对规范路径、当前版本、前后 Schema hash、实际结构 hash、变更、破坏性标志和 checksum。`apply_connection` 在 BEGIN IMMEDIATE 中重新读取状态并生成计划；确认 checksum 不匹配即拒绝，不能用全局 yes 替代具体计划。
+项目 `migrations/` 保存清单、追加步骤和候选；构建产物保存完整 `migrations.json`。步骤格式 1 使用版本化 `sqlite-schema-v1` 执行器，冻结前序、说明、from/to hash、目标 Schema、规则、风险和 checksum。它不调用当前应用函数，不依赖部署源码。Schema hash 契约 `sha256-schema-v1` 保持既有字节算法，规范模型仍按排序 JSON 计算；数据迁移有独立步骤，即使 hash 相同也执行并记录。
 
-| 变化 | 当前规则 |
-|---|---|
-| 新表、新可空字段、有合法非 null 默认值的必填字段 | 安全计划，经预检后可应用 |
-| 新普通/唯一索引 | 普通索引安全；唯一索引先检查已有重复值 |
-| 删除表/字段/索引、类型、约束、默认值变化 | 显式确认当前 checksum，先备份及预检 |
-| 无默认值必填增列 | 不自动应用；确认后已有数据仍须符合约束 |
-| 单一删除与同定义新增字段 | 报告 RenameCandidate；即使确认仍拒绝猜测，映射执行尚未实现 |
+`generate` 比较上一正式 Schema 与受检 IR，连接既有 Diff 能力生成候选；`seal` 检查风险处理、显式映射、数据规则和内存 SQLite 执行结果后追加固化。危险候选需要内容 checksum 确认；运行时另使用绑定数据库当前状态和待办链的完整执行计划 checksum。两种确认不可互换，均不能代替约束核验。精确规则结构见[迁移操作](../operations/migration-design.md)。
 
-空 Diff 不执行 DDL、不新增历史。删除 TSX 字段不会默认自动 DROP；未确认时保留旧库和旧有效模型。类型变更不做隐式字符串/数字转换；不兼容既有值不能靠确认跳过检查。
+正式 `run`、持久化 `dev`、`migrate apply` 和账号管理都使用正式链打开数据库；不再按最新 IR 临时推导并执行 DDL。空库也逐步执行完整历史；目标与当前源码不一致时先报告缺少迁移，不能删库、重建或伪造已执行记录。启动对照实际结构和已提交历史，必须证明数据库是目标链有效前缀；领先、缺失、改写、重复或分叉均停止对外服务。
 
-`_kenvoy_schema` 保存版本、规范 Schema JSON/hash、实际结构 JSON/hash；`_kenvoy_migrations` 保存递增版本、checksum、from/to hash、完整 plan_json、backup_path、执行时间。历史和 DDL 同事务提交，校验版本连续、前后 hash 链、计划 checksum 与最终 Schema。
+`_kenvoy_schema` 保存真实结构版本、规范 Schema JSON/hash 与实际结构快照；`_kenvoy_migrations` 保存每次真正执行的 checksum、from/to hash、plan、备份与时间，包括同结构的数据步骤。新正式交付状态由 `_kenvoy_catalog_owner`、`_kenvoy_catalog_applied`、`_kenvoy_catalog_baseline` 独立记录；每步的 DDL、数据、旧结构审计和正式成功位置在同一事务提交。旧库基线只记录真实来源，不向 applied 填入未执行步骤，原审计历史保持不变。
 
-实际结构快照来自排序的 sqlite_master 对象定义，包含业务表、索引、视图和触发器。手工修改、未知内部表、缺失元数据或记录篡改均阻断；迁移两张表另外核验精确受控 DDL。精确表所有权分别预留给认证模块的 `_kenvoy_users/_kenvoy_sessions/_kenvoy_auth_schema` 和附件模块的 `_kenvoy_uploads/_kenvoy_upload_schema`，各自独立核验版本与结构，绝不忽略所有同前缀对象。已有未纳管业务表拒绝自动接管。
+实际结构来自排序的 sqlite_master 对象。迁移、正式交付、快照来源、认证和附件 owner 分别精确核验自身 DDL、版本与记录；只有完成核验的已知对象才排除，未知同前缀表/索引/视图/触发器仍阻断。数据规则 SQL 使用 SQLite authorizer 限制业务对象访问与事务权限，不能改写宿主元数据或挂载外部数据库。冻结数据校验直接复用建表 CHECK 谓词，逐行核验 NOT NULL、系统 ID/时间和 UTF-8 字节，不能仅靠结构或 integrity_check 声称数据有效；附件还验证元数据、实际 BLOB 和归属守恒，文件字段改名同步更新绑定。
+
+## 旧库基线与开发快照
+
+缺少正式交付状态的现存库不是空库。显式 baseline 预览同时核验旧 Schema/实际结构/历史、选定正式步骤和数据约束；跳过含数据操作的历史要求逐步语义证明断言。不能证明则停止。确认 checksum 后先备份，再原子记录真实接入来源，后续真实迁移从基线继续。新空库不能 baseline 绕过链。
+
+一次性开发快照必须显式指定与正式数据隔离的空路径，直接建立最新结构，并先提交数据库内 `_kenvoy_dev_snapshot` 来源标记，同时保留初始化保护 sidecar；正式 run、迁移和 baseline 均拒绝快照，单文件复制或改名不改变来源。该内部表同样进行精确 owner 校验，不忽略未知同前缀对象。切换模式从不隐式重置数据库或转换历史，也不会默认占用共用 data/app.sqlite。
 
 ## 备份与回滚
 
-破坏性计划只允许持久化数据库，传入路径必须与连接一致。获取写锁后，通过独立只读连接调用 SQLite backup API，将一致性备份写入数据库父目录 backups/before-版本-时间-进程.sqlite，限制 30 秒，完成后 quick_check 必须为 ok；WAL 活动时不直接复制主文件。备份后预检失败仍保留备份；备份失败不执行迁移，失败生成的文件不能未经核验当作恢复点。
+危险计划只允许持久化数据库，传入路径必须与连接一致。在生命周期锁和事务保护下通过独立只读连接调用 SQLite backup API，将一致性备份写入数据库父目录 backups/，限制 30 秒，完成后 quick_check 必须为 ok；WAL 活动时不直接复制主文件。备份或预检失败不执行该步；先前成功步骤保持提交，失败备份文件不能未经核验当作恢复点。
 
 现有记录逐字段验证目标约束；唯一字段检查重复。重建时创建受控临时表、复制保留列及系统字段、核对行数、替换旧表并恢复索引，所有步骤受事务保护。保留 AUTOINCREMENT 最高已用序号，避免删除最高记录后重建导致 ID 重用。显式删除数据留在变更前备份，管理员可停服后恢复，目前没有自动 restore 命令。
 
-真实测试覆盖唯一冲突、约束失败和执行中外键阻止 DROP：先前创建的新表、历史及业务数据一起回滚。磁盘耗尽、断电和备份目录 IO 故障尚未注入测试，不将事务测试等同于这些故障全部通过。
+当前测试覆盖唯一冲突、约束/断言失败、非法 UTF-8、分步提交恢复以及附件字段改名的 BLOB/绑定回滚。早期借伪造认证表注入业务外键的测试已退役，新 owner 校验会在 DDL 前拒绝该状态，不放宽内部表所有权来恢复旧测试。磁盘耗尽、断电和备份目录 IO 故障尚未注入测试，不将事务用例等同于这些故障全部通过。
 
 ## 模型替换与边界
 
-replace_application 在工作队列串行迁移，成功后替换 Application IR 并增加数据库 generation，失败保留原注册表。HttpRuntime::publish_prepared 持应用写锁，在迁移成功后同步替换模型、JavaScript 包与静态资产；已接受的发布由独立跟踪任务完成，调用者取消不使状态中断。Development 在屏障前准备客户端候选，之后更新镜像和活动清单；提交后的收尾失败不能声称数据库回滚，具体策略见 [运行时设计](runtime-design.md)。
+正式运行和开发快照中的 replace_application 只接受相同物理 Schema；改变正式链或 Schema 要求停服重启，不在热更新期间执行 DDL。HttpRuntime::publish_prepared 的同代写锁继续协调模型、JavaScript 与静态资产，失败保留原注册表。只用于低层隔离测试的旧动态 Diff 执行器仍验证原有数据保护，不作为生产启动入口。
 
-关系字段、改名映射、跨代际崩溃恢复、大表耗时和空间预算仍待后续设计；文件字段已按上述附件协议实现。预检按行读取，但唯一值集合占用与数据量相关的内存，需大表实测后优化。本轮仅迁移隔离测试文件，没有迁移用户生产数据。
+应用版本、构建哈希与就绪/失败另追加到数据库相邻启动日志，迁移位置从 SQLite 提交状态读取。迁移全部成功但激活失败明确说明数据库已迁移，不能宣称回滚；恢复备份是独立操作，启动不自动覆盖业务库。关系字段、网络盘、多实例滚动升级、磁盘耗尽/断电与大数据量耗时/空间预算不在当前实测承诺内。
 
 证据见 [阶段 04 验证](../verification/0006-sqlite-runtime.md)、[实施记录](../changes/0005-sqlite-runtime.md)；相关决策为 [ADR 0005](../decisions/0005-sqlite-database.md)，生命周期见 [Runtime](runtime-design.md)。

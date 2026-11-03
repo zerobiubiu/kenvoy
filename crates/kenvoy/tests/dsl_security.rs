@@ -20,7 +20,10 @@ impl Fixture {
         ));
         fs::create_dir(&path)?;
         fs::create_dir(path.join("src"))?;
-        fs::write(path.join("kenvoy.toml"), "[project]\nname='安全验证'\n")?;
+        fs::write(
+            path.join("kenvoy.toml"),
+            "[project]\nname='安全验证'\nmin_cli_version='0.2.1'\nformat_version='0.2.0'\n",
+        )?;
         fs::write(path.join("src/app.tsx"), app)?;
         Ok(Self(path))
     }

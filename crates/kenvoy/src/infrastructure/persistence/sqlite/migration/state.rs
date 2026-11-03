@@ -1,26 +1,26 @@
 //! 持久化 Schema 快照、迁移历史链和真实数据库结构核验。
 
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 
-use rusqlite::{Connection, OpenFlags, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::model::FieldKind;
 
 use super::super::schema::{SchemaModel, hash};
+#[cfg(test)]
 use super::files::absolute_path;
 use super::planning::plan_checksum;
 use super::{MigrationError, MigrationRecord, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) struct ActualObject {
-    kind: String,
-    name: String,
-    table: String,
-    sql: Option<String>,
+pub(in super::super) struct ActualObject {
+    pub(in super::super) kind: String,
+    pub(in super::super) name: String,
+    pub(in super::super) table: String,
+    pub(in super::super) sql: Option<String>,
 }
 
 pub(super) struct State {
@@ -64,7 +64,11 @@ pub fn history(connection: &Connection) -> Result<Vec<MigrationRecord>> {
 }
 
 /// 读取历史不会创建数据库；同时核验版本链、快照和实际 Schema。
+#[cfg(test)]
 pub fn history_path(path: &Path) -> Result<Vec<MigrationRecord>> {
+    use rusqlite::OpenFlags;
+    use std::time::Duration;
+
     let path = absolute_path(path)?;
     if !path.exists() {
         return Ok(vec![]);
@@ -76,6 +80,8 @@ pub fn history_path(path: &Path) -> Result<Vec<MigrationRecord>> {
 }
 
 pub(super) fn read_state(connection: &Connection) -> Result<State> {
+    super::super::identity::validate_schema(connection)
+        .map_err(|error| MigrationError::Drift(format!("认证宿主结构核验失败：{error}")))?;
     let uploads_exist = super::super::uploads::validate_schema(connection)?;
     let actual = actual_objects(connection)?;
     let schema_exists = table_exists(connection, "_kenvoy_schema")?;
@@ -126,7 +132,8 @@ pub(super) fn read_state(connection: &Connection) -> Result<State> {
         ));
     }
     let records = history(connection)?;
-    let mut previous = hash(&SchemaModel::default())?;
+    let mut previous = super::catalog::records::initial_legacy_hash(connection)?
+        .unwrap_or(hash(&SchemaModel::default())?);
     for (index, record) in records.iter().enumerate() {
         if record.version != index as u64 + 1
             || record.plan.from_version != index as u64
@@ -179,7 +186,9 @@ fn verify_metadata_schema(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn actual_objects(connection: &Connection) -> Result<Vec<ActualObject>> {
+pub(in super::super) fn actual_objects(connection: &Connection) -> Result<Vec<ActualObject>> {
+    let catalog_owned = super::catalog::records::verify_owner(connection)?;
+    let snapshot_owned = super::super::snapshot::validate(connection)?;
     let mut statement=connection.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT GLOB 'sqlite_*' ORDER BY type,name")?;
     let rows = statement.query_map([], |row| {
         Ok(ActualObject {
@@ -192,6 +201,12 @@ pub(super) fn actual_objects(connection: &Connection) -> Result<Vec<ActualObject
     let mut objects = vec![];
     for row in rows {
         let row = row?;
+        if catalog_owned && super::catalog::records::TABLES.contains(&row.table.as_str()) {
+            continue;
+        }
+        if snapshot_owned && row.table == super::super::snapshot::TABLE {
+            continue;
+        }
         // 认证和附件表具有独立宿主版本校验；不忽略未知 _kenvoy_ 表。
         if !matches!(
             row.table.as_str(),
