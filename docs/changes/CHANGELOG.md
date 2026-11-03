@@ -2,11 +2,22 @@
 
 状态：参考；治理：持续维护的版本概要。详细执行事实保留在编号变更记录中，不以本页替代验证证据。
 
-## 未发布
+## 0.2.1
+
+发布状态：待发布；仅 dev 本地提交，未合并 main、未推送。Kenvoy 为 0.2.1，KEngine 代码未变，保持 0.2.0。
+
+### Kenvoy
+
+- 补齐 `dev`/`run` 的优雅退出：启动构建可被终止信号取消；Unix 处理 SIGINT/SIGTERM，Windows 处理 Ctrl+C、Ctrl+Break、控制台关闭与注销。
+- 首次信号后按期限排空 HTTP、停止开发 WebSocket、回收开发协调器/Vite、关闭 JavaScript worker 与 SQLite；第二次信号或 75 秒超期强制退出，避免关闭阶段永久挂起。
+- Vite 控制与日志读取均有期限；正常关闭后删除本次实例独占的 `.kenvoy/client-dev` 镜像与缓存。
+- 实施与验证见 [0025](0025-graceful-shutdown.md)。
+
+### 工程与分发
 
 - 工程流程切换为 dev/main 双分支：本地版本标签自动维护，main 只发布当前版本（含 PATCH），手动发布仅作 main 兜底，不再补发历史版本。
 - 手动与正式分发共用单目标打包实现，修复根 LICENSE 输入及新归档名称对应的 binstall 元数据；既有 0.2.0 源包和 Release 资产不覆盖。
-- 本轮不递增产品版本；实施与验证见 [0021](0021-dev-main-release-rules.md)。
+- 当时未递增产品版本；本次 0.2.1 统一包含该批工程改动，见 [0021](0021-dev-main-release-rules.md)。
 - 修复根提交产品版本漏标：初始化 v0.0.0 与根声明的 v0.1.0 可共存，已有标签不移动；见 [0022](0022-root-version-tag.md)。
 - 版本标签仅来自真实已提交版本，及时补到对应版本提交；退役 v0.0.0 初始化特例，增加切换、合并及推送前维护入口；见 [0023](0023-version-tag-rules.md)。
 - 新增 npm / Homebrew / Scoop / WinGet / Chocolatey / AUR 与 APT/RPM/Alpine/Arch 仓库发布工作流，只消费已发布 Release 归档；见 [0024](0024-package-channels.md)。

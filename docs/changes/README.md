@@ -38,6 +38,7 @@
 | 0022 | [根提交声明的版本标签补齐](0022-root-version-tag.md) | 已执行；本地 v0.1.0 与来源核对 | 初始化标签与根的真实产品版本标签共存，修复漏标与错误拒绝 |
 | 0023 | [版本标签规则定稿与初始化标签退役](0023-version-tag-rules.md) | 已执行；真实版本标签与持续补齐时机 | 删除人工初始化标签特例，提交/切换/合并/推送前共用维护入口 |
 | 0024 | [多渠道软件包发布与自动流水线](0024-package-channels.md) | 已执行；本地产物生成与验证，未上传 | npm/Homebrew/Scoop/WinGet/Chocolatey/AUR 与四类 Linux 仓库的独立 job 与凭据契约 |
+| 0025 | [dev/run 优雅退出与安全收尾](0025-graceful-shutdown.md) | 已执行；本地实现与 Windows Ctrl+C 复核，未合并 main | 终止信号、启动取消、HTTP/运行时关闭期限、Vite 回收与开发目录清理 |
 
 ## 关联代码与配置
 

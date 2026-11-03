@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
+use std::{future::IntoFuture, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     Router, middleware,
     routing::{get, post},
 };
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Notify};
 
 use super::{
     HttpRuntime, actions, development, handlers, middleware::protect, session, static_files,
@@ -48,12 +48,16 @@ impl HttpRuntime {
     }
 
     /// 宿主负责在 HTTP 优雅退出完成后关闭数据库工作线程。
+    /// 停止接收后最多等待连接排空；超时继续关闭宿主资源，不无限挂起。
     pub async fn serve<F>(&self, listener: TcpListener, shutdown: F) -> std::io::Result<()>
     where
         F: Future<Output = ()> + Send + 'static,
     {
+        const DRAIN_LIMIT: Duration = Duration::from_secs(10);
         let shared = self.shared.clone();
-        let result = axum::serve(
+        let draining = Arc::new(Notify::new());
+        let started = draining.clone();
+        let server = axum::serve(
             listener,
             self.router()
                 .into_make_service_with_connect_info::<SocketAddr>(),
@@ -63,8 +67,25 @@ impl HttpRuntime {
             if let Err(error) = development::stop(&shared).await {
                 tracing::error!(target:"kenvoy::http",%error,"开发连接关闭失败");
             }
-        })
-        .await;
+            started.notify_one();
+        });
+        let deadline = async move {
+            draining.notified().await;
+            tokio::time::sleep(DRAIN_LIMIT).await;
+        };
+        let mut server = Box::pin(server.into_future());
+        let result = tokio::select! {
+            result = server.as_mut() => result,
+            _ = deadline => {
+                tracing::warn!(
+                    target:"kenvoy::http",
+                    seconds = DRAIN_LIMIT.as_secs(),
+                    "HTTP 优雅退出等待超时，仍有连接未结束；继续关闭自有资源"
+                );
+                Ok(())
+            }
+        };
+        drop(server);
         development::stop(&self.shared)
             .await
             .map_err(|_| std::io::Error::other("开发连接未能退出"))?;

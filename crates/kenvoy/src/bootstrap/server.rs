@@ -2,7 +2,7 @@ use kengine::AnalysisSession;
 
 use super::{
     build,
-    error::{self, Result},
+    error::{self, Error, Result},
     lifecycle,
 };
 use crate::{
@@ -21,6 +21,7 @@ pub(super) async fn run_server(
     project: &Project,
     output: artifact::Loaded,
     development: Option<(AnalysisSession, build::Candidate)>,
+    shutdown: super::signals::Shutdown,
 ) -> Result<()> {
     let bundle: PreparedBundle = serde_json::from_slice(&output.server_modules)?;
     javascript::validate(&bundle)?;
@@ -71,12 +72,11 @@ pub(super) async fn run_server(
         let stop = development_runtime
             .as_ref()
             .map(lifecycle::Development::stop_signal);
+        let requested = shutdown.wait_owned();
         cli::server_ready(&origin);
         server
             .serve(listener, async move {
-                if let Err(error) = tokio::signal::ctrl_c().await {
-                    tracing::error!(target:"kenvoy::lifecycle", %error,"监听退出信号失败");
-                }
+                requested.await;
                 if let Some(stop) = stop {
                     let _ = stop.send(true);
                 }
@@ -86,15 +86,23 @@ pub(super) async fn run_server(
         Ok(())
     }
     .await;
+    const JS_SHUTDOWN_LIMIT: std::time::Duration = std::time::Duration::from_secs(15);
+    const DATABASE_SHUTDOWN_LIMIT: std::time::Duration = std::time::Duration::from_secs(15);
     let dev_shutdown = match development_runtime {
         Some(runtime) => runtime.shutdown().await,
         None => Ok(()),
     };
     let js_shutdown = match javascript_runtime {
-        Some(runtime) => runtime.shutdown().await,
+        Some(runtime) => match tokio::time::timeout(JS_SHUTDOWN_LIMIT, runtime.shutdown()).await {
+            Ok(result) => result.map_err(Error::from),
+            Err(_) => Err(Error::ShutdownTimeout("JavaScript 运行时")),
+        },
         None => Ok(()),
     };
-    let shutdown = database.shutdown().await;
+    let shutdown = match tokio::time::timeout(DATABASE_SHUTDOWN_LIMIT, database.shutdown()).await {
+        Ok(result) => result.map_err(Error::from),
+        Err(_) => Err(Error::ShutdownTimeout("SQLite 数据库")),
+    };
     serving?;
     dev_shutdown?;
     js_shutdown?;

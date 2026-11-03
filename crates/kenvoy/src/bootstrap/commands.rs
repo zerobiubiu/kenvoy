@@ -4,6 +4,7 @@ use super::{
     build, compile,
     error::{self, Error, Result},
     server::run_server,
+    signals::Shutdown,
 };
 use crate::{
     application::identity::Auth,
@@ -36,16 +37,23 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
     }
     let mut session = AnalysisSession::new();
     if let Command::Run { install_deps } = cli.command {
+        let shutdown = Shutdown::install();
         let output = if project.entry.is_file() {
             let fingerprint = artifact::input_fingerprint(&project)?;
             match artifact::load(&project) {
                 Ok(output) if output.manifest.input_fingerprint == fingerprint => output,
-                _ => build::prepare(&project, &mut session, install_deps).await?,
+                _ => tokio::select! {
+                    result = build::prepare(&project, &mut session, install_deps) => result?,
+                    _ = shutdown.wait() => {
+                        tracing::info!(target:"kenvoy::lifecycle","启动阶段收到终止信号，已取消构建");
+                        return Ok(());
+                    }
+                },
             }
         } else {
             artifact::load(&project)?
         };
-        return Box::pin(run_server(&project, output, None)).await;
+        return Box::pin(run_server(&project, output, None, shutdown)).await;
     }
     if let Command::Build { install_deps } = cli.command {
         let output = build::prepare(&project, &mut session, install_deps).await?;
@@ -57,11 +65,19 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
         return Ok(());
     }
     if let Command::Dev { install_deps } = cli.command {
-        let candidate = build::candidate(&project, &mut session, install_deps).await?;
+        let shutdown = Shutdown::install();
+        let candidate = tokio::select! {
+            result = build::candidate(&project, &mut session, install_deps) => result?,
+            _ = shutdown.wait() => {
+                tracing::info!(target:"kenvoy::lifecycle","启动阶段收到终止信号，已取消构建");
+                return Ok(());
+            }
+        };
         return Box::pin(run_server(
             &project,
             candidate.output.clone(),
             Some((session, candidate)),
+            shutdown,
         ))
         .await;
     }

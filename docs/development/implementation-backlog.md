@@ -67,8 +67,8 @@
 
 ### V02：当前修订的真实 Ctrl+C 与资源退出
 
-- **当前证据**：较早阶段有独立 PTY 的 Ctrl+C 记录；当前七套浏览器夹具使用强制终止，不能当作新一轮原生退出验收。
-- **待补验证**：使用当前构建，对基础应用及带自定义组件、开发 WebSocket 的应用实际发送原生 Ctrl+C；停止后再启动并核对数据。
+- **当前证据**：较早阶段有独立 PTY 的 Ctrl+C 记录；2026-11-03 的当前构建已复核基础 `dev`、带 Vite 子进程的自定义 `dev` 和生产 `run` 的 Ctrl+C，观察到完整关闭日志、端口释放、Node/CLI 无残留及 `.kenvoy/client-dev` 清理，见 [0025](../changes/0025-graceful-shutdown.md)。尚未在写入数据后重启核对，也未连接浏览器开发 WebSocket；七套浏览器夹具仍使用强制终止。
+- **待补验证**：在真实登记/编辑数据后停止并重启核对记录；通过浏览器保持开发 WebSocket 活跃再发送 Ctrl+C；在 Unix 发送 SIGTERM；覆盖构建中途取消、第二次信号与超时强制路径。
 - **验收标准**：HTTP 停止接收、端口释放、WebSocket 关闭、watcher/Vite/JS/SQLite 等自有资源回收、无本项目残留子进程、重启后数据存在；区分 PTY 外层退出码与应用本身结果。
 - **相关入口**：[进程夹具](../../crates/kenvoy-tests/src/lib.rs)、[退出观察脚本](../../crates/kenvoy/frontend/scripts/shutdown-observer.mjs)、[生命周期历史证据](../verification/0011-cli-lifecycle.md)、[退出实现](../../crates/kenvoy/src/main.rs)。
 

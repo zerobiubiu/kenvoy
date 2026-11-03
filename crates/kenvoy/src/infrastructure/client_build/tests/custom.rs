@@ -261,5 +261,13 @@ async fn real_custom_build_installs_only_explicit_user_dependencies_and_reuses_t
             .await
             .is_err()
     );
+    match fs::read_dir(project.root.join(".kenvoy/client-dev")) {
+        Ok(mut entries) => assert!(
+            entries.next().is_none(),
+            "开发实例退出后不得遗留镜像或缓存目录"
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     Ok(())
 }

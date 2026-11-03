@@ -51,6 +51,8 @@ pub enum Error {
     JavascriptDiagnostic(#[from] crate::application::execution::JsDiagnostic),
     #[error(transparent)]
     Javascript(#[from] crate::application::execution::JsError),
+    #[error("{0}未能在期限内关闭；已继续回收其余资源，进程退出前可能仍有未回收线程")]
+    ShutdownTimeout(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

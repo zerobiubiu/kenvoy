@@ -79,7 +79,7 @@ run 不要求事先执行 build。源码存在时核对输入指纹、框架兼�
 
 ## 关闭、部署与日志
 
-Ctrl+C 先通知开发协调器停止，在 Axum 等待退出前取消开发 WebSocket，再等待已接受发布任务，随后回收 watcher/Vite、关闭 QuickJS 与 SQLite。真实基础/自定义 CLI 信号、资源关闭、重启数据保留均已验收；早期 Windows 强制终止夹具的证据仍与真实信号测试分开记录。
+`dev`/`run` 在启动构建前安装终止信号监听。Unix 同时处理 SIGINT 与 SIGTERM，Windows 处理 Ctrl+C、Ctrl+Break、控制台关闭与注销。首次信号取消启动构建（如仍在构建），或停止开发协调器并关闭开发 WebSocket；HTTP 停止接收后最多等待 10 秒排空连接，开发协调器、JavaScript 与 SQLite 各有 15 秒关闭期限，Vite 控制/进程/日志回收另有更短期限。正常关闭会删除本次实例独占的 `.kenvoy/client-dev` 目录。第二次信号立即以 130 退出；首次信号后 75 秒仍未完成也会强制结束，防止关闭阶段永久挂起。基础/自定义 CLI 的真实 Ctrl+C、端口/子进程/临时目录关闭已在当前构建复核；Unix SIGTERM、构建中途信号和超时强制路径仍未实测。早期 Windows 强制终止夹具的证据仍与真实信号测试分开记录。
 
 默认 `server.host=127.0.0.1`、`port=3000`；测试可用端口 0，再按实际绑定端口生成 origin。`server.public_origin` 指定对外 Origin，非回环监听要求显式 HTTPS；不含凭据、业务路径、查询或片段。HTTPS 由部署代理终止，当前 Rust listener 本身没有 TLS，不信任 Forwarded 来推导安全来源。配置详情见 [项目配置](../contracts/project-configuration.md)。
 

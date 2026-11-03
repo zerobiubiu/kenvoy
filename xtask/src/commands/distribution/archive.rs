@@ -98,7 +98,7 @@ impl Drop for Pending<'_> {
         if self.complete {
             return;
         }
-        for path in std::iter::once(self.archive).chain(self.checksum.as_deref()) {
+        for path in std::iter::once(self.archive).chain(self.checksum) {
             if let Err(error) = fs::remove_file(path)
                 && error.kind() != io::ErrorKind::NotFound
             {

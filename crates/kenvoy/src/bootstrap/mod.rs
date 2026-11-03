@@ -4,6 +4,7 @@ mod commands;
 mod error;
 mod lifecycle;
 mod server;
+mod signals;
 
 pub(crate) use commands::execute;
 pub(crate) use error::report_diagnostics;

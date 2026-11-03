@@ -25,6 +25,7 @@
 | [changes/0019：0.2.0 源包与跨平台二进制发布](../changes/0019-crates-and-binary-release.md#执行验证记录) | 已执行；独立包编译、六目标打包、归档/校验和及 cargo-binstall 安装版本核验，未运行测试套件 | [发布操作](../operations/releasing.md)、[版本日志](../changes/CHANGELOG.md) |
 | [changes/0021：双分支与当前版本发布](../changes/0021-dev-main-release-rules.md#执行验证记录) | 已执行；真实 Git 标签回归、发布策略回归、六目标既有二进制归档、只读远端空跑、源包 dry-run；本轮未推送或运行远端发布 | [Git 与发布操作](../operations/releasing.md)、[工程流程](../development/engineering-workflow.md) |
 | [changes/0024：多渠道软件包发布](../changes/0024-package-channels.md#执行验证记录) | 已执行；渠道产物生成、npm shim 实测、nfpm 四格式打包与内容核对；未上传或运行远端渠道 | [多渠道软件包发布](../operations/distribution-channels.md) |
+| [changes/0025：dev/run 优雅退出](../changes/0025-graceful-shutdown.md#执行验证记录) | 已执行；Windows 基础/自定义 dev、生产 run 的真实 Ctrl+C，端口/子进程/临时目录清理与定向测试；Unix SIGTERM 与超时路径未实测 | [Runtime 设计](../architecture/runtime-design.md)、[CLI](../operations/cli-design.md)、[前端 Runtime](../architecture/frontend-runtime.md) |
 
 ## 初始审查与准备计划
 

@@ -57,7 +57,7 @@ impl DevClient {
     }
 
     pub(super) async fn stop_process(&mut self) -> Result<()> {
-        match tokio::time::timeout(Duration::from_secs(5), self.child.wait()).await {
+        match tokio::time::timeout(Duration::from_secs(4), self.child.wait()).await {
             Ok(Ok(_)) => {}
             Ok(Err(source)) => {
                 return Err(ClientBuildError::Spawn {
@@ -66,10 +66,11 @@ impl DevClient {
                 });
             }
             Err(_) => {
-                let _ = self.child.kill().await;
-                self.child
-                    .wait()
+                let _ = tokio::time::timeout(Duration::from_secs(2), self.child.kill()).await;
+                let _ = self.child.start_kill();
+                tokio::time::timeout(Duration::from_secs(2), self.child.wait())
                     .await
+                    .map_err(|_| invalid("Vite 服务未能在期限内回收"))?
                     .map_err(|source| ClientBuildError::Spawn {
                         operation: "回收 Vite 服务".into(),
                         source,
@@ -77,16 +78,24 @@ impl DevClient {
             }
         }
         if let Some(log) = self.log.take() {
-            let bytes = log
-                .await
-                .map_err(|error| invalid(format!("开发日志任务失败：{error}")))?
-                .map_err(|source| ClientBuildError::Spawn {
-                    operation: "读取 Vite 日志".into(),
-                    source,
-                })?;
-            let text = String::from_utf8_lossy(&bytes);
-            if !text.trim().is_empty() {
-                tracing::debug!(target:"kenvoy::build","{}",text.trim());
+            let abort = log.abort_handle();
+            match tokio::time::timeout(Duration::from_secs(2), log).await {
+                Ok(Ok(Ok(bytes))) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    if !text.trim().is_empty() {
+                        tracing::debug!(target:"kenvoy::build","{}",text.trim());
+                    }
+                }
+                Ok(Ok(Err(source))) => {
+                    tracing::debug!(target:"kenvoy::build",%source,"读取 Vite 日志失败");
+                }
+                Ok(Err(error)) => {
+                    tracing::debug!(target:"kenvoy::build",%error,"Vite 日志任务异常退出");
+                }
+                Err(_) => {
+                    abort.abort();
+                    tracing::warn!(target:"kenvoy::build","Vite 日志管道未在期限内关闭");
+                }
             }
         }
         self.closed = true;

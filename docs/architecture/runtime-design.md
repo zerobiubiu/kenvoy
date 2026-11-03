@@ -123,7 +123,7 @@ Vite 仅监听随机回环端口；Rust 固定目标代理 `/_kenvoy/vite/*`，�
 
 ## 关闭与日志
 
-Ctrl+C 信号先通知开发协调器停止，Axum 开始优雅退出前取消并等待开发 WebSocket；HTTP 完成后等待已接受发布任务。宿主随后回收 watcher/Vite、关闭 JavaScript worker，再关闭 SQLite 线程；启动失败同样走已创建资源的清理。基础与自定义组件 CLI 的真实 Ctrl+C、端口/WS 关闭和重启持久化均已验证；构建中途退出与断电不在本轮信号场景内。已接受写入结果不明不能声称未执行。
+`dev`/`run` 在启动构建前安装终止信号监听：Unix 处理 SIGINT/SIGTERM，Windows 处理 Ctrl+C、Ctrl+Break、控制台关闭与注销。首次信号取消构建或通知开发协调器停止；Axum 停止接收前先取消并等待开发 WebSocket，之后最多等待 10 秒排空连接。宿主以 15 秒期限停止 watcher/Vite、关闭 JavaScript worker，再以 15 秒期限关闭 SQLite 线程；启动失败同样走已创建资源的清理。Vite 控制与日志管道另有短期限，正常关闭后删除本次实例独占的 `.kenvoy/client-dev` 目录。第二次信号立即以退出码 130 强制结束；首次信号后 75 秒仍未完成也会强制结束，避免关闭阶段永久挂起。基础与自定义组件 CLI 的真实 Ctrl+C、端口/WS/子进程/临时目录关闭已复核；Unix SIGTERM、构建中途信号、超时强制路径及断电不在本轮信号场景内。已接受写入结果不明不能声称未执行。
 
 tracing 按 CLI、Compiler、Runtime、Database、HTTP、JavaScript 分类；开发可读、生产可选结构化。错误链保留上下文但脱敏。缓存、Session 清理、限流状态、刷新连接、后台任务均设置上限和释放途径。
 

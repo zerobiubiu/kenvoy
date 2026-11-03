@@ -42,7 +42,7 @@ React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的
 
 仅具有客户端模块引用的开发应用启动 Vite 子进程；基础 DSL 继续使用内嵌资产。`infrastructure/client_build/development` 在语义分析和受控构建通过后创建客户端镜像，Vite 不直接监听项目源码。候选准备不修改活动镜像；宿主发布数据库与应用模型后才提交镜像和更新通知。普通组件修改交给 Fast Refresh，结构变化允许重新挂载；提交开发镜像失败时停用代理、回退已验证的静态产物并显示需重载状态，不声称回滚已经提交的数据库迁移。
 
-开发镜像位于 `.kenvoy/client-dev`，只包含允许的客户端源码和资源，不复制完整声明入口、Schema Component 或服务端私有模块。源代码和资源在镜像收集前后校验输入指纹；镜像最多 8192 个文件，单文件最多 32 MiB，总量最多 256 MiB，配额在复制或读取前检查，读取同时限制字节数。开发模式的用户文件必须位于镜像中，`@id`、`@fs` 和 `?raw` 不能绕过边界读取原项目资产；框架源码、锁定依赖和优化缓存分别校验。
+开发镜像位于 `.kenvoy/client-dev`，只包含允许的客户端源码和资源，不复制完整声明入口、Schema Component 或服务端私有模块。每次开发实例使用独立子目录，正常关闭后删除该实例的镜像、初始构建与 Vite 缓存；异常中止可能保留现场供诊断，不应作为长期缓存使用。源代码和资源在镜像收集前后校验输入指纹；镜像最多 8192 个文件，单文件最多 32 MiB、总量最多 256 MiB，配额在复制或读取前检查，读取同时限制字节数。开发模式的用户文件必须位于镜像中，`@id`、`@fs` 和 `?raw` 不能绕过边界读取原项目资产；框架源码、锁定依赖和优化缓存分别校验。
 
 Vite 仅监听随机 loopback 端口，HTTP 与 WebSocket 均要求父进程的随机密钥；浏览器通过 Axum 同源代理 `/_kenvoy/vite/` 访问，密钥不发给浏览器。React 开发 preamble 由受控 HTML 处理器外置，同源脚本策略不需要 `unsafe-inline`。优化依赖首次生成时允许 Vite 等待其完成，避免将尚未落盘的合法依赖误判为 404。SDK 与 Runtime 共用独立的 `presentation/runtime/context.ts`；Context/SDK 不回引组件注册表页面树，避免循环导入导致 Fast Refresh 丢失 Context。
 

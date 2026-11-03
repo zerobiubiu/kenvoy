@@ -8,7 +8,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     process::Stdio,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use kengine::ProgramIR;
@@ -250,19 +250,42 @@ impl DevClient {
 
     pub async fn shutdown(&mut self) -> Result<()> {
         if self.closed {
+            self.remove_workdir();
             return Ok(());
         }
         self.sequence = self
             .sequence
             .checked_add(1)
             .ok_or_else(|| invalid("开发控制序号已耗尽"))?;
-        let result = self
-            .command(json!({"id":self.sequence,"type":"shutdown"}))
-            .await;
-        self.closed = true;
+        // 正常关闭优先让 Vite 释放端口与子进程；控制管道失效时不无限等待。
+        let result = match tokio::time::timeout(
+            Duration::from_secs(3),
+            self.command(json!({"id":self.sequence,"type":"shutdown"})),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(invalid("开发服务关闭控制超时")),
+        };
         let stopped = self.stop_process().await;
+        self.remove_workdir();
         result?;
         stopped
+    }
+
+    /// 只删除本次开发实例独占创建的镜像、缓存与初始构建目录。
+    fn remove_workdir(&self) {
+        let parent = self.directory.parent().map(|parent| parent.to_path_buf());
+        match fs::remove_dir_all(&self.directory) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::warn!(target:"kenvoy::build",%error,path=%self.directory.display(),"开发临时目录清理失败");
+            }
+        }
+        if let Some(parent) = parent {
+            let _ = fs::remove_dir(parent);
+        }
     }
 }
 

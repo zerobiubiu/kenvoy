@@ -245,10 +245,20 @@ impl Development {
         self.stop.clone()
     }
     pub async fn shutdown(self) -> Result<()> {
+        const SHUTDOWN_LIMIT: Duration = Duration::from_secs(15);
         let _ = self.stop.send(true);
-        self.task
-            .await
-            .map_err(|_| Error::InvalidConfig("开发协调任务异常退出".into()))?
+        let mut task = self.task;
+        match tokio::time::timeout(SHUTDOWN_LIMIT, &mut task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(Error::InvalidConfig("开发协调任务异常退出".into())),
+            Err(_) => {
+                task.abort();
+                let _ = task.await;
+                Err(Error::InvalidConfig(
+                    "开发协调任务未能在期限内退出，已中止；请确认终端没有遗留的 Vite 进程".into(),
+                ))
+            }
+        }
     }
 }
 fn custom(candidate: &Candidate) -> bool {

@@ -112,7 +112,7 @@ impl ManifestReader {
         self.output.read_exact(&mut self.contents)?;
         let mut separator = [0];
         self.output.read_exact(&mut separator)?;
-        if separator != [b'\n'] {
+        if separator != *b"\n" {
             return Err("Git manifest 对象缺少内容分隔符".into());
         }
         let version = parse_manifest(&self.contents)
