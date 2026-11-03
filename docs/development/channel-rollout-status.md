@@ -18,7 +18,6 @@
 | AUR `kenvoy-bin` | **尚未创建**（首次推送自动创建） |
 | main 分支 | 仍是旧发布配置；渠道工作流尚未进入默认分支 |
 | 真实渠道发布 | **未运行、未上传** |
-| Repology | `/api/v1/project/kenvoy` 返回 `[]`；README 徽章当前显示 “No known packages” |
 
 ## 下次继续：按顺序执行
 
@@ -37,7 +36,6 @@
    - Chocolatey：审核通过后 `choco install kenvoy`
    - AUR：`yay -S kenvoy-bin`
    - Linux：按 [APT/RPM/Alpine/Arch 安装命令](../operations/distribution-channels.md#apt--rpm--alpine--arch-仓库)逐项验证签名与版本
-7. **Repology**：至少一个被 Repology 监控的仓库（AUR/Homebrew/发行版等）收录后，徽章才会显示数据，通常有延迟；确认 `https://repology.org/project/kenvoy/versions` 可访问后，README 徽章无需改动。
 
 ## 已知边界
 

@@ -183,5 +183,3 @@ AUR 建包不需要网页操作：登录 aur.archlinux.org，在 *My Account →
 ## 验证边界
 
 本轮只做本地产物生成与静态检查，尚未运行 GitHub 上的渠道发布，也不代表各包管理器已完成审核（WinGet PR、Chocolatey 审核、AUR 首次建仓均为外部流程）。实际可用性以对应仓库/源的安装结果为证据，见 [0024](../changes/0024-package-channels.md) 的执行记录。
-
-README 的 Packaging Status 徽章使用 Repology `vertical-allrepos/kenvoy.svg`，链接到 `https://repology.org/project/kenvoy/versions`。Repology 只统计其监控的软件仓库；在 AUR/Homebrew 等渠道实际收录前，API 返回空数组、徽章显示 “No known packages”，属于正常状态，不需要修改徽章地址。
