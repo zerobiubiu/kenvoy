@@ -174,7 +174,6 @@ def _pkgbuild(assets, linux):
         "arch=('x86_64' 'aarch64')",
         f'url="{assets.homepage}"',
         f"license=('{LICENSE}')",
-        "conflicts=('kenvoy-bin')",
         "",
         f'source_x86_64=("{linux["x86_64"].url}")',
         f"sha256sums_x86_64=('{linux['x86_64'].sha256}')",

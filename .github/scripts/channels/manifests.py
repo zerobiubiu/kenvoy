@@ -1,4 +1,4 @@
-"""渠道清单生成：校验 assets.json 并输出 brew、scoop、winget、chocolatey 与 AUR 清单。
+"""渠道清单生成：校验 assets.json 并输出 brew、scoop 与 winget 清单。
 
 资产契约只此一份实现，npm_packages.py 复用同一套校验，避免两个脚本各写一份导致漂移。
 所有 URL 与 sha256 只取自 assets.json，脚本不联网、不自行下载、不推测发布地址。
@@ -319,125 +319,6 @@ def winget_files(assets: Assets) -> dict[str, str]:
     }
 
 
-def chocolatey_files(assets: Assets) -> dict[str, str]:
-    """Chocolatey 包：nuspec 元数据 + 按 PROCESSOR_ARCHITECTURE 选源并校验校验和的安装脚本。"""
-    windows = {asset.arch: asset for asset in assets.assets if asset.platform == "windows"}
-    nuspec = "\n".join(
-        [
-            '<?xml version="1.0" encoding="utf-8"?>',
-            "<!-- 该文件由 .github/scripts/channels/manifests.py 生成，请勿手工修改。 -->",
-            '<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">',
-            "  <metadata>",
-            "    <id>kenvoy</id>",
-            f"    <version>{assets.version}</version>",
-            "    <title>KenVoy</title>",
-            "    <authors>kenvoy contributors</authors>",
-            f"    <projectUrl>{assets.homepage}</projectUrl>",
-            f'    <license type="expression">{LICENSE}</license>',
-            "    <requireLicenseAcceptance>false</requireLicenseAcceptance>",
-            f"    <description>{DESCRIPTION}</description>",
-            "    <tags>kenvoy cli low-code typescript</tags>",
-            "  </metadata>",
-            "  <files>",
-            '    <file src="tools\\**" target="tools" />',
-            "  </files>",
-            "</package>",
-            "",
-        ]
-    )
-    install = [
-        "# 该文件由 .github/scripts/channels/manifests.py 生成，请勿手工修改。",
-        "$ErrorActionPreference = 'Stop'",
-        "",
-        "$packageName = 'kenvoy'",
-        f"$version = '{assets.version}'",
-        "$toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition",
-        "",
-        "# 32 位宿主进程会把真实架构放进 PROCESSOR_ARCHITEW6432，优先读取它。",
-        "$architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }",
-        "",
-        "switch ($architecture) {",
-        "  'AMD64' {",
-        f"    $url = '{windows['x86_64'].url}'",
-        f"    $checksum = '{windows['x86_64'].sha256}'",
-        "  }",
-        "  'ARM64' {",
-        f"    $url = '{windows['ARM64'].url}'",
-        f"    $checksum = '{windows['ARM64'].sha256}'",
-        "  }",
-        "  default {",
-        "    throw \"kenvoy 不支持处理器架构 '$architecture'，仅提供 x64 与 ARM64。\"",
-        "  }",
-        "}",
-        "",
-        "Install-ChocolateyZipPackage -PackageName $packageName -Url $url -UnzipLocation $toolsDir -Checksum $checksum -ChecksumType 'sha256'",
-        "Install-BinFile -Name 'kenvoy' -Path (Join-Path $toolsDir 'kenvoy.exe')",
-        "",
-    ]
-    return {
-        "chocolatey/kenvoy.nuspec": nuspec,
-        "chocolatey/tools/chocolateyInstall.ps1": "\n".join(install),
-    }
-
-
-def aur_files(assets: Assets) -> dict[str, str]:
-    """AUR kenvoy-bin：x86_64 与 aarch64 各自的 source 与 sha256sums，安装到 /usr/bin。"""
-    linux = {asset.arch: asset for asset in assets.assets if asset.platform == "linux"}
-    x86_64 = linux["x86_64"]
-    aarch64 = linux["ARM64"]
-
-    def source(asset: Asset) -> str:
-        return f"'{asset.file}::{asset.url}'"
-
-    pkgbuild = "\n".join(
-        [
-            "# Maintainer: kenvoy contributors",
-            "# 该文件由 .github/scripts/channels/manifests.py 生成，请勿手工修改。",
-            "pkgname=kenvoy-bin",
-            f"pkgver={assets.version}",
-            "pkgrel=1",
-            f"pkgdesc='{DESCRIPTION}'",
-            "arch=('x86_64' 'aarch64')",
-            f"url='{assets.homepage}'",
-            f"license=('{LICENSE}')",
-            "provides=('kenvoy')",
-            "conflicts=('kenvoy')",
-            "options=('!strip')",
-            f"source_x86_64=({source(x86_64)})",
-            f"sha256sums_x86_64=('{x86_64.sha256}')",
-            f"source_aarch64=({source(aarch64)})",
-            f"sha256sums_aarch64=('{aarch64.sha256}')",
-            "",
-            "package() {",
-            '  install -Dm755 "$srcdir/kenvoy" "$pkgdir/usr/bin/kenvoy"',
-            "}",
-            "",
-        ]
-    )
-    srcinfo = "\n".join(
-        [
-            "pkgbase = kenvoy-bin",
-            f"\tpkgdesc = {DESCRIPTION}",
-            f"\tpkgver = {assets.version}",
-            "\tpkgrel = 1",
-            f"\turl = {assets.homepage}",
-            "\tarch = x86_64",
-            "\tarch = aarch64",
-            f"\tlicense = {LICENSE}",
-            "\tprovides = kenvoy",
-            "\tconflicts = kenvoy",
-            "\toptions = !strip",
-            f"\tsource_x86_64 = {x86_64.file}::{x86_64.url}",
-            f"\tsha256sums_x86_64 = {x86_64.sha256}",
-            f"\tsource_aarch64 = {aarch64.file}::{aarch64.url}",
-            f"\tsha256sums_aarch64 = {aarch64.sha256}",
-            "pkgname = kenvoy-bin",
-            "",
-        ]
-    )
-    return {"aur/PKGBUILD": pkgbuild, "aur/.SRCINFO": srcinfo}
-
-
 def channel_files(assets: Assets) -> dict[str, str]:
     """全部渠道文件，键为相对输出目录的路径。"""
     files = {
@@ -445,8 +326,6 @@ def channel_files(assets: Assets) -> dict[str, str]:
         "scoop/bucket/kenvoy.json": scoop_manifest(assets),
     }
     files.update(winget_files(assets))
-    files.update(chocolatey_files(assets))
-    files.update(aur_files(assets))
     return files
 
 
@@ -466,7 +345,7 @@ def write_files(files: dict[str, str], output: str | Path) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="生成 brew/scoop/winget/chocolatey/AUR 渠道清单")
+    parser = argparse.ArgumentParser(description="生成 brew/scoop/winget 渠道清单")
     parser.add_argument("--assets", required=True, type=Path, help="工作流准备的 assets.json")
     parser.add_argument("--output", required=True, type=Path, help="渠道文件输出目录")
     arguments = parser.parse_args(argv)

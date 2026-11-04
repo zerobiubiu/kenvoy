@@ -147,7 +147,7 @@ cargo xtask browser    # 显式运行真实浏览器用例
 - [crates.io](https://crates.io/crates/kenvoy)：`kenvoy` CLI 与 `kengine` 库
 - [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)：Windows MSVC、Linux musl、macOS 的 x86_64 / ARM64 预编译 ZIP 与 SHA256
 
-npm、Homebrew、Scoop、WinGet、Chocolatey、AUR 以及 APT/RPM/Alpine/Arch 仓库已配置流水线但**尚未上线**，请勿按未验证方式安装；进度与待配凭据见[渠道发布进度](docs/development/channel-rollout-status.md)。
+npm、Homebrew、Scoop、WinGet 以及 APT/RPM/Alpine/Arch 仓库已配置流水线但**尚未上线**，请勿按未验证方式安装；进度与待配凭据见[渠道发布进度](docs/development/channel-rollout-status.md)。Chocolatey 与 AUR 渠道已取消，不再提供。
 
 ## 参与贡献
 

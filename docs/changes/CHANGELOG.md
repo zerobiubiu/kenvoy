@@ -15,7 +15,8 @@
 
 ### 工程与分发
 
-- 继续多渠道发布配置：经授权配置六项渠道 Secret 与专用签名/SSH 密钥；npm、Chocolatey 凭据及 AUR 公钥登记仍待账号操作，未上传。
+- 继续多渠道发布配置：经授权配置仓库 Secret 与专用签名密钥；npm 凭据仍待账号操作，未上传。
+- Chocolatey 与 AUR 渠道退役，工作流、生成器与测试一并删除，只保留历史记录；现行渠道为 npm、Homebrew、Scoop、WinGet 与 APT/RPM/Alpine/Arch 仓库。
 - 渠道事件限定 main 和本仓库，固定源码提交；npm/WinGet 采用默认只读、显式发布及错误即停止；npm 包补齐原始 LICENSE。
 - Linux 仓库保留历史及同版本包，补齐 RPM/Arch 包签名、真实索引别名和快进推送；签名、打包及真实只读计划的证据见 [0029](0029-channel-rollout-continuation.md)。
 - 本轮仅修改工程配置，不递增产品版本、不移动标签；现有 0.4.0 标签与后续提交的完整 Git 树不同，正式源码发布仍须先解决现行门禁并取得发布授权。

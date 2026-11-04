@@ -43,6 +43,7 @@
 | 0027 | [项目原生国际化与 CLI 0.3.0](0027-native-project-i18n.md) | 已执行；原生配置/词典/SDK 与隔离应用验证，未发布 | i18n 工具、双语 create、内置文案/机器错误、产物 v3、授权词典投影与语言状态隔离 |
 | 0028 | [强制原生语言、集中译文与 Schema](0028-mandatory-languages-and-schema.md) | 已执行；按用户新契约切换，未发布 | CLI 0.4.0、languages/alias/display、draft 2020-12 校验、启动前门禁、设备语言、产物 v4 及五例迁移 |
 | 0029 | [多渠道发布配置续接与安全门禁](0029-channel-rollout-continuation.md) | 已执行；六项渠道 Secret 与专用密钥、本地安全修补和验证，未上传 | npm/WinGet 显式发布、同版本 Linux 包保留、包与索引签名、源码树与账号阻断记录 |
+| 0030 | [退役 Chocolatey 与 AUR 渠道](0030-remove-chocolatey-and-aur.md) | 已执行；删除工作流 job、生成器、测试与现行文档，未发布 | 现行渠道收敛为 npm/Homebrew/Scoop/WinGet 与 APT/RPM/Alpine/Arch 仓库 |
 
 ## 关联代码与配置
 
@@ -69,3 +70,5 @@
 0028 根据用户新要求替代 0027 的可选 i18n、分语言文件和提取命令：原生语言始终启用，集中译文强制引用生成 Schema，无源码也须保留根文件。0.3.0 的记录不重写；新契约与证据以 0028 为准。
 
 0029 承接 0024 的暂停点，补齐已授权凭据和专用密钥，修复发布错误处理、签名与历史保留；未完成账号关联、版本安排或实际渠道发布，后续状态以持续维护的渠道进度为准。
+
+0030 按用户要求退役 Chocolatey 与 AUR：删除两渠道的 job、生成器、测试与现行文档，现行范围收敛为 npm、Homebrew、Scoop、WinGet 与 APT/RPM/Alpine/Arch 仓库。0024、0029 中关于两渠道的实施与待办保留为历史事实，不再代表当前计划。

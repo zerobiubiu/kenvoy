@@ -1,4 +1,4 @@
-"""渠道清单回归：assets.json 严格校验与 brew/scoop/winget/chocolatey/AUR 五处落位。"""
+"""渠道清单回归：assets.json 严格校验与 brew/scoop/winget 三处落位。"""
 
 import contextlib
 import io
@@ -64,10 +64,6 @@ class ChannelOutputs(unittest.TestCase):
                     "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.yaml",
                     "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.installer.yaml",
                     "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.locale.en-US.yaml",
-                    "chocolatey/kenvoy.nuspec",
-                    "chocolatey/tools/chocolateyInstall.ps1",
-                    "aur/PKGBUILD",
-                    "aur/.SRCINFO",
                 ]
             ),
         )
@@ -121,43 +117,6 @@ class ChannelOutputs(unittest.TestCase):
         locale = self.files[root + "Kenvoy.Kenvoy.locale.en-US.yaml"]
         self.assertIn("PackageLocale: en-US", locale)
         self.assertIn("License: MIT", locale)
-
-    def test_chocolatey_picks_source_by_processor_architecture(self):
-        script = self.files["chocolatey/tools/chocolateyInstall.ps1"]
-        self.assertIn("PROCESSOR_ARCHITECTURE", script)
-        self.assertIn("-ChecksumType 'sha256'", script)
-        self.assertIn("Install-BinFile -Name 'kenvoy'", script)
-        amd64 = script.split("'AMD64' {", 1)[1].split("'ARM64' {", 1)[0]
-        arm64 = script.split("'ARM64' {", 1)[1].split("default {", 1)[0]
-        for block, arch in ((amd64, "x86_64"), (arm64, "ARM64")):
-            asset = self.assets.select("windows", arch)
-            self.assertIn(asset.url, block)
-            self.assertIn(asset.sha256, block)
-        self.assertIn("throw", script.split("default {", 1)[1])
-
-        nuspec = self.files["chocolatey/kenvoy.nuspec"]
-        self.assertIn("<id>kenvoy</id>", nuspec)
-        self.assertIn("<version>0.3.0</version>", nuspec)
-        self.assertIn('src="tools\\**"', nuspec)
-
-    def test_aur_declares_both_architectures(self):
-        pkgbuild = self.files["aur/PKGBUILD"]
-        self.assertIn("pkgname=kenvoy-bin", pkgbuild)
-        self.assertIn("pkgver=0.3.0", pkgbuild)
-        self.assertIn("arch=('x86_64' 'aarch64')", pkgbuild)
-        self.assertIn('install -Dm755 "$srcdir/kenvoy" "$pkgdir/usr/bin/kenvoy"', pkgbuild)
-        for arch, key in (("x86_64", "x86_64"), ("ARM64", "aarch64")):
-            asset = self.assets.select("linux", arch)
-            self.assertIn(f"source_{key}=('{asset.file}::{asset.url}')", pkgbuild)
-            self.assertIn(f"sha256sums_{key}=('{asset.sha256}')", pkgbuild)
-
-        srcinfo = self.files["aur/.SRCINFO"]
-        self.assertIn("pkgbase = kenvoy-bin", srcinfo)
-        self.assertIn("pkgname = kenvoy-bin", srcinfo)
-        for arch, key in (("x86_64", "x86_64"), ("ARM64", "aarch64")):
-            asset = self.assets.select("linux", arch)
-            self.assertIn(f"\tsource_{key} = {asset.file}::{asset.url}", srcinfo)
-            self.assertIn(f"\tsha256sums_{key} = {asset.sha256}", srcinfo)
 
     def test_write_files_creates_relative_layout(self):
         output = Path(self.enterContext(tempfile.TemporaryDirectory())) / "out"
