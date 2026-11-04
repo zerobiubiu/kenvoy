@@ -1,6 +1,7 @@
 """从已发布 Release 生成渠道发布所需的 assets.json，并校验六个归档。"""
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -26,7 +27,12 @@ def release_assets(repository, tag, token=None):
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", env=environment)
     if result.returncode:
         raise AssetError(f"读取 Release {tag} 失败：{result.stderr.strip()}")
-    return json.loads(result.stdout).get("assets", [])
+    release = json.loads(result.stdout)
+    if (not isinstance(release, dict) or release.get("tag_name") != tag
+            or release.get("draft") is not False or release.get("prerelease") is not False
+            or not release.get("published_at")):
+        raise AssetError(f"Release {tag} 必须是已公开的正式发布，不能使用草稿、预发布或不匹配的标签")
+    return release.get("assets", [])
 
 
 def build(version, repository, tag, assets):
@@ -70,10 +76,19 @@ def download(zips, assets):
         if not item["url"].startswith(f"https://github.com/{assets['repository']}/releases/download/{assets['tag']}/"):
             raise AssetError("下载地址必须属于本仓库对应 Release")
         target = zips / item["file"]
-        subprocess.run(["gh", "release", "download", assets["tag"], "--repo", assets["repository"],
-                        "--pattern", item["file"], "--dir", str(zips), "--clobber"], check=True)
+        if target.is_symlink():
+            raise AssetError(f"归档目标不能是符号链接：{item['file']}")
+        if not target.exists():
+            subprocess.run(["gh", "release", "download", assets["tag"], "--repo", assets["repository"],
+                            "--pattern", item["file"], "--dir", str(zips)], check=True)
         if not target.is_file():
             raise AssetError(f"未能下载 {item['file']}")
+        digest = hashlib.sha256()
+        with target.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != item["sha256"]:
+            raise AssetError(f"{item['file']} 与 GitHub 官方 digest 不符，保留现场且拒绝覆盖")
     return assets
 
 

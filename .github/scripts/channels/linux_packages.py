@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import stat
 import sys
 import zipfile
@@ -106,7 +107,8 @@ def _arch_note(base, mapping):
     return "# 架构映射：" + "；".join(pairs)
 
 
-def _nfpm_config(assets, asset, packager, package_arch, output, note, apk_key=None):
+def _nfpm_config(assets, asset, packager, package_arch, output, note, apk_key=None,
+                 rpm_key=None, rpm_key_id=None):
     repository = assets.homepage
     binary = _output_path(output, f"pkgroot/{asset.arch}/usr/bin/kenvoy")
     license_path = _output_path(output, f"pkgroot/{asset.arch}/usr/share/doc/kenvoy/LICENSE")
@@ -145,6 +147,14 @@ def _nfpm_config(assets, asset, packager, package_arch, output, note, apk_key=No
             '    key_name: "kenvoy.rsa.pub"',
             "",
         ])
+    if packager == "rpm" and rpm_key is not None:
+        lines.extend([
+            "rpm:",
+            "  signature:",
+            f"    key_file: {_quote(Path(rpm_key).resolve().as_posix())}",
+            f"    key_id: {_quote(rpm_key_id)}",
+            "",
+        ])
     return "\n".join(lines)
 
 
@@ -180,8 +190,16 @@ def _pkgbuild(assets, linux):
     return "\n".join(lines)
 
 
-def generate(assets, zips, output, apk_key=None):
+def generate(assets, zips, output, apk_key=None, rpm_key=None, rpm_key_id=None):
     """解压 Linux 归档并写出八份 nfpm 配置与 arch/PKGBUILD。"""
+    if (rpm_key is None) != (rpm_key_id is None):
+        raise ChannelError("RPM 签名必须同时提供 --rpm-key 和 --rpm-key-id")
+    if rpm_key is not None:
+        key = Path(rpm_key)
+        if key.is_symlink() or not key.is_file():
+            raise ChannelError("RPM 签名密钥必须是普通文件")
+        if not isinstance(rpm_key_id, str) or not re.fullmatch(r"[0-9A-Fa-f]{16}", rpm_key_id):
+            raise ChannelError("RPM 签名 key id 必须是 16 位十六进制主密钥标识")
     linux = _linux_assets(assets)
     zips = Path(zips).resolve()
     if not zips.is_dir():
@@ -200,7 +218,8 @@ def generate(assets, zips, output, apk_key=None):
             name = _config_name(base, mapping[arch], arch)
             path = _output_path(output, name)
             path.write_text(
-                _nfpm_config(assets, linux[arch], _packager, mapping[arch], output, note, apk_key),
+                _nfpm_config(assets, linux[arch], _packager, mapping[arch], output, note,
+                             apk_key, rpm_key, rpm_key_id),
                 encoding="utf-8",
                 newline="\n",
             )
@@ -217,8 +236,11 @@ def main():
     parser.add_argument("--zips", required=True, help="六归档 ZIP 所在目录（至少含 Linux 两个）")
     parser.add_argument("--output", required=True, help="配置、PKGBUILD 与包根目录的输出目录")
     parser.add_argument("--apk-key", help="APK RSA 私钥路径；提供时在配置中启用包签名")
+    parser.add_argument("--rpm-key", help="RPM PGP 私钥文件；口令只从 NFPM_RPM_PASSPHRASE 读取")
+    parser.add_argument("--rpm-key-id", help="RPM 签名主密钥的 16 位十六进制 key id")
     arguments = parser.parse_args()
-    generate(load_assets(arguments.assets), arguments.zips, arguments.output, arguments.apk_key)
+    generate(load_assets(arguments.assets), arguments.zips, arguments.output,
+             arguments.apk_key, arguments.rpm_key, arguments.rpm_key_id)
 
 
 if __name__ == "__main__":

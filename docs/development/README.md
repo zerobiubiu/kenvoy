@@ -17,7 +17,7 @@
 | [技术风险与验证门禁](technical-risks.md) | 参考 | 语言、业务模型、数据、权限、构建与生命周期风险；区分已实施控制、已有证据和剩余边界 |
 | [测试与验收策略](testing-strategy.md) | 参考 | 语言、DSL、数据库、HTTP、CLI、跨 Crate、前端与真实浏览器的分层覆盖及环境要求 |
 | [Rust 工程入口与跨 Crate 测试](engineering-workflow.md) | 参考 | Workspace 成员职责、xtask 命令、Rust 夹具与浏览器驱动边界，以及旧 tools 的替代入口 |
-| [渠道发布进度与待办](channel-rollout-status.md) | 参考 | 多渠道发布的当前完成度、8 个待配 Secret、首次真实发布顺序与 Repology 收录状态 |
+| [渠道发布进度与待办](channel-rollout-status.md) | 参考 | 凭据与专用密钥的配置状态、账号待办、源码发布门禁及首次真实发布顺序 |
 
 ## 推荐阅读顺序
 

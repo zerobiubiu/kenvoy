@@ -13,6 +13,13 @@
 - 项目格式仅支持 `>=0.4.0, <0.5.0`，最低 CLI 为 0.4.0；产物 4、HTTP 描述 3、词典 Bundle 2；Application IR 1、Schema 哈希 v1 及已固化迁移不变。无源码部署也必须携带匹配的 translations.json。
 - 五个示例及回归同步迁移，详细实施与验证见 [0028](0028-mandatory-languages-and-schema.md)；0027 保留为旧方案实施事实，不再代表现行配置。
 
+### 工程与分发
+
+- 继续多渠道发布配置：经授权配置六项渠道 Secret 与专用签名/SSH 密钥；npm、Chocolatey 凭据及 AUR 公钥登记仍待账号操作，未上传。
+- 渠道事件限定 main 和本仓库，固定源码提交；npm/WinGet 采用默认只读、显式发布及错误即停止；npm 包补齐原始 LICENSE。
+- Linux 仓库保留历史及同版本包，补齐 RPM/Arch 包签名、真实索引别名和快进推送；签名、打包及真实只读计划的证据见 [0029](0029-channel-rollout-continuation.md)。
+- 本轮仅修改工程配置，不递增产品版本、不移动标签；现有 0.4.0 标签与后续提交的完整 Git 树不同，正式源码发布仍须先解决现行门禁并取得发布授权。
+
 ## 0.3.0
 
 发布状态：待发布；dev 本地实现，未合并 main、未推送或发布。Kenvoy CLI 递增至 0.3.0，KEngine 保持 0.2.0。

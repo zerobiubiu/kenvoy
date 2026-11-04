@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONUTF8: '1'
+
 concurrency:
   group: kenvoy-channels
   cancel-in-progress: false
@@ -30,7 +33,19 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
+      source_date_epoch: ${{ steps.version.outputs.source_date_epoch }}
     steps:
+      - name: 仅允许本仓库 main 的发布上下文
+        env:
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          SOURCE_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ] || [ "$SOURCE_BRANCH" != main ] || [ "$SOURCE_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo '渠道发布只允许本仓库 main；不会从 dev、tag 或外部仓库发布。' >&2
+            exit 1
+          fi
       - uses: actions/checkout@v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -45,7 +60,7 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          git fetch --tags --force --quiet
+          git fetch --tags --quiet
           requested="${INPUT_VERSION:-}"
           if [ -z "$requested" ]; then
             requested=$(python - <<'PY'
@@ -59,6 +74,8 @@ jobs:
           git rev-parse --verify "refs/tags/v${requested}^{commit}" >/dev/null \
             || { echo "缺少版本标签 v${requested}" >&2; exit 1; }
           echo "version=$requested" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=$(git show -s --format=%ct "refs/tags/v${requested}^{commit}")" >> "$GITHUB_OUTPUT"
       - name: 生成并下载六个官方 Release 归档
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,6 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -104,21 +122,15 @@ jobs:
           python .github/scripts/channels/npm_packages.py \
             --assets "$RUNNER_TEMP/channel/assets.json" --zips "$RUNNER_TEMP/channel/zips" \
             --output "$RUNNER_TEMP/npm"
-      - name: 发布（已存在同版本则跳过，不覆盖）
+      - name: 只发布缺失版本，平台包先于主包
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then echo '缺少仓库 Secret NPM_TOKEN' >&2; exit 1; fi
-          version="${{ needs.prepare.outputs.version }}"
-          for directory in "$RUNNER_TEMP"/npm/*/; do
-            name=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$directory/package.json")
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "跳过已存在：$name@$version"
-              continue
-            fi
-            (cd "$directory" && npm publish --access public --provenance)
-          done
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo '未配置 NPM_TOKEN：使用 npm Trusted Publishing，七个包必须已绑定 channels.yml。'
+          fi
+          python .github/scripts/channels/publish_npm.py --packages "$RUNNER_TEMP/npm" --publish
 
   homebrew:
     needs: prepare
@@ -127,6 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -161,6 +174,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -195,6 +209,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -205,31 +220,17 @@ jobs:
           path: ${{ runner.temp }}/channel
       - name: 渲染清单并提交 PR
         env:
-          TOKEN: ${{ secrets.WINGET_TOKEN }}
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          if [ -z "${TOKEN:-}" ]; then echo '缺少仓库 Secret WINGET_TOKEN（需 public_repo 的 PAT）' >&2; exit 1; fi
+          if [ -z "${GH_TOKEN:-}" ]; then echo '缺少仓库 Secret WINGET_TOKEN（需 public_repo 的 PAT）' >&2; exit 1; fi
           python .github/scripts/channels/manifests.py \
             --assets "$RUNNER_TEMP/channel/assets.json" --output "$RUNNER_TEMP/manifests"
-          source="$RUNNER_TEMP/manifests/winget/manifests/k/Kenvoy/Kenvoy/$VERSION"
-          test -d "$source"
-          gh api "repos/microsoft/winget-pkgs/forks" -X POST -f default_branch_only=true >/dev/null 2>&1 || true
-          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${{ github.repository_owner }}/winget-pkgs.git" winget
-          cd winget
-          git config user.name kenvoy-release
-          git config user.email release@users.noreply.github.com
-          branch="kenvoy-$VERSION"
-          git switch -c "$branch"
-          mkdir -p "manifests/k/Kenvoy/Kenvoy/$VERSION"
-          cp "$source"/* "manifests/k/Kenvoy/Kenvoy/$VERSION/"
-          git add "manifests/k/Kenvoy/Kenvoy/$VERSION"
-          git commit -m "Add Kenvoy $VERSION"
-          git push origin "$branch"
-          gh pr create --repo microsoft/winget-pkgs --head "${{ github.repository_owner }}:$branch" \
-            --title "Add Kenvoy $VERSION" \
-            --body "Automated WinGet manifests for Kenvoy $VERSION (x64/ARM64 portable ZIP)." || true
+          python .github/scripts/channels/publish_winget.py \
+            --manifests "$RUNNER_TEMP/manifests/winget/manifests/k/Kenvoy/Kenvoy/$VERSION" \
+            --version "$VERSION" --owner "$OWNER" --publish
 
   chocolatey:
     needs: prepare
@@ -238,6 +239,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -254,10 +256,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ([string]::IsNullOrWhiteSpace($env:API_KEY)) { throw '缺少仓库 Secret CHOCOLATEY_API_KEY' }
           python .github/scripts/channels/manifests.py --assets "$env:RUNNER_TEMP/channel/assets.json" --output "$env:RUNNER_TEMP/manifests"
+          if ($LASTEXITCODE -ne 0) { throw '渠道清单生成失败' }
           Push-Location "$env:RUNNER_TEMP/manifests/chocolatey"
           choco pack
+          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey 打包失败' }
           $package = Get-ChildItem -Filter '*.nupkg' | Select-Object -First 1
           choco push $package.FullName --source https://push.chocolatey.org/ --api-key $env:API_KEY
+          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey 上传失败' }
           Pop-Location
 
   aur:
@@ -267,6 +272,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -307,9 +313,12 @@ jobs:
     needs: prepare
     name: APT / RPM / Alpine / Arch 仓库
     runs-on: ubuntu-24.04
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
     steps:
       - uses: actions/checkout@v4.2.2
         with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5.6.0
         with:
@@ -318,12 +327,23 @@ jobs:
         with:
           name: channel-assets
           path: ${{ runner.temp }}/channel
+      - name: 读取现有包仓库，失败时停止而不是当作空仓库
+        env:
+          TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then echo '缺少仓库 Secret PACKAGES_TOKEN' >&2; exit 1; fi
+          git clone --depth 1 --branch gh-pages \
+            "https://x-access-token:${TOKEN}@github.com/${{ github.repository_owner }}/kenvoy-packages.git" "$RUNNER_TEMP/old"
       - name: 安装打包、索引与签名工具
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends dpkg-dev createrepo-c pacman-package-manager gnupg openssl
+          sudo apt-get install -y --no-install-recommends dpkg-dev createrepo-c pacman-package-manager gnupg openssl rpm
           curl -fsSL -o "$RUNNER_TEMP/nfpm.tgz" \
             https://github.com/goreleaser/nfpm/releases/download/v2.43.0/nfpm_2.43.0_Linux_x86_64.tar.gz
+          echo 'a80d5f724ed70b192ffa8a2bde469c013cef559c8afa3441eb51dd9a918beb6b  nfpm.tgz' |
+            (cd "$RUNNER_TEMP" && sha256sum --check --status)
           tar -xzf "$RUNNER_TEMP/nfpm.tgz" -C "$RUNNER_TEMP" nfpm
           # Ubuntu 没有 apk-tools：用 alpine 容器包装 apk index，保持索引与 apk-tools 一致。
           mkdir -p "$RUNNER_TEMP/bin"
@@ -342,46 +362,49 @@ jobs:
           if [ -z "${GPG_PRIVATE_KEY:-}" ] || [ -z "${APK_SIGNING_KEY:-}" ]; then
             echo '缺少仓库 Secret GPG_PRIVATE_KEY / APK_SIGNING_KEY' >&2; exit 1
           fi
-          printf '%s' "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
-          install -m 700 -d "$RUNNER_TEMP/apk"
+          umask 077
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -m 700 -d "$GNUPGHOME" "$RUNNER_TEMP/apk"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' "$GPG_PRIVATE_KEY" | base64 -d > "$RUNNER_TEMP/release-signing.asc"
+          gpg --batch --import "$RUNNER_TEMP/release-signing.asc"
           printf '%s' "$APK_SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/apk/kenvoy.rsa"
           openssl rsa -in "$RUNNER_TEMP/apk/kenvoy.rsa" -pubout -out "$RUNNER_TEMP/apk/kenvoy.rsa.pub"
-          echo "GPG_KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')" >> "$GITHUB_ENV"
+          mapfile -t signing_keys < <(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5}')
+          [ "${#signing_keys[@]}" -eq 1 ] || { echo 'GPG_PRIVATE_KEY 必须只包含一项主密钥' >&2; exit 1; }
+          echo "GPG_KEY=${signing_keys[0]}" >> "$GITHUB_ENV"
       - name: 生成八份配置并构建四类安装包
+        env:
+          NFPM_RPM_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           python .github/scripts/channels/linux_packages.py \
             --assets "$RUNNER_TEMP/channel/assets.json" --zips "$RUNNER_TEMP/channel/zips" \
-            --output "$RUNNER_TEMP/linux" --apk-key "$RUNNER_TEMP/apk/kenvoy.rsa"
-          cd "$RUNNER_TEMP/linux"
-          mkdir -p "$RUNNER_TEMP/pkgs/deb" "$RUNNER_TEMP/pkgs/rpm/x86_64" "$RUNNER_TEMP/pkgs/rpm/aarch64" \
-            "$RUNNER_TEMP/pkgs/apk/x86_64" "$RUNNER_TEMP/pkgs/apk/aarch64" \
-            "$RUNNER_TEMP/pkgs/arch/x86_64" "$RUNNER_TEMP/pkgs/arch/aarch64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-deb.yaml --packager deb --target "$RUNNER_TEMP/pkgs/deb"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-deb-arm64.yaml --packager deb --target "$RUNNER_TEMP/pkgs/deb"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-rpm.yaml --packager rpm --target "$RUNNER_TEMP/pkgs/rpm/x86_64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-rpm-aarch64.yaml --packager rpm --target "$RUNNER_TEMP/pkgs/rpm/aarch64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-apk.yaml --packager apk --target "$RUNNER_TEMP/pkgs/apk/x86_64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-apk-aarch64.yaml --packager apk --target "$RUNNER_TEMP/pkgs/apk/aarch64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-archlinux.yaml --packager archlinux --target "$RUNNER_TEMP/pkgs/arch/x86_64"
-          "$RUNNER_TEMP/nfpm" package --config nfpm-archlinux-aarch64.yaml --packager archlinux --target "$RUNNER_TEMP/pkgs/arch/aarch64"
+            --output "$RUNNER_TEMP/linux" --apk-key "$RUNNER_TEMP/apk/kenvoy.rsa" \
+            --rpm-key "$RUNNER_TEMP/release-signing.asc" --rpm-key-id "$GPG_KEY"
+          python .github/scripts/channels/build_linux_packages.py \
+            --configs "$RUNNER_TEMP/linux" --previous "$RUNNER_TEMP/old" \
+            --output "$RUNNER_TEMP/pkgs" --nfpm "$RUNNER_TEMP/nfpm" --version "${{ needs.prepare.outputs.version }}"
       - name: 合并旧版本并生成四类仓库索引
         env:
-          TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          if [ -z "${TOKEN:-}" ]; then echo '缺少仓库 Secret PACKAGES_TOKEN' >&2; exit 1; fi
-          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository_owner }}/kenvoy-packages.git"
-          if git clone --depth 1 --branch gh-pages "$remote" "$RUNNER_TEMP/old" 2>/dev/null; then
-            :
-          else
-            mkdir -p "$RUNNER_TEMP/old"
-          fi
-          mkdir -p "$RUNNER_TEMP/assemble/apt" "$RUNNER_TEMP/assemble/rpm" "$RUNNER_TEMP/assemble/alpine" "$RUNNER_TEMP/assemble/arch"
-          # 旧版本包先进入待索引集合，保证升级后仍可安装历史版本。
-          find "$RUNNER_TEMP/old" -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' -o -name '*.pkg.tar.*' \) -print0 |
-            while IFS= read -r -d '' file; do cp "$file" "$RUNNER_TEMP/assemble/"; done
-          cp -R "$RUNNER_TEMP/pkgs/." "$RUNNER_TEMP/assemble/"
+          mkdir -p "$RUNNER_TEMP/assemble"
+          # 同名历史包只接受相同字节；新构建器会复用已发布版本，不重签 RPM 包。
+          while IFS= read -r -d '' file; do
+            target="$RUNNER_TEMP/assemble/$(basename "$file")"
+            if [ -f "$target" ]; then
+              cmp -s "$file" "$target" || { echo '同名软件包或签名字节冲突，拒绝覆盖历史版本' >&2; exit 1; }
+            else cp "$file" "$target"; fi
+          done < <(find "$RUNNER_TEMP/old" "$RUNNER_TEMP/pkgs" -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' -o -name '*.pkg.tar.*' \) -print0)
+          for package in "$RUNNER_TEMP"/assemble/*.pkg.tar.zst "$RUNNER_TEMP"/assemble/*.pkg.tar.xz "$RUNNER_TEMP"/assemble/*.pkg.tar.gz; do
+            [ -f "$package" ] || continue
+            if [ ! -f "$package.sig" ]; then
+              printf '%s\n' "${GPG_PASSPHRASE:-}" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --local-user "$GPG_KEY" --detach-sign -o "$package.sig" "$package"
+            fi
+            gpg --batch --verify "$package.sig" "$package"
+          done
           python .github/scripts/channels/linux_repo.py --version "${{ needs.prepare.outputs.version }}" \
             --packages "$RUNNER_TEMP/assemble" --repo "$RUNNER_TEMP/repo"
       - name: 签名仓库元数据并发布公钥
@@ -390,13 +413,14 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          sign=(--batch --yes --pinentry-mode loopback)
-          if [ -n "${GPG_PASSPHRASE:-}" ]; then sign+=(--passphrase "$GPG_PASSPHRASE"); fi
-          gpg "${sign[@]}" --clearsign -o "$RUNNER_TEMP/repo/apt/dists/stable/InRelease" "$RUNNER_TEMP/repo/apt/dists/stable/Release"
-          gpg "${sign[@]}" --detach-sign --armor -o "$RUNNER_TEMP/repo/apt/dists/stable/Release.gpg" "$RUNNER_TEMP/repo/apt/dists/stable/Release"
+          sign() {
+            printf '%s\n' "${GPG_PASSPHRASE:-}" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --local-user "$GPG_KEY" "$@"
+          }
+          sign --clearsign -o "$RUNNER_TEMP/repo/apt/dists/stable/InRelease" "$RUNNER_TEMP/repo/apt/dists/stable/Release"
+          sign --detach-sign --armor -o "$RUNNER_TEMP/repo/apt/dists/stable/Release.gpg" "$RUNNER_TEMP/repo/apt/dists/stable/Release"
           gpg --armor --export "$GPG_KEY" > "$RUNNER_TEMP/repo/apt/key.asc"
           for file in "$RUNNER_TEMP"/repo/rpm/*/repodata/repomd.xml; do
-            gpg "${sign[@]}" --detach-sign --armor -o "$file.asc" "$file"
+            sign --detach-sign --armor -o "$file.asc" "$file"
           done
           gpg --armor --export "$GPG_KEY" > "$RUNNER_TEMP/repo/rpm/RPM-GPG-KEY-kenvoy"
           cat > "$RUNNER_TEMP/repo/rpm/kenvoy.repo" <<EOF
@@ -409,7 +433,11 @@ jobs:
           gpgkey=https://raw.githubusercontent.com/${OWNER}/kenvoy-packages/gh-pages/rpm/RPM-GPG-KEY-kenvoy
           EOF
           for db in "$RUNNER_TEMP"/repo/arch/*/*.db.tar.gz "$RUNNER_TEMP"/repo/arch/*/*.files.tar.gz; do
-            [ -f "$db" ] && gpg "${sign[@]}" --detach-sign -o "$db.sig" "$db"
+            [ -f "$db" ] || continue
+            sign --detach-sign -o "$db.sig" "$db"
+            # raw.githubusercontent 不跟随 Git 符号链接，发布真正的 db/files 别名文件。
+            cp --remove-destination "$db" "${db%.tar.gz}"
+            cp --remove-destination "$db.sig" "${db%.tar.gz}.sig"
           done
           cp "$RUNNER_TEMP/apk/kenvoy.rsa.pub" "$RUNNER_TEMP/repo/alpine/kenvoy.rsa.pub"
           for index in "$RUNNER_TEMP"/repo/alpine/v3.20/main/*/APKINDEX.tar.gz; do
@@ -418,23 +446,24 @@ jobs:
             docker run --rm -v "$directory:/repo" -v "$RUNNER_TEMP/apk:/key:ro" alpine:3.20 \
               sh -c 'apk add --no-cache abuild >/dev/null && cd /repo && abuild-sign -k /key/kenvoy.rsa APKINDEX.tar.gz'
           done
-      - name: 发布到 GitHub Pages 仓库
-        env:
-          TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
+          rpm --dbpath "$RUNNER_TEMP/rpm-keyring" --initdb
+          rpmkeys --dbpath "$RUNNER_TEMP/rpm-keyring" --import "$RUNNER_TEMP/repo/rpm/RPM-GPG-KEY-kenvoy"
+          for package in "$RUNNER_TEMP"/repo/rpm/*/*.rpm; do
+            result=$(LC_ALL=C rpmkeys --dbpath "$RUNNER_TEMP/rpm-keyring" --checksig "$package")
+            [[ "$result" == *"digests signatures OK"* ]] || { echo 'RPM 包签名验证失败，停止发布' >&2; exit 1; }
+          done
+      - name: 快进更新包仓库，不强推或丢弃历史
         run: |
           set -euo pipefail
-          remote="https://x-access-token:${TOKEN}@github.com/${OWNER}/kenvoy-packages.git"
-          rm -rf "$RUNNER_TEMP/site"
-          cp -R "$RUNNER_TEMP/repo" "$RUNNER_TEMP/site"
-          cat > "$RUNNER_TEMP/site/index.html" <<EOF
+          cd "$RUNNER_TEMP/old"
+          rm -rf apt rpm alpine arch
+          cp -R "$RUNNER_TEMP/repo/." .
+          cat > index.html <<'EOF'
           <!doctype html><meta charset="utf-8"><title>Kenvoy packages</title>
           <h1>Kenvoy 软件包仓库</h1>
           <ul><li><a href="apt/">APT</a></li><li><a href="rpm/">RPM</a></li><li><a href="alpine/">Alpine</a></li><li><a href="arch/">Arch</a></li></ul>
           EOF
-          cd "$RUNNER_TEMP/site"
-          git init -q -b gh-pages
-          git remote add origin "$remote"
           git add -A
+          if git diff --cached --quiet; then echo '包仓库已是最新'; exit 0; fi
           git -c user.name=kenvoy-release -c user.email=release@users.noreply.github.com commit -q -m "kenvoy ${{ needs.prepare.outputs.version }}"
-          git push --force origin gh-pages
+          git push origin HEAD:gh-pages

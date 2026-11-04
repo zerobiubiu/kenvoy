@@ -305,6 +305,11 @@ def _build_arch(work, packages):
         for package in packages:
             if package.arch == arch:
                 shutil.copy2(package.path, _inside(work / "arch", f"{arch}/{package.path.name}"))
+                signature = package.path.with_name(package.path.name + ".sig")
+                if signature.is_symlink():
+                    raise RepoError("Arch 软件包签名不能是符号链接")
+                if signature.is_file():
+                    shutil.copy2(signature, _inside(directory, signature.name))
                 names.append(package.path.name)
         _run("repo-add", ["kenvoy.db.tar.gz", *sorted(names)], cwd=directory)
         target = directory / "kenvoy.db.tar.gz"

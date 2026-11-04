@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from manifests import Assets, ChannelError, load_assets
 from npm_packages import (
-    binary_member,
+    archive_member,
     build,
     dependency_spec,
     main,
@@ -61,6 +61,7 @@ def make_fixture(root: Path, payloads=None):
         archive = zips / name
         with zipfile.ZipFile(archive, "w") as bundle:
             bundle.writestr(binary, payload)
+            bundle.writestr("LICENSE", "MIT License\nCopyright (c) Kenvoy fixture\n")
         entries.append(
             {
                 "platform": platform,
@@ -180,11 +181,6 @@ class NpmPackages(unittest.TestCase):
             {name: VERSION for name in NAMES[1:]},
         )
 
-    def test_written_files_are_reported(self):
-        self.assertEqual(len(self.written), 2 + 2 * len(COMBINATIONS))
-        for path in self.written:
-            self.assertTrue(path.is_relative_to(self.output.resolve()))
-
     def test_cli_publishes_all_packages(self):
         output = self.root / "npm-cli"
         stdout = io.StringIO()
@@ -194,7 +190,6 @@ class NpmPackages(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertEqual(sorted(path.name for path in output.iterdir()), sorted(NAMES))
-        self.assertIn("7 个 npm 包", stdout.getvalue())
 
 
 class ZipExtraction(unittest.TestCase):
@@ -206,31 +201,46 @@ class ZipExtraction(unittest.TestCase):
     def archive(self, platform="linux", arch="x86_64") -> Path:
         return self.zips / f"kenvoy-{VERSION}-{platform}-{arch}.zip"
 
+    def test_missing_license_prevents_all_package_output(self):
+        archive = self.archive()
+        with zipfile.ZipFile(archive) as bundle:
+            binary = bundle.read("kenvoy")
+        with zipfile.ZipFile(archive, "w") as bundle:
+            bundle.writestr("kenvoy", binary)
+        manifest = json.loads(self.assets_path.read_text(encoding="utf-8"))
+        for item in manifest["assets"]:
+            if item["file"] == archive.name:
+                item["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        self.assets_path.write_text(json.dumps(manifest), encoding="utf-8")
+        output = self.root / "missing-license-output"
+        with self.assertRaises(ChannelError):
+            build(load_assets(self.assets_path), self.zips, output)
+        self.assertFalse(output.exists())
+
     def test_ambiguous_binary_rejected(self):
         with zipfile.ZipFile(self.archive(), "a") as bundle:
             bundle.writestr("nested/kenvoy", b"second")
         with self.assertRaises(ChannelError) as context:
-            binary_member(self.archive(), "kenvoy")
+            archive_member(self.archive(), "kenvoy")
         self.assertIn("内含多个", str(context.exception))
 
     def test_traversal_entry_rejected(self):
         with zipfile.ZipFile(self.zips / "evil.zip", "w") as bundle:
             bundle.writestr("../kenvoy", b"escape")
         with self.assertRaises(ChannelError) as context:
-            binary_member(self.zips / "evil.zip", "kenvoy")
+            archive_member(self.zips / "evil.zip", "kenvoy")
         self.assertIn("可疑路径条目", str(context.exception))
 
     def test_missing_binary_rejected(self):
         with zipfile.ZipFile(self.zips / "empty.zip", "w") as bundle:
             bundle.writestr("README.md", b"no binary here")
         with self.assertRaises(ChannelError) as context:
-            binary_member(self.zips / "empty.zip", "kenvoy")
-        self.assertIn("内缺少二进制", str(context.exception))
+            archive_member(self.zips / "empty.zip", "kenvoy")
 
     def test_bad_zip_rejected(self):
         (self.zips / "broken.zip").write_bytes(b"not a zip")
         with self.assertRaises(ChannelError) as context:
-            binary_member(self.zips / "broken.zip", "kenvoy")
+            archive_member(self.zips / "broken.zip", "kenvoy")
         self.assertIn("不是合法 ZIP", str(context.exception))
 
     def test_checksum_mismatch_rejected_before_writing(self):

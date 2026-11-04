@@ -40,6 +40,8 @@
 
 当前 dev 源码 CLI 为 0.4.0，KEngine 为 0.2.0，尚未发布。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；0026/0027 保留原始迁移与旧语言方案的实施事实，不将本地版本等同于已上线。
 
+多渠道发布已从历史暂停点继续：凭据与签名配置、发布失败保护和本地实测见[0029](changes/0029-channel-rollout-continuation.md)；账号待办、完整 Git 树门禁及首次发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。当前未向各渠道上传，不将本地打包等同于已可安装。
+
 ## 文档规范
 
 ### 存放、分类与命名

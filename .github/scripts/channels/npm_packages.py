@@ -174,8 +174,8 @@ def verify_archive(archive: Path, asset: Asset) -> None:
         )
 
 
-def binary_member(archive: Path, binary: str) -> str:
-    """在 ZIP 中唯一定位二进制条目；含穿越路径、多个同名或空文件时拒绝。"""
+def archive_member(archive: Path, binary: str) -> str:
+    """在 ZIP 中唯一定位交付文件；含穿越路径、多个同名或空文件时拒绝。"""
     try:
         with zipfile.ZipFile(archive) as bundle:
             matches = []
@@ -189,7 +189,7 @@ def binary_member(archive: Path, binary: str) -> str:
                 if parts[-1] == binary:
                     matches.append(name)
             if not matches:
-                raise ChannelError(f"{archive.name} 内缺少二进制 {binary}")
+                raise ChannelError(f"{archive.name} 内缺少交付文件 {binary}")
             if len(matches) > 1:
                 raise ChannelError(f"{archive.name} 内含多个 {binary}：{'、'.join(matches)}")
             member = matches[0]
@@ -215,13 +215,13 @@ def _write_text(path: Path, content: str) -> None:
         stream.write(content)
 
 
-def _write_binary(archive: Path, member: str, destination: Path) -> None:
+def _write_binary(archive: Path, member: str, destination: Path, mode: int = 0o755) -> None:
     with zipfile.ZipFile(archive) as bundle:
         payload = bundle.read(member)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(payload)
     if os.name != "nt":
-        destination.chmod(0o755)
+        destination.chmod(mode)
 
 
 def build(assets: Assets, zips: str | Path, output: str | Path) -> list[Path]:
@@ -236,7 +236,8 @@ def build(assets: Assets, zips: str | Path, output: str | Path) -> list[Path]:
     for asset in assets.assets:
         archive = archive_root / asset.file
         verify_archive(archive, asset)
-        plan.append((asset, archive, binary_member(archive, asset.binary)))
+        plan.append((asset, archive, archive_member(archive, asset.binary),
+                     archive_member(archive, "LICENSE")))
 
     written = []
     package_json = _target(root, MAIN_PACKAGE, "package.json")
@@ -248,8 +249,11 @@ def build(assets: Assets, zips: str | Path, output: str | Path) -> list[Path]:
     if os.name != "nt":
         shim.chmod(0o755)
     written.append(shim)
+    license_path = _target(root, MAIN_PACKAGE, "LICENSE")
+    _write_binary(plan[0][1], plan[0][3], license_path, 0o644)
+    written.append(license_path)
 
-    for asset, archive, member in plan:
+    for asset, archive, member, license_member in plan:
         directory = package_name(asset.platform, asset.arch)
         package_path = _target(root, directory, "package.json")
         _write_text(package_path, _json(platform_package(assets, asset)))
@@ -258,6 +262,9 @@ def build(assets: Assets, zips: str | Path, output: str | Path) -> list[Path]:
         binary_path = _target(root, directory, "bin", asset.binary)
         _write_binary(archive, member, binary_path)
         written.append(binary_path)
+        license_path = _target(root, directory, "LICENSE")
+        _write_binary(archive, license_member, license_path, 0o644)
+        written.append(license_path)
     return written
 
 
