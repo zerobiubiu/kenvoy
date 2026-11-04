@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -82,10 +83,23 @@ def publish(root, plan, github, environ):
         if "kenvoy" in missing:
             prepare_frontend(source, environment)
         packages = [argument for crate in missing for argument in ("--package", crate)]
+        metadata = subprocess.run(
+            ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"],
+            cwd=source, env=environment, check=True, capture_output=True,
+            text=True, encoding="utf-8",
+        )
+        package_directory = Path(json.loads(metadata.stdout)["target_directory"]) / "package"
+        # publish 使用内部临时归档；以 package 的正式输出在上传前固化摘要。
         subprocess.run(
-            ["cargo", "publish", "--dry-run", "--locked", *packages],
+            ["cargo", "package", "--locked", *packages],
             cwd=source, env=environment, check=True,
         )
+        checksums = {
+            crate: hashlib.sha256(
+                (package_directory / f"{crate}-{versions[crate]}.crate").read_bytes()
+            ).hexdigest()
+            for crate in missing
+        }
         for crate in missing:
             require_latest(root, environ, github)
             version = versions[crate]
@@ -99,9 +113,7 @@ def publish(root, plan, github, environ):
                 cwd=source, check=True,
                 env={**environment, "CARGO_REGISTRY_TOKEN": token},
             )
-            package = source / "target" / "package" / f"{crate}-{version}.crate"
-            digest = hashlib.sha256(package.read_bytes()).hexdigest()
-            await_registry(crate, version, digest)
+            await_registry(crate, version, checksums[crate])
 
 
 def main():

@@ -35,6 +35,7 @@
 | [changes/0032：仅保留 npm/Homebrew/Scoop](../changes/0032-retire-linux-and-winget-channels.md#执行验证记录) | 已执行；保留渠道回归、真实产物逐字节对照、npm shim、0.4.2 本机编译和工作流检查；未运行远端发布 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md) |
 | [changes/0033：npm 单包与 CLI 0.4.3](../changes/0033-single-npm-package-download.md#执行验证记录) | 已执行；61 项 Python、114 项 Node 回归，正式 npm 包 Windows/Linux 安装及摘要、原生 Ctrl+C、0.4.3 create/check/build、工程门禁 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md) |
 | [changes/0034：Cargo 鉴权与 0.4.4 恢复](../changes/0034-cargo-auth-and-044-release.md#执行验证记录) | 已执行；0.4.3 正式失败取证、真实 Cargo 默认 registry 鉴权的失败前/通过后、0.4.4 create/check/build；远端发行状态单独记录 | [发布操作](../operations/releasing.md)、[渠道进度](../development/channel-rollout-status.md) |
+| [changes/0035：0.4.4 正式发行与恢复](../changes/0035-cargo-package-checksum-recovery.md#执行验证记录) | 已执行；14 项回归、正式源包校验、六平台归档与头部、npm OIDC、Windows/Linux 匿名安装、Homebrew/Scoop 清单；具体边界见正文 | [发布操作](../operations/releasing.md)、[渠道进度](../development/channel-rollout-status.md) |
 
 ## 初始审查与准备计划
 

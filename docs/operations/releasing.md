@@ -78,15 +78,17 @@ CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一�
 
 只有 `kengine` 和 `kenvoy` 对外发布，`kenvoy-tests`、`xtask` 保持 `publish=false`。先查询两个包各自的精确版本：仅 404 表示缺失；鉴权、限流或网络错误不能当作未发布。
 
-新源包从 main 精确 Git SHA 的 `git archive` 创建仓库外独占快照，在快照生成 Kenvoy 内置前端并执行 Cargo dry-run/编译校验，再按 KEngine → Kenvoy CLI 上传缺失项。不使用 `--allow-dirty` 或 `--no-verify`；根 LICENSE 通过 workspace license-file 进入每个发布包。
+新源包从 main 精确 Git SHA 的 `git archive` 创建仓库外独占快照，在快照生成 Kenvoy 内置前端；通过 Cargo metadata 获取 `target_directory`，执行 `cargo package --locked` 创建并编译验证正式归档，在上传前固化 SHA-256，再按 KEngine → Kenvoy CLI 上传缺失项并与 registry checksum 比较。不使用 `--allow-dirty` 或 `--no-verify`，不依赖 `cargo publish` 的内部临时归档路径；根 LICENSE 通过 workspace license-file 进入每个发布包。实现与恢复见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
 上传是不可逆操作；不覆盖既有版本，不盲目重试上传写请求。KEngine 成功、Kenvoy 失败时，手动兜底只处理仍缺失的当前版本步骤。已发布源包补二进制时，从实际 registry 源包核对官方 SHA256 后构建，使用包内前端，不拿后来修改的工作区冒充原发布源码。
 
 GitHub Release 先以草稿收集缺失资产，齐全并验证后公开；标题固定为 `Kenvoy <version>`。既有 ZIP/侧车不使用 `--clobber`：已有 ZIP 缺侧车时按原 ZIP 计算校验值，不重新构建后替换；发现既有校验冲突即停，留给人工核查。历史已发布版本按其发布包的下载元数据识别资产，不因新命名规则重命名旧文件。
 
+按标签查询的 GitHub API 只返回已发布 Release；404 后须用有相应仓库权限的分页 Release 列表定位草稿，不能将已存在草稿误判为不存在。创建草稿、每次上传及最终完整性检查共用此读取规则，保留已有 ZIP 和缺侧车恢复语义。
+
 ### 凭据与 GitHub 权限
 
-`CARGO_TOKEN` 是仓库 Secret，只交给需要上传源包的步骤；发布器向实际 Cargo 上传子进程注入 `CARGO_REGISTRY_TOKEN`，供默认 crates.io 读取。不能用命名仓库的 `CARGO_REGISTRIES_CRATES_IO_TOKEN` 替代；编译、前端和 dry-run 环境继续剥离凭据。GitHub 使用 `github.token`，两个认证域分开，GitHub Token 不发送给 crates.io，也不读取或输出操作者本地 Cargo 凭据。修复与真实 Cargo 回归见 [0034](../changes/0034-cargo-auth-and-044-release.md)。
+`CARGO_TOKEN` 是仓库 Secret，只交给需要上传源包的步骤；发布器向实际 Cargo 上传子进程注入 `CARGO_REGISTRY_TOKEN`，供默认 crates.io 读取。不能用命名仓库的 `CARGO_REGISTRIES_CRATES_IO_TOKEN` 替代；前端构建、metadata 和 package 预检子进程继续剥离凭据。GitHub 使用 `github.token`，两个认证域分开，GitHub Token 不发送给 crates.io，也不读取或输出操作者本地 Cargo 凭据。修复与真实 Cargo 回归见 [0034](../changes/0034-cargo-auth-and-044-release.md)。
 
 [GitHub 官方可复用工作流规则](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)允许命名 Secret 传递和 `secrets: inherit`，但权限在调用链中只能保持或降低。两个入口的调用 job 明确授予 `contents: write`，被调用流程的构建/检查 job 保持只读，仅 Release job 使用写权限。
 

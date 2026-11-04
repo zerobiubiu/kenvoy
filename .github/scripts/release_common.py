@@ -88,7 +88,21 @@ class GitHub:
         return reference["object"]["sha"]
 
     def release(self, tag):
-        return self.get(f"releases/tags/{urllib.parse.quote(tag, safe='')}")
+        release = self.get(f"releases/tags/{urllib.parse.quote(tag, safe='')}")
+        if release is not None:
+            return release
+        # 按标签接口只返回已发布版本；草稿必须从认证后的分页列表定位。
+        page = 1
+        while True:
+            releases = self.get(f"releases?per_page=100&page={page}")
+            if not isinstance(releases, list):
+                raise ReleaseError("无法读取 Release 列表，不能确定草稿是否已存在")
+            for release in releases:
+                if release.get("tag_name") == tag:
+                    return release
+            if len(releases) < 100:
+                return None
+            page += 1
 
     def tag_sha(self, tag):
         reference = self.get(f"git/ref/tags/{urllib.parse.quote(tag, safe='')}")

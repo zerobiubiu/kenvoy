@@ -44,6 +44,9 @@ dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitH
 
 发布前还需对真实生成 tarball 执行匿名隔离安装、CLI 运行与摘要校验；npm 12 注册表全局安装仅为本包添加 `--allow-scripts=kenvoy`，本地 tarball 则匹配精确 `file:` 来源，局部安装通过 `npm install-scripts approve` 授权。不能以安装退出码 0 代替 postinstall 已执行。实际首发不属于测试，必须单独授权。细节见[渠道操作](../operations/distribution-channels.md)。
 
+### 源码包与 Release 发布回归
+
+运行 `uv run --no-project --python 3.12 python -B -m unittest discover -s .github/scripts/tests -v`。真实 Cargo 用例需要已准备的 Cargo/Git，使用独占 Cargo Home、本机索引与本机 HTTP 服务，验证默认仓库鉴权、上传前/后摘要及外部 target 目录；不会使用真实令牌或向公网发布测试包。Release 用例覆盖草稿创建、分页定位、既有 ZIP 复用与完整侧车。依据和边界见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
 ## 代码层次与拆分
 

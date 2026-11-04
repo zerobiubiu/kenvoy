@@ -1,5 +1,6 @@
-"""通过真实 Cargo 和仅限本机的 registry 验证源包上传鉴权，不接触真实凭据。"""
+"""通过真实 Cargo 和本机 registry 验证上传鉴权、归档摘要及发布恢复，不接触真实凭据。"""
 
+import hashlib
 import json
 import os
 import shutil
@@ -20,9 +21,16 @@ import publish_crates
 
 @unittest.skipUnless(shutil.which("cargo") and shutil.which("git"), "需要已有 Cargo 和 Git")
 class CrateAuthenticationTests(unittest.TestCase):
-    def test_default_registry_upload_authenticates_with_the_publish_secret(self):
+    def test_default_registry_upload_authenticates_and_verifies_published_bytes(self):
+        self.verify_publication()
+
+    def test_publication_honors_an_external_target_directory(self):
+        self.verify_publication(external_target=True)
+
+    def verify_publication(self, external_target=False):
         requests = []
         token = "kenvoy-local-registry-test-not-a-real-token"
+        uploaded = {}
 
         class RegistryHandler(BaseHTTPRequestHandler):
             def log_message(self, *_arguments):
@@ -34,9 +42,30 @@ class CrateAuthenticationTests(unittest.TestCase):
                 metadata = json.loads(body[4:4 + metadata_length])
                 requests.append((self.path, self.headers.get("Authorization"),
                                  metadata["name"], metadata["vers"]))
-                # 验证请求后立即拒绝，不落库、不触发 Cargo 的索引可见性等待。
-                payload = json.dumps({"errors": [{"detail": "本地探针不接收发布"}]}).encode()
-                self.send_response(403)
+                if self.headers.get("Authorization") != token:
+                    self.send_error(401)
+                    return
+                offset = 4 + metadata_length
+                archive_length = struct.unpack("<I", body[offset:offset + 4])[0]
+                archive = body[offset + 4:]
+                if len(archive) != archive_length:
+                    self.send_error(400)
+                    return
+                uploaded["checksum"] = hashlib.sha256(archive).hexdigest()
+                entry = index / "ke" / "nv" / "kenvoy"
+                entry.parent.mkdir(parents=True, exist_ok=True)
+                entry.write_text(json.dumps({
+                    "name": "kenvoy", "vers": "0.0.0", "deps": [],
+                    "cksum": uploaded["checksum"], "features": {}, "yanked": False,
+                }) + "\n", encoding="utf-8")
+                for arguments in (["add", "ke/nv/kenvoy"],
+                                  ["commit", "--no-gpg-sign", "-m", "记录本机测试上传"]):
+                    real_run(["git", *arguments], cwd=index, env=environment,
+                             check=True, capture_output=True, timeout=30)
+                payload = json.dumps({"warnings": {
+                    "invalid_categories": [], "invalid_badges": [], "other": [],
+                }}).encode()
+                self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
@@ -70,6 +99,8 @@ class CrateAuthenticationTests(unittest.TestCase):
                     "CARGO_TOKEN": token, "GIT_CONFIG_NOSYSTEM": "1",
                     "GIT_CONFIG_GLOBAL": os.devnull,
                 })
+                if external_target:
+                    environment["CARGO_TARGET_DIR"] = str(root / "external-target")
                 real_run = subprocess.run
                 real_run(["cargo", "generate-lockfile", "--offline"], cwd=source,
                          env=environment, check=True, capture_output=True, timeout=30)
@@ -84,9 +115,10 @@ class CrateAuthenticationTests(unittest.TestCase):
                 for arguments in (
                     ["init", "--initial-branch=main"],
                     ["config", "core.hooksPath", str(root / "no-hooks")],
+                    ["config", "user.name", "发布鉴权测试"],
+                    ["config", "user.email", "release-test@example.invalid"],
                     ["add", "config.json"],
-                    ["-c", "user.name=发布鉴权测试", "-c", "user.email=release-test@example.invalid",
-                     "commit", "--no-gpg-sign", "-m", "本地 registry"],
+                    ["commit", "--no-gpg-sign", "-m", "本地 registry"],
                 ):
                     real_run(["git", *arguments], cwd=index, env=environment,
                              check=True, capture_output=True, timeout=30)
@@ -100,10 +132,20 @@ class CrateAuthenticationTests(unittest.TestCase):
 
                 def run_cargo(arguments, **kwargs):
                     # 限定索引与网络出口为本机，参数和鉴权环境原样交给真实 Cargo。
-                    return real_run(arguments, **kwargs, capture_output=True, timeout=60)
+                    kwargs.setdefault("capture_output", True)
+                    kwargs.setdefault("timeout", 60)
+                    try:
+                        return real_run(arguments, **kwargs)
+                    except subprocess.CalledProcessError as error:
+                        stderr = error.stderr or ""
+                        error.add_note(stderr.decode("utf-8", errors="replace")
+                                       if isinstance(stderr, bytes) else stderr)
+                        raise
 
                 def registry_version(crate, _version):
-                    return {"num": "0.0.0"} if crate == "kengine" else None
+                    if crate == "kengine":
+                        return {"num": "0.0.0"}
+                    return dict(uploaded) if uploaded else None
 
                 plan = {"version": "0.0.0", "engine_version": "0.0.0", "sha": "fixture"}
                 with (
@@ -113,14 +155,10 @@ class CrateAuthenticationTests(unittest.TestCase):
                     patch.object(publish_crates, "require_latest"),
                     patch.object(publish_crates.registry, "registry_version", registry_version),
                     patch.object(publish_crates.subprocess, "run", run_cargo),
-                    self.assertRaises(subprocess.CalledProcessError) as rejected,
                 ):
                     publish_crates.publish(root, plan, object(), environment)
 
-                self.assertEqual(
-                    requests, [("/api/v1/crates/new", token, "kenvoy", "0.0.0")],
-                    rejected.exception.stderr.decode("utf-8", errors="replace"),
-                )
+                self.assertEqual(requests, [("/api/v1/crates/new", token, "kenvoy", "0.0.0")])
         finally:
             server.shutdown()
             server.server_close()
