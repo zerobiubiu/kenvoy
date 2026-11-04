@@ -48,11 +48,11 @@ nfpm 固定版本并校验下载摘要，RPM 使用专用私钥和 16 位长 key
 | [.github/workflows/channels.yml](../../.github/workflows/channels.yml) | 主分支/来源门禁、固定源码、发布器接线、退出码、密钥隔离、签名与历史保留 |
 | [assets.py](../../.github/scripts/channels/assets.py) | 正式 Release 与下载/缓存摘要检查 |
 | [npm_packages.py](../../.github/scripts/channels/npm_packages.py)、[publish_npm.py](../../.github/scripts/channels/publish_npm.py) | 原始 LICENSE 交付、只读计划及显式发布 |
-| [publish_winget.py](../../.github/scripts/channels/publish_winget.py) | 固定上游、fork/PR 幂等与错误处理 |
-| [linux_packages.py](../../.github/scripts/channels/linux_packages.py)、[build_linux_packages.py](../../.github/scripts/channels/build_linux_packages.py)、[linux_repo.py](../../.github/scripts/channels/linux_repo.py) | RPM 签名配置、既有包复用、Arch 包签名进入索引 |
+| [publish_winget.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/publish_winget.py) | 固定上游、fork/PR 幂等与错误处理 |
+| [linux_packages.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/linux_packages.py)、[build_linux_packages.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/build_linux_packages.py)、[linux_repo.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/linux_repo.py) | RPM 签名配置、既有包复用、Arch 包签名进入索引 |
 | [test_npm_packages.py](../../.github/scripts/channels/tests/test_npm_packages.py)、[test_publish_npm.py](../../.github/scripts/channels/tests/test_publish_npm.py) | 缺许可证拒绝、发布顺序、已有版本与错误边界 |
-| [test_publish_winget.py](../../.github/scripts/channels/tests/test_publish_winget.py) | 真实临时 Git 仓库中的恢复、越界分支与 API 失败 |
-| [test_release_assets.py](../../.github/scripts/channels/tests/test_release_assets.py)、[test_build_linux_packages.py](../../.github/scripts/channels/tests/test_build_linux_packages.py) | 非正式资产、坏摘要、缓存保护、包与签名不变性 |
+| [test_publish_winget.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/tests/test_publish_winget.py) | 真实临时 Git 仓库中的恢复、越界分支与 API 失败 |
+| [test_release_assets.py](../../.github/scripts/channels/tests/test_release_assets.py)、[test_build_linux_packages.py](https://github.com/zerobiubiu/kenvoy/blob/511455e4c8c21a6f4fe66f2d63cf222c1979bd9d/.github/scripts/channels/tests/test_build_linux_packages.py) | 非正式资产、坏摘要、缓存保护、包与签名不变性 |
 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md)、[版本日志](CHANGELOG.md)及分类索引 | 当前配置、账号阻断、安装与恢复边界、证据入口 |
 
 ## 发布前仍须处理

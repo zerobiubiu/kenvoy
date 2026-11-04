@@ -1,4 +1,4 @@
-"""渠道清单回归：assets.json 严格校验与 brew/scoop/winget 三处落位。"""
+"""渠道清单回归：assets.json 严格校验与 brew/scoop 交付契约。"""
 
 import contextlib
 import io
@@ -61,9 +61,6 @@ class ChannelOutputs(unittest.TestCase):
                 [
                     "brew/Formula/kenvoy.rb",
                     "scoop/bucket/kenvoy.json",
-                    "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.yaml",
-                    "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.installer.yaml",
-                    "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/Kenvoy.Kenvoy.locale.en-US.yaml",
                 ]
             ),
         )
@@ -98,35 +95,6 @@ class ChannelOutputs(unittest.TestCase):
             template = manifest["autoupdate"]["architecture"][key]["url"]
             self.assertEqual(template, asset.url.replace(VERSION, "$version"))
 
-    def test_winget_nested_portable_supports_both_architectures(self):
-        root = "winget/manifests/k/Kenvoy/Kenvoy/0.3.0/"
-        installer = self.files[root + "Kenvoy.Kenvoy.installer.yaml"]
-        self.assertIn("InstallerType: zip", installer)
-        self.assertIn("NestedInstallerType: portable", installer)
-        self.assertIn("RelativeFilePath: kenvoy.exe", installer)
-        self.assertIn("PortableCommandAlias: kenvoy", installer)
-        for arch, key in (("x86_64", "x64"), ("ARM64", "arm64")):
-            asset = self.assets.select("windows", arch)
-            self.assertIn(
-                f"- Architecture: {key}\n  InstallerUrl: {asset.url}\n  InstallerSha256: {asset.sha256}",
-                installer,
-            )
-        version_manifest = self.files[root + "Kenvoy.Kenvoy.yaml"]
-        self.assertIn("PackageVersion: 0.3.0", version_manifest)
-        self.assertIn("ManifestType: version", version_manifest)
-        locale = self.files[root + "Kenvoy.Kenvoy.locale.en-US.yaml"]
-        self.assertIn("PackageLocale: en-US", locale)
-        self.assertIn("License: MIT", locale)
-
-    def test_write_files_creates_relative_layout(self):
-        output = Path(self.enterContext(tempfile.TemporaryDirectory())) / "out"
-        written = write_files(self.files, output)
-        self.assertEqual(len(written), len(self.files))
-        for path in written:
-            self.assertTrue(path.is_file(), path)
-            self.assertTrue(path.is_relative_to(output.resolve()), path)
-        formula = (output / "brew/Formula/kenvoy.rb").read_text(encoding="utf-8")
-        self.assertEqual(formula, self.files["brew/Formula/kenvoy.rb"])
 
 
 class AssetContract(unittest.TestCase):

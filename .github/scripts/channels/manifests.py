@@ -1,4 +1,4 @@
-"""渠道清单生成：校验 assets.json 并输出 brew、scoop 与 winget 清单。
+"""渠道清单生成：校验 assets.json 并输出 brew 与 scoop 清单。
 
 资产契约只此一份实现，npm_packages.py 复用同一套校验，避免两个脚本各写一份导致漂移。
 所有 URL 与 sha256 只取自 assets.json，脚本不联网、不自行下载、不推测发布地址。
@@ -14,9 +14,6 @@ from pathlib import Path
 # 分发注册表面向国际用户，这里使用固定英文描述；名称、版本与仓库地址一律来自 assets.json。
 DESCRIPTION = "Kenvoy turns TypeScript/JSX declarations into pages, controlled APIs and SQLite-backed apps"
 LICENSE = "MIT"
-MANIFEST_VERSION = "1.6.0"
-IDENTIFIER = "Kenvoy.Kenvoy"
-PUBLISHER = "Kenvoy"
 
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -249,84 +246,12 @@ def scoop_manifest(assets: Assets) -> str:
     return json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
 
 
-def winget_files(assets: Assets) -> dict[str, str]:
-    """WinGet 三清单：zip 安装器 + portable 嵌套文件，x64 与 arm64 各自落位。"""
-    windows = {asset.arch: asset for asset in assets.assets if asset.platform == "windows"}
-    root = f"winget/manifests/k/Kenvoy/Kenvoy/{assets.version}"
-    version_manifest = "\n".join(
-        [
-            f"PackageIdentifier: {IDENTIFIER}",
-            f"PackageVersion: {assets.version}",
-            "DefaultLocale: en-US",
-            "ManifestType: version",
-            f"ManifestVersion: {MANIFEST_VERSION}",
-            "",
-        ]
-    )
-    installer = [
-        f"PackageIdentifier: {IDENTIFIER}",
-        f"PackageVersion: {assets.version}",
-        "Platform:",
-        "- Windows.Desktop",
-        "MinimumOSVersion: 10.0.0.0",
-        "InstallerType: zip",
-        "NestedInstallerType: portable",
-        "NestedInstallerFiles:",
-        f"- RelativeFilePath: {windows['x86_64'].binary}",
-        "  PortableCommandAlias: kenvoy",
-        "InstallModes:",
-        "- silent",
-        "UpgradeBehavior: install",
-        "Installers:",
-    ]
-    for arch, key in (("x86_64", "x64"), ("ARM64", "arm64")):
-        asset = windows[arch]
-        installer.extend(
-            [
-                f"- Architecture: {key}",
-                f"  InstallerUrl: {asset.url}",
-                f"  InstallerSha256: {asset.sha256}",
-            ]
-        )
-    installer.extend(["ManifestType: installer", f"ManifestVersion: {MANIFEST_VERSION}", ""])
-    locale = "\n".join(
-        [
-            f"PackageIdentifier: {IDENTIFIER}",
-            f"PackageVersion: {assets.version}",
-            "PackageLocale: en-US",
-            f"Publisher: {PUBLISHER}",
-            f"PublisherUrl: {assets.homepage}",
-            f"PublisherSupportUrl: {assets.homepage}/issues",
-            "PackageName: KenVoy",
-            f"PackageUrl: {assets.homepage}",
-            f"License: {LICENSE}",
-            f"LicenseUrl: {assets.homepage}/blob/main/LICENSE",
-            f'ShortDescription: "{DESCRIPTION}"',
-            "Moniker: kenvoy",
-            "Tags:",
-            "- cli",
-            "- low-code",
-            "- typescript",
-            "ManifestType: locale",
-            f"ManifestVersion: {MANIFEST_VERSION}",
-            "",
-        ]
-    )
-    return {
-        f"{root}/Kenvoy.Kenvoy.yaml": version_manifest,
-        f"{root}/Kenvoy.Kenvoy.installer.yaml": "\n".join(installer),
-        f"{root}/Kenvoy.Kenvoy.locale.en-US.yaml": locale,
-    }
-
-
 def channel_files(assets: Assets) -> dict[str, str]:
-    """全部渠道文件，键为相对输出目录的路径。"""
-    files = {
+    """Homebrew 与 Scoop 清单，键为相对输出目录的路径。"""
+    return {
         "brew/Formula/kenvoy.rb": brew_formula(assets),
         "scoop/bucket/kenvoy.json": scoop_manifest(assets),
     }
-    files.update(winget_files(assets))
-    return files
 
 
 def write_files(files: dict[str, str], output: str | Path) -> list[Path]:
@@ -345,7 +270,7 @@ def write_files(files: dict[str, str], output: str | Path) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="生成 brew/scoop/winget 渠道清单")
+    parser = argparse.ArgumentParser(description="生成 brew/scoop 渠道清单")
     parser.add_argument("--assets", required=True, type=Path, help="工作流准备的 assets.json")
     parser.add_argument("--output", required=True, type=Path, help="渠道文件输出目录")
     arguments = parser.parse_args(argv)

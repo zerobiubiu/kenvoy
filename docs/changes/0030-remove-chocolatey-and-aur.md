@@ -25,7 +25,7 @@
 |---|---|
 | [channels.yml](../../.github/workflows/channels.yml) | 删除 `chocolatey` 与 `aur` 两个 job；其余 job 的主分支门禁、固定源码与签名流程不变 |
 | [manifests.py](../../.github/scripts/channels/manifests.py) | 删除 `chocolatey_files`、`aur_files` 及其调用；脚本只生成 brew/scoop/winget，文档字符串与 CLI 描述同步 |
-| [linux_packages.py](../../.github/scripts/channels/linux_packages.py) | 删除 Arch 包中指向已退役 AUR 包名的 `conflicts` 声明；pacman 仓库产物本身不变 |
+| [linux_packages.py](https://github.com/zerobiubiu/kenvoy/blob/098e24b615e1b602d4e871498d7790ea28e318a0/.github/scripts/channels/linux_packages.py) | 删除 Arch 包中指向已退役 AUR 包名的 `conflicts` 声明；pacman 仓库产物本身不变 |
 | [test_manifests.py](../../.github/scripts/channels/tests/test_manifests.py) | 删除两渠道断言，渠道清单期望集合收敛为 5 个文件 |
 | [distribution-channels.md](../operations/distribution-channels.md) | 范围、流程图、章节、Secret 表与配置步骤只保留现行渠道 |
 | [channel-rollout-status.md](../development/channel-rollout-status.md) | 重写现状、Secret 在用清单、发布路径与版本门禁说明 |

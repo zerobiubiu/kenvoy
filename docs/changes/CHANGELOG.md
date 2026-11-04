@@ -2,9 +2,18 @@
 
 状态：参考；治理：持续维护的版本概要。详细执行事实保留在编号变更记录中，不以本页替代验证证据。
 
+## 0.4.2
+
+发布状态：待发布；CLI 为 0.4.2，KEngine 保持 0.2.0；项目格式仍为 0.4.0。既有最低 CLI 为 0.4.0 的项目继续兼容，create 新项目则声明创建时的 CLI 0.4.2。本轮不推送、合并或运行远端发布。
+
+- 按用户要求退役 APT、RPM、Alpine、Arch、WinGet：删除工作流、生成器、发布器、签名/索引构建和专用测试，渠道只保留 npm、Homebrew、Scoop。
+- 保留 crates.io、GitHub Release 六目标 ZIP、npm 七包以及 Homebrew/Scoop 清单；不取消 Linux/macOS/Windows 平台二进制。
+- 经授权删除 WINGET_TOKEN、GPG_PRIVATE_KEY、GPG_PASSPHRASE、APK_SIGNING_KEY；保留 PACKAGES_TOKEN、CARGO_TOKEN，远端旧包仓库和本地密钥恢复副本不动。
+- 经用户确认递增 PATCH，并在最终版本提交维护本地附注标签 v0.4.2；旧标签不移动。实施与验证见 [0032](0032-retire-linux-and-winget-channels.md)。
+
 ## 0.4.1
 
-发布状态：待发布；仅 dev 本地实施，未合并 main、未推送或发布。Kenvoy CLI 为 0.4.1，KEngine 保持 0.2.0；项目格式与最低 CLI 仍为 0.4.0。
+发布状态：未发布；本节保留当时 0.4.1 的准备事实。继续有效的内容拟随 0.4.2 交付，旧标签保持不动；下述已取消渠道以 0.4.2 的说明为准。
 
 - 0.4.0 从未发布：其内容随本版一并交付，本版在其基础上完成渠道工程收尾。
 - Chocolatey 与 AUR 渠道退役，工作流、生成器与测试删除，只保留历史记录；现行渠道为 npm、Homebrew、Scoop、WinGet 与 APT/RPM/Alpine/Arch 仓库。
@@ -19,7 +28,7 @@
 
 ## 0.4.0
 
-发布状态：未发布；内容已并入 0.4.1 发布，标签不推送。Kenvoy CLI 原为 0.4.0，KEngine 保持 0.2.0。
+发布状态：未发布；继续有效的产品内容拟随 0.4.2 交付。Kenvoy CLI 原为 0.4.0，KEngine 保持 0.2.0。
 
 - 国际化强制开启，使用 languages 的代码/可选唯一 alias/必填 display 与仅代码 fallback，移除旧可选 i18n 配置和分语言目录协议。
 - 根 translations.json 集中保存完整语言矩阵；生成 draft 2020-12 language.schema.json，明确必需的 `$schema` 引用与每语言代码/别名 oneOf，使用真实 Schema 引擎校验，不伪造译文。

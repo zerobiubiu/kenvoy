@@ -15,7 +15,7 @@
 | [CLI 当前行为](cli-design.md) | 参考 | 项目创建/检查、i18n Schema 更新与译文初始化/校验、迁移、账号、dev/build/run、依赖与产物部署、退出/日志 |
 | [正式迁移与旧库接入](migration-design.md) | 参考 | 生成/固化、冻结规则、完整链交付、双重确认、逐步事务、备份、显式基线、快照与生命周期锁 |
 | [Git、版本标签与产品发布](releasing.md) | 参考 | dev/main 双分支、自动本地 tag、main 当前版本自动发布及手动兜底、单目标下载 artifact、六目标 registry 构建与安装边界 |
-| [多渠道软件包发布](distribution-channels.md) | 参考 | npm/OIDC、Homebrew、Scoop、WinGet 与 Linux raw 仓库的产物流、签名、不可变包复用、凭据与外部审核边界 |
+| [多渠道软件包发布](distribution-channels.md) | 参考 | npm/OIDC、Homebrew、Scoop 的正式归档消费、发布门禁、凭据与上线验收边界 |
 
 ## 推荐阅读顺序
 

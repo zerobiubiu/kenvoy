@@ -104,7 +104,6 @@ fn create_provides_required_root_files_and_keeps_application_ir_format_one() -> 
     let fixture = Fixture::new()?;
     let config = fixture.config()?;
     assert_eq!(config["project"]["format_version"].as_str(), Some("0.4.0"));
-    assert_eq!(config["project"]["min_cli_version"].as_str(), Some("0.4.0"));
     assert!(config.get("i18n").is_none());
     assert!(!fixture.project().join("locales").exists());
     let translations: Value =

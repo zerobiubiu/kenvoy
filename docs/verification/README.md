@@ -32,6 +32,7 @@
 | [changes/0029：多渠道配置续接](../changes/0029-channel-rollout-continuation.md#执行验证记录) | 已执行；114 项渠道回归、主分支门禁、真实只读计划、npm 封装、签名包与 APT 索引；凭据部分完成，远端发布和部分源验收未执行 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md) |
 | [changes/0030：退役 Chocolatey 与 AUR](../changes/0030-remove-chocolatey-and-aur.md#执行验证记录) | 已执行；112 项渠道回归、残留引用检查、工作流语法与工程门禁；未运行远端工作流 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md) |
 | [changes/0031：发布版本对齐](../changes/0031-release-version-alignment.md#执行验证记录) | 已执行；Workspace 编译、真实 `--version`、framework_version 定向回归、渠道回归与文档门禁；未推送未发布 | [渠道进度](../development/channel-rollout-status.md)、[Git 与发布操作](../operations/releasing.md) |
+| [changes/0032：仅保留 npm/Homebrew/Scoop](../changes/0032-retire-linux-and-winget-channels.md#执行验证记录) | 已执行；保留渠道回归、真实产物逐字节对照、npm shim、0.4.2 本机编译和工作流检查；未运行远端发布 | [渠道操作](../operations/distribution-channels.md)、[渠道进度](../development/channel-rollout-status.md) |
 
 ## 初始审查与准备计划
 
