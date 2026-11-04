@@ -2,7 +2,7 @@
 
 将 TypeScript/JSX 声明解释为 React 页面、受控 API、管理后台和 SQLite 持久化应用的 Rust 原生 CLI。
 
-当前源码版本为 **0.4.3**，强制原生语言与集中译文契约已在 dev 实施，尚未合并 main 或发布。下列默认安装命令获取已发布版本；需要本次功能时按仓库说明构建 dev 源码，不将本地版本标签当作线上可安装证据。
+本源码版本为 **0.4.4**，包含强制原生语言与集中译文契约。下列默认安装命令获取实际已发布版本，不将源码版本或 Git 标签当作线上可安装证据；完整发行状态见仓库的渠道进度与版本日志。
 
 ## 安装
 
@@ -20,7 +20,7 @@ cargo install kenvoy --locked
 cargo binstall kenvoy
 ```
 
-预编译归档来自 [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)，正式发布提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。0.4.3 尚未发布；交叉编译产物不代表在全部架构完成运行测试。
+预编译归档来自 [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases)，正式发布提供 Windows MSVC、Linux musl、macOS 的 x86_64/aarch64 目标，归档旁附 SHA-256 校验文件。以对应版本的正式 Release 为准；交叉编译产物不代表在全部架构完成运行测试。
 
 ## 创建并运行
 

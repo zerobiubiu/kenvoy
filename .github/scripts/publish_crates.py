@@ -93,10 +93,11 @@ def publish(root, plan, github, environ):
             if registry.registry_version(crate, version) is not None:
                 print(f"{crate} {version} 已存在，跳过")
                 continue
+            # 默认 crates.io 使用 registry.token，而不是命名仓库的 registries.<name>.token。
             subprocess.run(
                 ["cargo", "publish", "--locked", "--package", crate],
                 cwd=source, check=True,
-                env={**environment, "CARGO_REGISTRIES_CRATES_IO_TOKEN": token},
+                env={**environment, "CARGO_REGISTRY_TOKEN": token},
             )
             package = source / "target" / "package" / f"{crate}-{version}.crate"
             digest = hashlib.sha256(package.read_bytes()).hexdigest()

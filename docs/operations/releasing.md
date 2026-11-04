@@ -86,7 +86,7 @@ GitHub Release 先以草稿收集缺失资产，齐全并验证后公开；标�
 
 ### 凭据与 GitHub 权限
 
-`CARGO_TOKEN` 是仓库 Secret，只交给需要上传源包的步骤；GitHub 使用 `github.token`。两个认证域分开，GitHub Token 不发送给 crates.io，也不读取或输出操作者本地 Cargo 凭据。
+`CARGO_TOKEN` 是仓库 Secret，只交给需要上传源包的步骤；发布器向实际 Cargo 上传子进程注入 `CARGO_REGISTRY_TOKEN`，供默认 crates.io 读取。不能用命名仓库的 `CARGO_REGISTRIES_CRATES_IO_TOKEN` 替代；编译、前端和 dry-run 环境继续剥离凭据。GitHub 使用 `github.token`，两个认证域分开，GitHub Token 不发送给 crates.io，也不读取或输出操作者本地 Cargo 凭据。修复与真实 Cargo 回归见 [0034](../changes/0034-cargo-auth-and-044-release.md)。
 
 [GitHub 官方可复用工作流规则](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)允许命名 Secret 传递和 `secrets: inherit`，但权限在调用链中只能保持或降低。两个入口的调用 job 明确授予 `contents: write`，被调用流程的构建/检查 job 保持只读，仅 Release job 使用写权限。
 
