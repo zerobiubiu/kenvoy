@@ -38,7 +38,7 @@
 
 0.2.0 已完成源包与六目标二进制发布：[版本日志](changes/CHANGELOG.md)、[发布操作](operations/releasing.md)及[执行记录 0019](changes/0019-crates-and-binary-release.md)。最近入口与 CLI 修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)及[文件与图片契约](contracts/file-uploads.md)。
 
-当前 dev 源码 CLI 为 0.4.0，KEngine 为 0.2.0，尚未发布。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；0026/0027 保留原始迁移与旧语言方案的实施事实，不将本地版本等同于已上线。
+当前 dev 源码 CLI 为 0.4.1，KEngine 为 0.2.0，尚未发布；项目格式与最低 CLI 仍为 0.4.0。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；0026/0027 保留原始迁移与旧语言方案的实施事实，不将本地版本等同于已上线。0.4.0 未发布的原因见[0031](changes/0031-release-version-alignment.md)。
 
 多渠道发布已从历史暂停点继续：凭据与签名配置、发布失败保护和本地实测见[0029](changes/0029-channel-rollout-continuation.md)，Chocolatey 与 AUR 已退役见[0030](changes/0030-remove-chocolatey-and-aur.md)；账号待办、版本标签门禁及首次发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。当前未向各渠道上传，不将本地打包等同于已可安装。
 

@@ -51,7 +51,7 @@ kenvoy dev                           # http://127.0.0.1:3000
 
 访问 `/customers` 登记数据；登录 `/admin/customers` 查询、编辑和删除。匿名只有声明允许的表单提交权限。
 
-当前 dev 源码为 Kenvoy CLI **0.4.0**（尚未发布），KEngine 保持 **0.2.0**；安装命令获取已发布版本，不代表本次功能已上线。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
+当前 dev 源码为 Kenvoy CLI **0.4.1**（尚未发布），KEngine 保持 **0.2.0**；安装命令获取已发布版本，不代表本次功能已上线。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
 
 
 ### 生产运行

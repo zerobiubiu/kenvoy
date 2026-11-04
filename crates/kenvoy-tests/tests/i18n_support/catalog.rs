@@ -201,7 +201,7 @@ async fn omitted_languages_keeps_three_defaults_and_metadata_only_uses_dsl_text(
     let built = build(&fixture)?;
     assert_eq!(built["project_format_version"], "0.4.0");
     assert_eq!(built["min_cli_version"], "0.4.0");
-    assert_eq!(built["framework_version"], "0.4.0");
+    assert_eq!(built["framework_version"], "0.4.1");
     let mut server = fixture.start("run")?;
     let mut session = Session::new(server.origin()).await?;
     let model = session.get("/_kenvoy/application", StatusCode::OK).await?;

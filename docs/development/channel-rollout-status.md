@@ -15,7 +15,7 @@
 | 本地渠道回归 | 112 项：111 通过，1 项因 Windows 符号链接权限跳过 |
 | 本地 npm 包与 shim | 七个包包含 LICENSE；真实 npm 打包预览及 0.2.0 二进制封装运行通过，未上传 |
 | 本地 Linux 交付 | 8 个包生成成功；GPG/RSA 实签、Arch 包签名、APT 索引与验签、原包和签名复用通过 |
-| 仓库 Secret | `PACKAGES_TOKEN`、`WINGET_TOKEN`、`GPG_PRIVATE_KEY`、`GPG_PASSPHRASE`、`APK_SIGNING_KEY` 在用；缺 `NPM_TOKEN`；`AUR_SSH_PRIVATE_KEY` 已无消费者 |
+| 仓库 Secret | `PACKAGES_TOKEN`、`WINGET_TOKEN`、`GPG_PRIVATE_KEY`、`GPG_PASSPHRASE`、`APK_SIGNING_KEY` 在用；缺 `NPM_TOKEN`；`AUR_SSH_PRIVATE_KEY` 已删除 |
 | main 分支 | 渠道工作流尚未进入默认分支；`main` 是 `dev` 的祖先，合并可快进 |
 | 真实渠道发布 | **未运行、未上传** |
 
@@ -25,22 +25,23 @@
 - `GPG_PRIVATE_KEY`、`GPG_PASSPHRASE`、`APK_SIGNING_KEY`：已生成专用密钥并写入。只回读 Secret 名称和更新时间，不把它描述为可读取密钥值。
 - GPG 完整指纹：`D03C849C5A87865D5251A61715A7EFB37DFFE7B8`。
 - 受限恢复副本位于当前用户配置目录 `.config/kenvoy-release/keys-20261104-*`，不在仓库中；仅当前 Windows 用户和 SYSTEM 可访问。GPG 口令使用 CurrentUser DPAPI，迁机前须安全导出，不能只复制口令文件到新电脑。
-- `AUR_SSH_PRIVATE_KEY` 仍存在但已无工作流消费；是否删除由用户决定，本轮不擅自删除 Secret。
+- `AUR_SSH_PRIVATE_KEY` 已按用户授权从仓库删除；旧私钥仅留在本地受限恢复副本中，不再被任何工作流使用。
+- 当前版本为 Kenvoy CLI 0.4.1（未发布），`v0.4.0` 是未发布的本地标签，保留但永不推送。
 - 本轮不实际发布；登录页已交回用户，不在聊天中收取密码、验证码或 Token。
 
 ## 发布路径（用户执行）
 
-1. **先解决版本与标签一致性**，否则 `main 最新版本自动发布` 会在源码发布前失败（见下节）。
+1. 版本与标签已对齐：CLI 升为 0.4.1，`v0.4.1` 打在包含该版本的提交上（见下节）。
 2. 合并 `dev` → `main`。当前 `main`（`3e870f4`）是 `dev` 的祖先，可快进合并，合并后树与 `dev` 相同。
-3. 逐个显式推送所需版本 tag，再推送 `main`；不使用 `--tags`。
+3. 先推送 `v0.4.1`，再推送 `main`；不使用 `--tags`，也不推送 `v0.4.0`。
 4. `main 最新版本自动发布` 成功后，`多渠道软件包发布` 自动触发；失败时按日志逐项修复，不撤销已完成的 Release。
 
 ## 发布门禁：版本标签与源码树
 
-- 远端现有 tag 只有 `v0.1.0`、`v0.2.0`；`v0.3.0`、`v0.4.0` 仅在本地。
-- `v0.4.0` 指向 `4e960afa`，其树为 `a689af29…`；当前 `dev` HEAD 的树为 `f1cbffad…`，两者不同。
-- 现行 [require_tag](../../.github/scripts/release_common.py) 在发布新源码时要求 tag 树与 `main` 树完全一致，因此直接推送现有 `v0.4.0` + `main` 会在源码发布阶段被拒绝。
-- 合规选择只有两类：为本次发布确定新的版本并打新 tag，或在明确授权下重指尚未发布的本地 `v0.4.0`。不得静默移动已发布 tag，也不得为通过门禁改写校验规则。具体选择待用户确认后执行。
+- 远端现有 tag 只有 `v0.1.0`、`v0.2.0`；`v0.3.0` 与 `v0.4.0` 是未发布的本地标签，不推送。
+- 现行 [require_tag](../../.github/scripts/release_common.py) 在发布新源码时要求 tag 树与 `main` 树完全一致。`v0.4.0` 指向 `4e960afa`（树 `a689af29…`），与后续 `dev` 树不同，因此不能用它发布。
+- 已选定合规方案：递增 PATCH 到 0.4.1，并在包含该版本的最终提交打 `v0.4.1`；不改写 `v0.4.0`，也不放宽校验。详见 [0031](../changes/0031-release-version-alignment.md)。
+- 该 tag 之后若再有提交，树会再次不一致；因此合并前不要再追加提交，追加则需重新对齐版本与标签。
 
 ## 逐项验收（发布后）
 
