@@ -1,0 +1,13 @@
+{
+  "name": "kenvoy-npm-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "fflate": "0.8.2",
+    "https-proxy-agent": "7.0.6",
+    "proxy-from-env": "1.1.0"
+  }
+}

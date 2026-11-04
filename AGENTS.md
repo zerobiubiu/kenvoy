@@ -57,7 +57,7 @@
 - Kenvoy CLI 每次已提交版本变化，都自动创建附注标签 `vMAJOR.MINOR.PATCH`，缺失标签及时补齐到该版本首次出现的提交，不能统一挂到当前 HEAD；同版本普通提交不重打标签。每次可写任务开始/收尾、提交后、切回 dev、合并到 dev 后及获准推送前均核对补齐，无须额外要求；只读任务不写引用。既有合法发布标签不移动、不覆盖，冲突必须报错；删除或重指需单独授权。标签默认只在本地创建，补 tag 不等于发布旧版本。具体命令与钩子见发布操作。
 - 获得推送授权后，本次分支与保留的版本 tag 一并同步到 GitHub，不遗漏先前补齐的标签；推送前再运行一次标签核对。标签逐个显式推送，仍不使用 `git push --tags` / `--follow-tags` 批量推送未核对版本。发布新版本前必须确认标签已在远端，指向已合入 main 的相同版本源码；CI 不自动创建或移动远端 tag。
 - 仅 `main` 更新自动触发发布；只检查 main 当前版本，不扫描或补发历史版本。已发布源包跳过，缺失的当前版本资产可由同一流程补齐；手动发布仅是 main 自动发布的兜底，不允许从 dev 或任意历史版本发布。
-- 渠道发布仅保留 npm、Homebrew、Scoop，只消费已发布 GitHub Release 的六个归档与官方摘要，不重新编译、不改动 Release；由独立工作流在 main 发布成功后触发，也可按已发布版本手动补发。缺 Secret 或外部账号未就绪必须明确失败并指出名称，不得跳过或伪造成功。APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 已退役，不恢复其 job、生成器或凭据要求；crates.io 与 GitHub Release 六目标归档不受影响。配置见[多渠道发布](docs/operations/distribution-channels.md)。
+- 渠道发布仅保留 npm、Homebrew、Scoop，只消费已发布 GitHub Release 的六个归档与官方摘要，不重新编译、不改动 Release；由独立工作流在 main 发布成功后触发，也可按已发布版本手动补发。npm 只发布 `kenvoy` 单包，由安装器按平台下载并校验对应二进制；不发布或依赖 Kenvoy 平台分包。缺凭据或账号未就绪必须明确失败，不得跳过或伪造成功。APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 已退役，不恢复其实现或凭据要求；crates.io 与 GitHub Release 六目标归档不受影响。配置见[多渠道发布](docs/operations/distribution-channels.md)。
 - 只暂存本次授权且已验证的文件或变更块，不夹带用户已有或无关改动；不提交密钥、个人配置、依赖目录、业务运行数据或构建产物，新增持久化目录前检查 ignore 保护。
 
 ## 实施与验证

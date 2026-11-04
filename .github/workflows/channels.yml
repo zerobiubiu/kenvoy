@@ -93,7 +93,7 @@ jobs:
 
   npm:
     needs: prepare
-    name: npm 主包与六个平台包
+    name: npm 单包与平台自动安装器
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -120,15 +120,15 @@ jobs:
           python .github/scripts/channels/npm_packages.py \
             --assets "$RUNNER_TEMP/channel/assets.json" --zips "$RUNNER_TEMP/channel/zips" \
             --output "$RUNNER_TEMP/npm"
-      - name: 只发布缺失版本，平台包先于主包
+      - name: 只发布缺失的 kenvoy 版本
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo '未配置 NPM_TOKEN：使用 npm Trusted Publishing，七个包必须已绑定 channels.yml。'
+            echo '未配置 NPM_TOKEN：使用 npm Trusted Publishing，kenvoy 包必须已绑定 channels.yml。'
           fi
-          python .github/scripts/channels/publish_npm.py --packages "$RUNNER_TEMP/npm" --publish
+          python .github/scripts/channels/publish_npm.py --package "$RUNNER_TEMP/npm/kenvoy" --publish
 
   homebrew:
     needs: prepare

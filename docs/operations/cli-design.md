@@ -12,7 +12,7 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.2），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.3），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
 
 check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 

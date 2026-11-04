@@ -1,6 +1,6 @@
 # 多渠道软件包发布
 
-状态：参考；治理：现状文档。适用范围：Kenvoy CLI 二进制分发到 npm、Homebrew、Scoop。crates.io 与 GitHub Release 继续沿用 [Git 与发布操作](releasing.md)；渠道收敛及专用凭据清理见 [0032](../changes/0032-retire-linux-and-winget-channels.md)，当前前置条件见[渠道进度](../development/channel-rollout-status.md)。以下安装命令仅供正式发布后使用，不表示现在已经上线。
+状态：参考；治理：现状文档。适用范围：Kenvoy CLI 二进制分发到 npm、Homebrew、Scoop。crates.io 与 GitHub Release 继续沿用 [Git 与发布操作](releasing.md)；渠道退役见 [0032](../changes/0032-retire-linux-and-winget-channels.md)，npm 单包切换与首发见 [0033](../changes/0033-single-npm-package-download.md)，实际进度见[渠道进度](../development/channel-rollout-status.md)。安装命令不代表尚未发布版本已上线。
 
 ## 总体结构
 
@@ -8,7 +8,7 @@
 flowchart TD
   A[main 发布成功 GitHub Release] --> B[渠道工作流 workflow_run]
   B --> C[assets.json 六归档 + 官方 sha256]
-  C --> D[npm 7 个包]
+  C --> D[npm 单包 kenvoy 安装器]
   C --> E[Homebrew tap formula]
   C --> F[Scoop bucket]
 ```
@@ -17,7 +17,7 @@ flowchart TD
 
 前置条件：版本 tag 已推送；对应正式 Release 已发布、非 draft/prerelease，六个 ZIP 均带 GitHub 官方 digest。下载和复用缓存都核对 SHA-256，不覆盖损坏缓存。缺归档或摘要不符时停止，不进入各渠道。0.2.0 及更早的 Release 使用旧的三元组文件名，不在自动发现兼容范围内；渠道发布从采用 `kenvoy-{version}-{platform}-{arch}.zip` 的版本开始。
 
-源码发布仍执行现有完整 Git 树一致性门禁：首次发布源码时，main 的树必须与该版本 tag 一致。标签之后仅修改文档或渠道配置，也不能跳过这项检查。本次经用户确认采用 CLI 0.4.2 的最终版本提交与新本地标签；不移动旧 tag，也不自动推送。
+源码发布仍执行完整 Git 树一致性门禁：首次发布源码时，main 的树必须与该版本 tag 一致。标签之后仅修改文档或渠道配置，也不能跳过检查。本次经用户确认采用 CLI 0.4.3 的最终版本提交与新本地标签；不移动旧 tag，也不自动推送。
 
 ## 资产与命名
 
@@ -25,35 +25,36 @@ flowchart TD
 
 ## npm
 
-发布 7 个**无 scope** 包，避免依赖 npm 组织：
+只发布一个无 scope 包 **`kenvoy`**，不生成、发布或依赖 `kenvoy-win32-*`、`kenvoy-linux-*`、`kenvoy-darwin-*` 平台分包。
 
-| 包 | 内容 |
-|---|---|
-| `kenvoy` | 主包：`bin` 为 JS shim，按 `process.platform/arch` 解析平台包，转发参数、stdio 与退出码 |
-| `kenvoy-win32-x64`、`kenvoy-win32-arm64` | Windows 二进制 |
-| `kenvoy-linux-x64`、`kenvoy-linux-arm64` | Linux musl 静态二进制 |
-| `kenvoy-darwin-x64`、`kenvoy-darwin-arm64` | macOS 通用归档中的对应架构 |
+包内包含 `postinstall` 安装器、命令入口、六目标 `download-manifest.json` 和原始 LICENSE。安装时按 `process.platform` / `process.arch` 选择 Windows、Linux、macOS 的 x64/arm64，网络上只下载当前平台的正式 Release ZIP；不要求用户安装 Rust 或外部解压工具。
 
-主包通过 `optionalDependencies` 依赖六个平台包；平台包声明 `os`/`cpu`，内含真实 `bin/kenvoy(.exe)`。七个包都附带官方归档中的原始 `LICENSE`。
+生成器先核对六份发行 ZIP 的官方摘要，再固化每项的真实 URL、归档长度/摘要、唯一可执行成员及其长度/摘要。安装器依次验证 ZIP 和程序，才原子写入包内 `vendor/<binarySha256>/kenvoy(.exe)`；旧摘要缓存不能充当新程序的回退。合法的已有文件可直接复用，Unix 执行权限为 0755。
 
-[publish_npm.py](../../.github/scripts/channels/publish_npm.py) 默认只读预检：先校验全部包，再查询全部版本；仅精确 HTTP 404 表示尚未发布，鉴权、限流、网络及服务端异常均失败。显式 `--publish` 且处于 main 才写入，先发布六个平台包、最后发布主包；已有版本跳过，首次失败即停止，不盲目重试或覆盖版本。实际命令保留 `--access public --provenance --ignore-scripts`。
+运行入口只执行已安装程序并保留参数、stdio 与退出结果，不再联网补装。若使用 `--ignore-scripts` 跳过安装，局部依赖可执行 `npm rebuild kenvoy`，全局安装执行 `npm rebuild -g kenvoy`。npm 12 默认还会拦截未授权的依赖脚本：局部项目须先通过 `npm install-scripts approve kenvoy` 审批，全局安装/重建才使用 `--allow-scripts=kenvoy`。不能把 npm install 的退出码 0 当成二进制已安装。
+
+下载遵循 npm/HTTP(S) 代理及 NO_PROXY，保留 TLS 校验；仅接受官方 GitHub HTTPS 地址及有限的官方 CDN 跳转。下载中断、长度/摘要错误、非法或重复 ZIP 成员都使安装失败，不留下可运行的半成品。ZIP 与代理库只是通用 JavaScript 依赖，不是 Kenvoy 平台分包；版本来源见[技术栈](../reference/technology-stack.md)。
+
+[publish_npm.py](../../.github/scripts/channels/publish_npm.py) 使用 `--package <kenvoy目录>`，默认只读预检；仅精确 HTTP 404 表示该版本未发布，鉴权、限流、网络及服务端异常均失败。CI 中显式 `--publish` 且处于 main 才上传这个包；已有版本跳过，不盲目重试或覆盖。`--ignore-scripts` 只作用于发布操作，不会取消用户安装时的 postinstall。
 
 ### npm 鉴权与首次接入
 
 - 长期使用 Trusted Publishing（OIDC）：GitHub-hosted runner、`id-token: write`、npm ≥ 11.5.1、Node ≥ 22.14；绑定仓库 `zerobiubiu/kenvoy` 和工作流文件 `channels.yml`，包的 `repository.url` 须对应本仓库。现有工作流让 npm 自行选择 OIDC，缺少 `NPM_TOKEN` 不会提前阻断有效的可信发布。
-- 首次创建包与建立绑定是独立前提。七个包尚不存在时，不能声称仅配置 OIDC 就已可发布；首发需由拥有包名权限的账号通过受允许的交互 2FA 或 Granular token 完成。每个包建立 Trusted Publisher 后再撤掉临时 Token。
+- 首次创建包与 OIDC 绑定是独立前提。手动首发须得到明确授权，使用已验证的正式归档及 npm 账号要求的 2FA。现在只需给 `kenvoy` 配置一个 Trusted Publisher，不再有六个平台包的绑定；本地手动发布不伪造 main 上下文或 CI provenance。
 - 不再创建旧式 Automation token。npm 自 2025 年 11 月起仅支持 Granular token；其绕过 2FA 的直接发布方式将于 2027 年 1 月退役。不得绕过账号或组织的强制 2FA 要求。
 - 自 2026 年 9 月起，新可信发布配置还须明确允许工作流执行 `npm publish`，不能只启用 staging。新绑定两天内未首次发布会失效，应在实际发布窗口配置，而非长期提前占位。
 - `npm whoami`/`npm view` 不能证明 OIDC 已获发布授权；以真实受授权发布及安装结果验收。
 
-依据：[Access tokens](https://docs.npmjs.com/about-access-tokens/)、[Trusted publishers](https://docs.npmjs.com/trusted-publishers/)（2026-11-04 核对）。
+依据：[Access tokens](https://docs.npmjs.com/about-access-tokens/)、[Trusted publishers](https://docs.npmjs.com/trusted-publishers/)。OIDC 字段使用 GitHub 用户 `zerobiubiu`、仓库 `kenvoy`、工作流文件名 `channels.yml`；当前 job 未配置 environment，可留空。必须允许直接 `npm publish`，只允许 staging 不足以执行现有 CI。账号与 OIDC 由用户自行配置，不在聊天中提交密码、验证码或 Token。
 
-安装：
+安装（npm 12 只授权本包，不全局放行依赖脚本）：
 
 ```text
-npm install -g kenvoy
+npm install -g kenvoy --allow-scripts=kenvoy
 kenvoy --version
 ```
+
+局部项目也可先执行 `npm install-scripts approve kenvoy`，再执行 rebuild；该审批命令不支持全局模式。依据：[npm install-scripts](https://docs.npmjs.com/cli/v12/commands/npm-install-scripts/)。
 
 ## Homebrew
 
@@ -77,7 +78,7 @@ scoop install kenvoy
 
 | Secret | 用途 | 生成方式 |
 |---|---|---|
-| `NPM_TOKEN` | 首次接入时的过渡发布凭据；配置有效 OIDC 后可省略 | 获准发布七个包的 Granular token；不能使用已退役 Automation token |
+| `NPM_TOKEN` | 未采用有效 OIDC 时的过渡发布凭据 | 获准发布 `kenvoy` 的 Granular token；不能使用已退役 Automation token |
 | `PACKAGES_TOKEN` | 推送 Homebrew tap 与 Scoop bucket | 对 `homebrew-tap`、`scoop-bucket` 有写权限的 GitHub 凭据 |
 
 除 npm 可选择有效 OIDC 外，各 job 缺少必要 Secret 时明确失败，不伪造成功。所有密钥只在对应 job 注入，不打印、不写入发布制品。复用现有 GitHub 登录凭据须获得授权；它的权限可能大于渠道所需权限，后续改为专用最小权限凭据时应单独验证，不擅自撤销现有登录。
@@ -98,4 +99,4 @@ APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 均已退役，不再配
 
 ## 验证边界
 
-当前验证范围为保留渠道的单元回归、真实归档生成、删除前后产物逐字节对照、npm 封装运行和工作流检查，证据见 [0032](../changes/0032-retire-linux-and-winget-channels.md#执行验证记录)。旧 Linux 仓库与 WinGet 的验证只保留在历史记录中，不属于现行发布范围。未运行远端工作流或真实渠道安装；不能把 Secret 配置和本地生成当成已上线。
+当前验收覆盖单包生成和发布边界、六目标平台选择、真实 ZIP 下载/双重校验/原子安装、命令运行与失败保护；实际执行记录见 [0033](../changes/0033-single-npm-package-download.md#执行验证记录)。不将未运行的平台或远端 CI 记作通过，也不把源码版本、本地 npm 包与实际注册表版本混为一谈。

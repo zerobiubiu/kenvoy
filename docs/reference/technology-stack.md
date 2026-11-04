@@ -61,6 +61,19 @@
 
 默认 Runtime 的生产 npm 依赖仅 React、React DOM 和 React Router。其余是构建或测试工具；应用自己的组件库由应用 package.json 与锁文件管理。MUI/Emotion 已从框架及探针依赖移除，选择原因见 [ADR 0010](../decisions/0010-native-components-and-data-bindings.md)。
 
+### npm CLI 安装器依赖
+
+这组依赖只用于 npm 单包的二进制下载安装，不进入 React Runtime、KEngine 或 Rust 正常依赖闭包。版本单一来源是 [npm_runtime/package.json](../../.github/scripts/channels/npm_runtime/package.json)，完整解析与校验值保存在同目录 [package-lock.json](../../.github/scripts/channels/npm_runtime/package-lock.json)。
+
+| 安装器直接依赖 | 精确版本 | 用途与来源 |
+|---|---|---|
+| fflate | 0.8.2 | 校验后读取唯一 ZIP 成员；npm registry，MIT |
+| https-proxy-agent | 7.0.6 | HTTP(S) 代理 CONNECT，保持 TLS 校验；npm registry，MIT |
+| proxy-from-env | 1.1.0 | npm/环境代理及 NO_PROXY 选择；npm registry，MIT |
+
+安装器使用 Node.js ≥18，按平台下载对应正式 ZIP，验证归档与二进制的长度和 SHA-256，再写入摘要隔离目录；不需要外部解压工具或 Rust。源码、测试与工程依赖位于 `.github/scripts/channels/npm_runtime/`，具体流程见[渠道操作](../operations/distribution-channels.md)。
+
+
 ## 正式实现与技术边界
 
 ### SWC、通用 IR 与业务解释

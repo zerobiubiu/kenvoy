@@ -38,9 +38,9 @@
 
 0.2.0 已完成源包与六目标二进制发布：[版本日志](changes/CHANGELOG.md)、[发布操作](operations/releasing.md)及[执行记录 0019](changes/0019-crates-and-binary-release.md)。最近入口与 CLI 修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)及[文件与图片契约](contracts/file-uploads.md)。
 
-当前 dev 源码 CLI 为 0.4.2，KEngine 为 0.2.0，尚未发布；项目格式仍为 0.4.0，既有最低 CLI 声明为 0.4.0 的项目继续兼容。create 会把新项目的最低 CLI 设为创建时版本，本版生成值为 0.4.2。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；历史实施事实保留，不将本地版本等同于已上线。版本标签安排见[0031](changes/0031-release-version-alignment.md)和后续[0032](changes/0032-retire-linux-and-winget-channels.md)。
+当前 dev 源码 CLI 为 0.4.3，KEngine 为 0.2.0，尚未发布；项目格式仍为 0.4.0，既有最低 CLI 声明为 0.4.0 的项目继续兼容。create 会把新项目的最低 CLI 设为创建时版本，本版生成值为 0.4.3。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；历史实施事实保留，不将本地版本等同于已上线。
 
-多渠道发布现仅保留 npm、Homebrew、Scoop；APT/RPM/Alpine/Arch/WinGet 的退役、凭据清理与 0.4.2 发布准备见[0032](changes/0032-retire-linux-and-winget-channels.md)。crates.io 与 GitHub Release 六目标归档继续保留；账号待办、版本标签门禁及首次发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。尚未执行本轮远端发布。
+渠道仅保留 npm、Homebrew、Scoop。npm 只发布单个 `kenvoy`，安装时按系统与架构下载官方二进制；实现、手动首发与后续 OIDC 入口见[0033](changes/0033-single-npm-package-download.md)。渠道退役见[0032](changes/0032-retire-linux-and-winget-channels.md)，当前注册表状态及发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 仍保留六目标 ZIP。
 
 ## 文档规范
 

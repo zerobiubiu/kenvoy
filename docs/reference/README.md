@@ -26,6 +26,7 @@
 
 - Rust 版本、共享依赖与 Workspace：[根 Cargo.toml](../../Cargo.toml)、[Cargo.lock](../../Cargo.lock)。成员依赖见 [KEngine manifest](../../crates/kengine/Cargo.toml)、[Kenvoy manifest](../../crates/kenvoy/Cargo.toml)、[测试成员 manifest](../../crates/kenvoy-tests/Cargo.toml)和 [xtask manifest](../../xtask/Cargo.toml)。测试和工程依赖不等于产品依赖。
 - 前端依赖与构建配置：[package.json](../../crates/kenvoy/frontend/package.json)、[package-lock.json](../../crates/kenvoy/frontend/package-lock.json)、[vite.config.mjs](../../crates/kenvoy/frontend/vite.config.mjs)、[tsconfig.json](../../crates/kenvoy/frontend/tsconfig.json)。用户应用自己的组件库由其项目依赖管理，不属于默认 Runtime 的依赖承诺。
+- npm CLI 安装器依赖：[工程声明](../../.github/scripts/channels/npm_runtime/package.json)、[锁文件](../../.github/scripts/channels/npm_runtime/package-lock.json)；只服务于单包下载安装，不属于应用前端依赖。
 - 实现入口：[KEngine](../../crates/kengine/src/)、[Kenvoy](../../crates/kenvoy/src/)、[React Runtime](../../crates/kenvoy/frontend/src/)。相关机制见[KEngine 设计](../architecture/kengine-design.md)、[前端 Runtime](../architecture/frontend-runtime.md)、[JavaScript Runtime](../architecture/javascript-runtime.md)和[数据库设计](../architecture/database-design.md)。
 - 工程与验证入口：[xtask](../../xtask/)、[kenvoy-tests](../../crates/kenvoy-tests/)及[工程流程](../development/engineering-workflow.md)；公开数据结构见[Generic IR](../contracts/generic-ir.md)与[Application IR](../contracts/application-ir.md)，运行设置见[项目配置](../contracts/project-configuration.md)。
 

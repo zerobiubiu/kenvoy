@@ -36,6 +36,15 @@ dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitH
 
 开发统一使用 dev，只有用户批准合并 main 才进入发布。[标签维护入口](../../.githooks/maintain-version-tags)由提交、切换回 dev、合并完成及推送前钩子复用；首次克隆需按[Git 与发布操作](../operations/releasing.md)启用本仓库 hooksPath。轻量 CI 协调脚本位于 [.github/scripts](../../.github/scripts/)，与本地 Rust 工程入口分工，不恢复 tools 或额外产品 Workspace 成员。
 
+### npm 分发安装器
+
+安装器的工程依赖与锁文件独立位于 `.github/scripts/channels/npm_runtime/`，不进入 React Runtime 或 Cargo 产品依赖。准备依赖时只用 `npm ci --prefix .github/scripts/channels/npm_runtime --ignore-scripts --no-audit --no-fund`，不运行未审查的依赖脚本。
+
+生成器与发布器运行 `uv run --no-project --python 3.12 python -B -m unittest discover -s .github/scripts/channels/tests -v`。Node 行为套件运行 `node --test .github/scripts/channels/tests/npm_runtime.test.cjs .github/scripts/channels/tests/npm_runtime_network.test.cjs .github/scripts/channels/tests/npm_runtime_runner.test.cjs`；Windows 原生 Ctrl+C 夹具可通过 `KENVOY_TEST_PYTHON` 指定已准备的 Python 3 路径。
+
+发布前还需对真实生成 tarball 执行匿名隔离安装、CLI 运行与摘要校验；npm 12 注册表全局安装仅为本包添加 `--allow-scripts=kenvoy`，本地 tarball 则匹配精确 `file:` 来源，局部安装通过 `npm install-scripts approve` 授权。不能以安装退出码 0 代替 postinstall 已执行。实际首发不属于测试，必须单独授权。细节见[渠道操作](../operations/distribution-channels.md)。
+
+
 ## 代码层次与拆分
 
 产品和前端按[DDD 目录规范](../architecture/ddd-structure.md)组织；xtask 使用 `checks/commands`，测试支撑使用 `process/fixture/protocol`，不为工程编排创建业务领域层。

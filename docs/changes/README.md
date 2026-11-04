@@ -46,6 +46,7 @@
 | 0030 | [退役 Chocolatey 与 AUR 渠道](0030-remove-chocolatey-and-aur.md) | 已执行；删除工作流 job、生成器、测试与现行文档，未发布 | 现行渠道收敛为 npm/Homebrew/Scoop/WinGet 与 APT/RPM/Alpine/Arch 仓库 |
 | 0031 | [发布版本对齐：CLI 0.4.1 与 AUR 凭据清理](0031-release-version-alignment.md) | 已执行；版本、锁文件、断言与文档对齐，未推送 | CLI 0.4.1、`v0.4.1` 本地标签、删除 AUR Secret、0.4.0 并入本版 |
 | 0032 | [退役 Linux 软件源与 WinGet，准备 CLI 0.4.2](0032-retire-linux-and-winget-channels.md) | 已执行；移除五类发布源及四项专用 Secret，保留渠道通过本地验证，未发布 | npm/Homebrew/Scoop、六目标 ZIP、0.4.2 版本与本地标签安排 |
+| 0033 | [npm 单包按平台下载与 CLI 0.4.3](0033-single-npm-package-download.md) | 已执行；单包安装器、0.2.0 正式 npm 首发及 Windows/Linux 注册表安装、0.4.3 本地验证 | 移除平台分包、下载/摘要/原子安装、Ctrl+C、npm 12 审批、单包 OIDC 与旧分包撤销状态 |
 
 ## 关联代码与配置
 
@@ -78,3 +79,5 @@
 0031 解决源码发布门禁与既有标签树不一致的问题：按用户选择递增 PATCH 至 0.4.1 并创建新标签，不移动 `v0.4.0`；0.4.0 的产品内容随 0.4.1 交付，删除已无消费者的 AUR Secret。
 
 0032 按用户进一步要求取消 APT、RPM、Alpine、Arch 与 WinGet，并经确认准备 CLI 0.4.2；0024、0029、0030 的旧发布范围不再作为操作依据。历史实施和验证事实不变，仅将已删除源码的失效链接定位到其原始提交；当前配置统一见渠道操作与进度页。
+
+0033 按用户要求将 npm 改为一个 `kenvoy` 包，安装时下载当前平台的正式归档；替代 0024、0029 中的平台分包方案。0.2.0 手动首发、旧分包撤销与尚未发布的 0.4.3 源码分别记录，不混同为一次已完成的远端发布。
