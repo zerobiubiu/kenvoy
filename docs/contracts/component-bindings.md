@@ -63,10 +63,20 @@ file 重载额外取得 `uploadState/upload/removeUpload/cancelUpload`，复用�
 - `useForm()`：资源表单状态；只在对应上下文使用。
 - `useAction/callAction`：沿用服务端 Action 通道。
 - `useI18n()`：框架原生语言状态、`t`、`formatNumber/formatDate/formatDateTime` 和语言切换；无需应用 Provider 或第三方国际化库，规则见[原生国际化](i18n.md)。
+- `useLocale()`：读取同一上下文中的当前规范语言代码，页面内切换后响应式更新。
 
 普通展示组件无需绑定资源；涉及业务数据的自定义组件使用这些接口，不复制字段 Schema。原生协议要求无法靠 TypeScript 阻止恶意浏览器脚本，真正的类型、授权与选项验证始终在 Rust 服务端执行。
 
 资源和字段标签在显示层按原生键翻译；选项 `value`、远程选项业务标签、字段草稿和规范提交值不被翻译。自定义组件的任意 props 不自动当成文案，使用 `useI18n().t('custom.<键>', params, fallback)` 明确声明。重载继续消费同一绑定，不把本地化数字、日期或布尔标签写回业务值。
+
+## 编辑器与 JSX 类型
+
+dev 后续实现通过 `kenvoy types` 交付真实 SDK 声明和项目接线，尚未发布；操作与三条 paths 见 [CLI 编辑器类型](../operations/cli-design.md#编辑器类型)。不要在项目中写空壳 `declare module '@kenvoy/client'`，也不要安装同名占位 npm 包。
+
+`jsxImportSource: @kenvoy/client` 使用独立 JSX 类型命名空间：DSL 的 app/page/resource/字段等具有具体属性，text、form、select、image 等同名标签与普通 React HTML/SVG 分支择一匹配，保留事件、aria、children、ref 和自定义组件 props 检查。不全局污染 React.JSX，不用任意标签 any 索引消除诊断。浏览器中的 jsx/jsxs/jsxDEV/Fragment 仍转发到同一 React 运行时。
+
+SDK 的声明由 `src/sdk.ts` 及其真实传递依赖生成，不维护另一份手写 API；`useI18n/useLocale`、资源绑定、动作、上传和 Image 的类型与实际实现一致。类型检查仍不替代 Rust 对静态 Schema、值域和服务端权限的验证。
+
 
 
 ## React 组件库

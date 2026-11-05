@@ -320,7 +320,6 @@ fn newly_created_template_contains_complete_accurate_business_translations() -> 
     );
     assert!(root.join("language.schema.json").is_file());
     assert!(!root.join("locales").exists());
-    assert!(!root.join("package.json").exists());
     assert!(!root.join("node_modules").exists());
     assert!(!project.database.exists());
     Ok(())

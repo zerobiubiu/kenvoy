@@ -12,7 +12,7 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.4），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；dev 后续实现还创建编辑器 tsconfig.json、私有 package.json 和 .kenvoy/types 声明。项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.4），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
 
 check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 
@@ -22,6 +22,33 @@ kenvoy check --resource customers --input patch.json --patch
 ```
 
 --resource/--input 必须配对。Create 补默认值和可选 null，Patch 缺失字段表示不修改；显式 null 仍受可空性限制。输出明确标记未写数据库。
+
+## 编辑器类型
+
+以下为 dev 未发布能力，需要本仓库源码构建的 CLI：
+
+```text
+kenvoy --project customer-app types
+```
+
+命令把真实 SDK 源码生成的声明写到 `.kenvoy/types`，包括 `sdk.d.ts`、生产/开发 JSX runtime 及传递类型；不解析或执行项目源码、不校验译文内容、不打开业务库，也不调用 npm。缺少 `tsconfig.json` / `package.json` 时创建默认文件；已有文件即使损坏也逐字保留，不自动合并或覆盖。
+
+JSON 报告的 `status` 是 `declarations_generated`，不是“项目已通过类型检查”；`configuration_review_required`、两项配置的 `created/preserved`、`required_tsconfig`、`recommended_package`、`install_command` 与 `typecheck_command` 指明还需做什么。新建清单可在项目根显式执行 `npm install --ignore-scripts`；已有清单按报告安装精确开发依赖并补 `scripts.typecheck`，再执行 `npm run typecheck`。
+
+默认配置采用 strict、noEmit、Bundler、`jsx: react-jsx` 和 `jsxImportSource: @kenvoy/client`，三项路径映射为：
+
+| 模块 | 相对 tsconfig.json 的类型文件 |
+|---|---|
+| `@kenvoy/client` | `./.kenvoy/types/sdk.d.ts` |
+| `@kenvoy/client/jsx-runtime` | `./.kenvoy/types/presentation/jsx-runtime.d.ts` |
+| `@kenvoy/client/jsx-dev-runtime` | `./.kenvoy/types/presentation/jsx-dev-runtime.d.ts` |
+
+开发依赖为与框架匹配的 `typescript`、`@types/react`、`@types/react-dom`，版本来自框架 package.json。React 运行包仍由 Kenvoy 共享，不要求安装另一个 React 或 npm `@kenvoy/client`。配置覆盖项目内 JS/TS/JSX/TSX，排除生成目录、依赖、迁移、构建输出及持久化目录；不会设置 baseUrl、skipLibCheck 或任意标签 any 索引。
+
+CLI 升级、重新克隆或清理 `.kenvoy` 后重新执行 `kenvoy types`。生成清单用摘要接管自身声明，拒绝同名用户文件、改动过的当前声明、越界路径及链接；只清理仍归属生成器的过期声明。编辑器仍显示缓存诊断时，重新加载 TypeScript 项目或重启 TS Server，并选择项目安装的 TypeScript 版本。
+
+`npm run typecheck` 检查编辑器/API 类型，`kenvoy check` 检查声明语义、权限、Schema 和模块边界，两者不能互相替代。实现和实际正反向检查见 [0038](../changes/0038-editor-types-and-jsx-runtime.md)。
+
 
 ## 查看解析结果
 

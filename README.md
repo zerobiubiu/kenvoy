@@ -56,6 +56,19 @@ kenvoy dev                           # http://127.0.0.1:3000
 
 Kenvoy CLI **0.4.4** 已发布，KEngine 保持 **0.2.0**。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
 
+### 编辑器类型支持（dev 未发布）
+
+源码构建的 CLI 为新项目生成 `tsconfig.json`、私有开发依赖清单和真实 SDK/JSX 声明；基础 DSL 运行仍不要求 Node。缺少这些配置的已有项目可执行：
+
+```text
+kenvoy types
+npm install --ignore-scripts
+npm run typecheck
+```
+
+若已有 `package.json` 或 `tsconfig.json`，`types` 会保留原文件，按其 JSON 报告补齐设置并执行 `install_command`，不要直接覆盖原配置。不要安装空壳 `@kenvoy/client` 或重复 React 运行包，也不要用 `any`、空模块声明或关闭 strict 消红。完整操作与限制见[编辑器类型](docs/operations/cli-design.md#编辑器类型)；该能力尚未包含在已发布的 0.4.4 中。
+
+
 
 ### 生产运行
 
@@ -65,7 +78,7 @@ kenvoy build    # 生成版本化应用描述、客户端资产与服务端模�
 kenvoy run      # 加载生产产物并启动；有源码且需要更新时自动构建
 ```
 
-基础 DSL 运行不需要 Node/npm；只有使用自定义组件库时才需要 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps`。
+基础 DSL 运行不需要 Node/npm；自定义 React 客户端构建需要 Node/npm，编辑器类型检查也需显式准备开发类型依赖。第三方组件库仍通过 `kenvoy dev --install-deps` 或 `kenvoy build --install-deps` 显式安装，不在运行时偷偷改写依赖。
 
 `create` 已固化模板的初始迁移。之后改变数据库结构，先 `kenvoy migrate generate --description "变更说明"`，审查候选后 `kenvoy migrate seal`，再构建或启动；危险变更还需显式规则、精确确认和一致性备份。`run` 只执行已固化步骤，空库也执行完整链，不在启动时临时生成方案。
 

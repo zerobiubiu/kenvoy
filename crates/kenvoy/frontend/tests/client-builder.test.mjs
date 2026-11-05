@@ -47,7 +47,7 @@ async function execute(request, root) {
 
 test('真实 Vite 自定义组件构建保留 Hooks、用户 React 组件库、barrel CSS 和静态切片，未打包服务端入口', async t => {
   const { root, request, destination } = await fixture(t, {
-    'src/Card.tsx': `import {useState} from 'react'; import {Slot} from '@radix-ui/react-slot'; import {useAction} from '@kenvoy/client'; import clsx from 'clsx'; export function CustomerCard({label='客户'}) { const [count,setCount]=useState(0); const calculate=useAction('discount'); return <Slot className={clsx('custom-provenance-marker',{active:count>0})} onClick={()=>{setCount(count+1);void calculate([count]);}}><button>{label}:{count}</button></Slot>; }`,
+    'src/Card.tsx': `/** @jsxImportSource @kenvoy/client */\nimport {useState} from 'react'; import {Slot} from '@radix-ui/react-slot'; import {useAction} from '@kenvoy/client'; import clsx from 'clsx'; export function CustomerCard({label='客户'}) { const [count,setCount]=useState(0); const calculate=useAction('discount'); return <Slot className={clsx('custom-provenance-marker',{active:count>0})} onClick={()=>{setCount(count+1);void calculate([count]);}}><button>{label}:{count}</button></Slot>; }`,
     'src/barrel.ts': `import './card.css'; export {CustomerCard} from './Card';`,
     'src/card.css': '.custom-provenance-marker { color: rgb(11,22,33); }',
     'src/private.server.ts': 'export const PRIVATE_SERVER_ONLY_SENTINEL = "private-secret";',

@@ -51,6 +51,7 @@
 | 0035 | [发布后校验与草稿 Release 恢复](0035-cargo-package-checksum-recovery.md) | 已执行；0.4.4 源包、六目标 Release、npm OIDC 与 Homebrew/Scoop 发行及安装证据 | 上传前摘要、真实 Cargo 发布、草稿分页检索、既有产物恢复与 14 项回归 |
 | 0036 | [完整发布与六个手动打包入口](0036-workflow-entrypoints.md) | 已执行；本地入口与文档修正，未推送、未触发远端 | 自动/手动全渠道接续、八个业务入口、共享单目标打包与分支边界 |
 | 0037 | [翻译引用预检与 React 函数模板](0037-i18n-reference-check-and-react-templates.md) | 已执行；本地源码、CLI/HTTP、浏览器与回归验收，未发布 | 缺词启动阻断、useLocale、静态函数入口、模板闭包及并发夹具隔离 |
+| 0038 | [编辑器 SDK 类型与 JSX Runtime](0038-editor-types-and-jsx-runtime.md) | 已执行；原生声明交付、CLI 配置保护、真实 TypeScript 正反向与浏览器验收，未发布 | types/create、SDK 声明闭包、DSL/HTML/SVG 类型隔离、共享 React 与工具链缓存升级 |
 
 ## 关联代码与配置
 
@@ -93,3 +94,5 @@
 0036 按用户新要求替代 0021 的旧手动入口及 0024 的渠道独立手动补发：正式发布只有两个完整入口，手动打包拆成六份。历史记录保留原事实；当前入口、操作命令与本地/远端状态以现状文档为准。
 
 0037 收紧 0028 中显式业务 `t(...)` 调用的缺词行为：源码预检必须通过才能构建或启动，不能依靠 fallback 掩盖漏配；自动 DSL 默认文字和词典矩阵规则保持。新增 `useLocale()` 与静态 React 函数模板入口，不改变 KEngine、数据迁移协议或既有 0.4.4 发行事实。
+
+0038 为 0037 的 React 模板与原生 SDK 补齐编辑器交付：真实声明随 CLI 分发，create/types 建立 TypeScript 接线，保持运行时 React 共享与既有用户配置保护；不以空壳类型或关闭检查代替正确解析，不改变已有发行与标签。

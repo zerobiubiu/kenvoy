@@ -12,6 +12,7 @@
 | 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [DDD 目录规范](architecture/ddd-structure.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
+| 解决编辑器 React/SDK/JSX 报错 | [编辑器类型生成与接线](operations/cli-design.md#编辑器类型) → [SDK 与 JSX 类型](contracts/component-bindings.md#编辑器与-jsx-类型) → [实施与证据 0038](changes/0038-editor-types-and-jsx-runtime.md) |
 | 原生支持多语言 | [强制语言与集中译文](contracts/i18n.md) → [可运行 i18n-app](../examples/i18n-app/README.md) → [CLI 初始化/校验](operations/cli-design.md#原生国际化工具) → [实施与证据 0028](changes/0028-mandatory-languages-and-schema.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
 | 开发分支、版本标签与发布 | [Git 与发布操作](operations/releasing.md) → [多渠道软件包](operations/distribution-channels.md) → [分支与发布规则实施记录](changes/0021-dev-main-release-rules.md) → [标签规则定稿](changes/0023-version-tag-rules.md) |
@@ -45,6 +46,8 @@
 工作流入口已在本地按[0036](changes/0036-workflow-entrypoints.md)收敛为 main 自动/手动完整发布与六个独立手动打包入口；本轮尚未推送或触发远端任务。操作方式见[发布操作](operations/releasing.md)。
 
 dev 后续增加显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；实现及本轮验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未发布，不改变既有 0.4.4 发行与标签。
+
+dev 编辑支持增加 `kenvoy types`、新项目默认 TypeScript 配置、真实 SDK 声明和独立 JSX 类型入口；使用与配置保护规则见[CLI](operations/cli-design.md#编辑器类型)，实现和本轮验收见[0038](changes/0038-editor-types-and-jsx-runtime.md)。该能力尚未发布，不要求为基础运行安装另一份 React。
 
 ## 文档规范
 

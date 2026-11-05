@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
+    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -89,11 +90,21 @@ pub async fn build(
     {
         return Err(invalid("自定义客户端构建需要 Node.js 24 或更新版本"));
     }
+    let mut identity = Sha256::new();
+    for bytes in [PACKAGE, LOCK] {
+        identity.update((bytes.len() as u64).to_le_bytes());
+        identity.update(bytes);
+    }
+    let hash = identity.finalize();
+    let mut identity = String::with_capacity(hash.len() * 2);
+    for byte in hash {
+        write!(identity, "{byte:02x}").expect("写入字符串不会失败");
+    }
     let toolchain = directory(
         &root,
         &cache.join(format!(
             "{}-{}-{}-node{}",
-            &digest(LOCK)[..24],
+            &identity[..24],
             node.platform,
             node.architecture,
             node.version.split('.').next().unwrap_or("unknown")
@@ -121,7 +132,7 @@ pub async fn build(
     }
     // 框架缓存仅安装锁文件中的确定依赖，不读取项目 npmrc 或生命周期脚本。
     let ready = toolchain.join("ready.json");
-    let marker = json!({"lock":digest(LOCK),"node_major":node.version.split('.').next(),"platform":node.platform,"architecture":node.architecture});
+    let marker = json!({"manifest_lock":identity,"lock":digest(LOCK),"node_major":node.version.split('.').next(),"platform":node.platform,"architecture":node.architecture});
     if !ready.exists() {
         tracing::info!(target: "kenvoy::build", "首次准备锁定的客户端构建工具缓存");
         let npm = npm_cli(&node.executable)?;

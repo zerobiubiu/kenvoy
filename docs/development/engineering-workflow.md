@@ -32,6 +32,9 @@ xtask/                     # 不发布的 Rust 工程编排
 
 xtask 不自动安装工具或框架依赖。首次从源码构建仍需按[根 README](../../README.md)准备 npm 依赖；浏览器需要已有 Playwright/Chromium。内部 Cargo 命令使用 `--offline --locked`。CLI 路径从 Cargo 的 compiler-artifact 消息取得，并通过 `KENVOY_BINARY` 传给测试，支持不同 target 目录和构建 profile。
 
+前端 `npm run build` 先生成 Vite 资产，再通过 `tsconfig.types.json` 从真实 SDK 与两个 JSX runtime 根生成 `dist/types` 声明闭包；Cargo 构建要求两类产物齐全，发布源包也包含这些声明。不要仅运行 Vite 或手写一份 SDK 声明替代该步骤。编辑器消费回归由 `frontend/tests/editor-types.test.mjs` 使用真实 TypeScript 执行正反向检查；项目生成与保护边界由 `kenvoy/tests/types_cli.rs` 验证。
+
+
 dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitHub；发布与交叉编译流程见[发布操作](../operations/releasing.md)。正式对外操作由发布操作者在对应门禁完成后执行。
 
 开发统一使用 dev，只有用户批准合并 main 才进入发布。[标签维护入口](../../.githooks/maintain-version-tags)由提交、切换回 dev、合并完成及推送前钩子复用；首次克隆需按[Git 与发布操作](../operations/releasing.md)启用本仓库 hooksPath。轻量 CI 协调脚本位于 [.github/scripts](../../.github/scripts/)，与本地 Rust 工程入口分工，不恢复 tools 或额外产品 Workspace 成员。

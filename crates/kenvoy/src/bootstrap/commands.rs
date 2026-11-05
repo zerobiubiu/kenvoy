@@ -29,6 +29,10 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
         return Ok(());
     }
     let mut project = Project::discover(&cli.project)?;
+    if let Command::Types = cli.command {
+        cli::print_json(&project::editor::prepare(&project)?)?;
+        return Ok(());
+    }
     if matches!(
         cli.command,
         Command::Migrate {

@@ -7,6 +7,7 @@
 - 在 `check/build/dev/run` 执行应用前检查显式翻译调用；漏配键或无法静态确定的动态键给出源码定位并阻断，不修改已有译文或业务库。
 - `@kenvoy/client` 提供 `useLocale()`，与 `useI18n().locale` 共用响应式规范语言状态。
 - 默认入口支持静态 React 函数/箭头函数返回 JSX、局部常量及静态重导出；不执行组件，不放宽动态 Schema 或私有模块边界。实施记录见 [0037](0037-i18n-reference-check-and-react-templates.md)。
+- 新增 `kenvoy types` 与新项目默认编辑器接线，交付真实 SDK 声明和独立 JSX 类型命名空间；保留原生 React HTML/SVG 与严格 API 检查，不自动安装依赖或覆盖已有配置。实现及验证见 [0038](0038-editor-types-and-jsx-runtime.md)。
 - 尚未安排新的产品版本，不改动已发布的 CLI 0.4.4、KEngine 0.2.0 或既有标签。
 
 ## 发布工程调整（本地，未推送）

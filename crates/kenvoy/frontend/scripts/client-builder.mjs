@@ -106,6 +106,8 @@ export async function configuration(request) {
           if (id === 'virtual:kenvoy-registry') return registryId;
           if (id.startsWith('virtual:kenvoy-slice/')) return `\0${id}`;
           if (id === '@kenvoy/client') return path.join(frameworkRoot, 'src/sdk.ts');
+          if (id === '@kenvoy/client/jsx-runtime') return path.join(frameworkRoot, 'src/presentation/jsx-runtime.ts');
+          if (id === '@kenvoy/client/jsx-dev-runtime') return path.join(frameworkRoot, 'src/presentation/jsx-dev-runtime.ts');
           const slice = slices.get(importer);
           if (slice) {
             const target = slice.imports[id];

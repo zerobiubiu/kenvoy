@@ -22,12 +22,14 @@ include = [
     "/frontend/package.json",
     "/frontend/package-lock.json",
     "/frontend/tsconfig.json",
+    "/frontend/tsconfig.types.json",
     "/frontend/vite.config.mjs",
     "/frontend/src/**",
     "/frontend/scripts/client-builder.mjs",
     "/frontend/scripts/client-dev.mjs",
     "/frontend/dist/index.html",
     "/frontend/dist/assets/**",
+    "/frontend/dist/types/**",
 ]
 
 [package.metadata.binstall]

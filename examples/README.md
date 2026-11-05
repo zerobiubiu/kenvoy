@@ -14,4 +14,7 @@
 
 在任一示例目录执行 `kenvoy i18n` 会更新 Schema、仅在译文文件不存在时创建只含 Schema 引用的文件，然后严格校验译文；不会提取源码、自动翻译或覆盖已有词条。新增词条必须覆盖配置中的全部语言，每种语言的代码与别名恰好选一个。`dev`、`run` 启动前同样更新 Schema 并校验；`check`、`build` 只读校验。
 
+编辑器类型支持需要 dev 源码构建的 CLI：先在示例目录执行 `kenvoy types`，按报告补齐已有配置，再显式安装报告中的开发类型依赖并执行 `npm run typecheck`。没有配置时命令创建默认文件；已有第三方依赖清单不会被覆盖。不要另外安装 React 运行包或空壳 `@kenvoy/client`。详见[编辑器操作](../docs/operations/cli-design.md#编辑器类型)；此步骤只影响编辑支持，不改变示例业务库。
+
+
 各示例分别使用各自 `data/app.sqlite`，默认均监听 3000 端口；同时运行时修改其中一个示例的端口。详细文档入口是 [docs/README.md](../docs/README.md)。

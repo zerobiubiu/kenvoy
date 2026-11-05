@@ -8,7 +8,7 @@ use crate::{
 
 pub(crate) fn created(path: &Path) {
     println!(
-        "已创建项目：{}\n下一步：进入项目目录，执行 kenvoy dev",
+        "已创建项目：{}\n下一步：进入项目目录，执行 kenvoy dev（原生运行不需要 npm）\n编辑器类型：已生成 .kenvoy/types、tsconfig.json 与私有 package.json；请显式执行 npm install --ignore-scripts，再执行 npm run typecheck。\nCLI 升级后执行 kenvoy types 刷新编辑器声明。",
         path.display()
     );
 }

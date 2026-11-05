@@ -128,6 +128,22 @@ pub(super) const SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../../../frontend/src/presentation/i18n.tsx"),
     ),
     (
+        "src/presentation/jsx-runtime.ts",
+        include_bytes!("../../../frontend/src/presentation/jsx-runtime.ts"),
+    ),
+    (
+        "src/presentation/jsx-dev-runtime.ts",
+        include_bytes!("../../../frontend/src/presentation/jsx-dev-runtime.ts"),
+    ),
+    (
+        "src/presentation/jsx-types.ts",
+        include_bytes!("../../../frontend/src/presentation/jsx-types.ts"),
+    ),
+    (
+        "src/presentation/dsl-types.ts",
+        include_bytes!("../../../frontend/src/presentation/dsl-types.ts"),
+    ),
+    (
         "src/presentation/runtime/context.ts",
         include_bytes!("../../../frontend/src/presentation/runtime/context.ts"),
     ),

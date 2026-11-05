@@ -1,7 +1,9 @@
 //! 发行构建把通用 React 资产编入唯一的用户 Binary，不在应用启动时下载依赖。
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs, io,
+    env,
+    fmt::Write as _,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -262,7 +264,12 @@ fn source_fingerprint(package: &Path, layout: &BuildLayout) -> io::Result<String
         .collect())
 }
 
-fn collect(root: &Path, path: &Path, files: &mut Vec<(String, PathBuf)>) -> io::Result<()> {
+fn collect(
+    root: &Path,
+    path: &Path,
+    files: &mut Vec<(String, PathBuf)>,
+    include: fn(&str) -> bool,
+) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let kind = entry.file_type()?;
@@ -270,7 +277,7 @@ fn collect(root: &Path, path: &Path, files: &mut Vec<(String, PathBuf)>) -> io::
             return Err(io::Error::other("前端构建资产不能包含符号链接"));
         }
         if kind.is_dir() {
-            collect(root, &entry.path(), files)?;
+            collect(root, &entry.path(), files, include)?;
         } else if kind.is_file() {
             let full = entry.path();
             let relative = full
@@ -279,7 +286,7 @@ fn collect(root: &Path, path: &Path, files: &mut Vec<(String, PathBuf)>) -> io::
                 .to_str()
                 .ok_or_else(|| io::Error::other("资产路径不是 Unicode"))?
                 .replace('\\', "/");
-            if relative == "index.html" || relative.starts_with("assets/") {
+            if include(&relative) {
                 files.push((relative, full));
             }
         }
@@ -298,19 +305,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("缺少通用 React 发行资产。请先在 crates/kenvoy/frontend 执行 npm ci --ignore-scripts 与 npm run build，再编译 Kenvoy".into());
     }
     let mut files = Vec::new();
-    collect(&root, &root, &mut files)?;
+    collect(&root, &root, &mut files, |path| {
+        path == "index.html" || path.starts_with("assets/")
+    })?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
     if !files.iter().any(|(path, _)| path.ends_with(".js")) {
         return Err("前端构建没有生成 JavaScript 资产".into());
     }
-    let mut output = String::from("pub const BUNDLED_ASSETS: &[(&str, &[u8])] = &[\n");
-    for (name, path) in files {
-        output.push_str(&format!(
-            "({name:?}, include_bytes!({:?})),\n",
-            path.to_str().ok_or("资产绝对路径不是 Unicode")?
-        ));
+    let types_root = root.join("types");
+    if !types_root.is_dir() {
+        return Err(
+            "缺少编辑器 SDK 类型。请在 crates/kenvoy/frontend 执行 npm run build 后重新编译".into(),
+        );
     }
-    output.push_str("];\n");
+    let mut types = Vec::new();
+    collect(&types_root, &types_root, &mut types, |path| {
+        path.ends_with(".d.ts")
+    })?;
+    types.sort_by(|a, b| a.0.cmp(&b.0));
+    for required in [
+        "sdk.d.ts",
+        "presentation/jsx-runtime.d.ts",
+        "presentation/jsx-dev-runtime.d.ts",
+    ] {
+        if !types.iter().any(|(name, _)| name == required) {
+            return Err(format!("编辑器类型缺少 {required}；请重新构建前端").into());
+        }
+    }
+    let mut output = String::new();
+    for (constant, assets) in [("BUNDLED_ASSETS", files), ("EDITOR_TYPES", types)] {
+        writeln!(output, "pub const {constant}: &[(&str, &[u8])] = &[")?;
+        for (name, path) in assets {
+            writeln!(
+                output,
+                "({name:?}, include_bytes!({:?})),",
+                path.to_str().ok_or("资产绝对路径不是 Unicode")?
+            )?;
+        }
+        output.push_str("];\n");
+    }
     output.push_str(&format!(
         "pub const FRAMEWORK_FINGERPRINT: &str = {framework_fingerprint:?};\n"
     ));

@@ -111,5 +111,6 @@ pub fn create(target: &Path) -> Result<()> {
         file.write_all(content.as_bytes())
             .map_err(|error| io(&path, error))?;
     }
+    super::editor::prepare_at(&target, &config)?;
     Ok(())
 }
