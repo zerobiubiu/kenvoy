@@ -50,7 +50,6 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
     } = cli.command
     {
         project::i18n::prepare(&project, false)?;
-        database::snapshot::reject(&project.database)?;
         let shutdown = Shutdown::install();
         let output = if project.entry.is_file() {
             let fingerprint = artifact::input_fingerprint(&project)?;
@@ -67,6 +66,7 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
         } else {
             artifact::load(&project)?
         };
+        database::snapshot::reject(&project.database)?;
         return Box::pin(run_server(&project, output, None, shutdown, confirm)).await;
     }
     if let Command::Build { install_deps } = cli.command {
@@ -134,7 +134,8 @@ pub(crate) async fn execute(cli: Cli) -> Result<()> {
             input,
             patch,
         } => {
-            project::i18n::load(&project)?;
+            let i18n = project::i18n::load(&project)?;
+            javascript::validate_i18n(&program, &i18n).map_err(Error::Dsl)?;
             javascript::prepare(&program, &application, project.config.runtime.trust)?;
             if let (Some(name), Some(path)) = (resource, input) {
                 let resource = application

@@ -8,6 +8,21 @@
 
 单段 page 路径可从直接字段推导资源；多段路径须明确 page.resource。显式资源优先，同资源页面字段结构必须一致；页面 labels 独立覆盖展示，不改变持久化模型。form 支持 resource、mode=create/edit、fields 字符串数组；table 支持 resource 和 columns。
 
+dev 后续实现支持 React 常见函数模板入口，尚未发布，见 [0037](../changes/0037-i18n-reference-check-and-react-templates.md)：
+
+```tsx
+export default function App() {
+  const title = '客户登记';
+  return <app name="客户管理">
+    <page path="/customers" title={title} />
+  </app>;
+}
+```
+
+支持命名/匿名函数、函数表达式、表达式/块箭头函数，以及静态别名和既有模块导入/重导出。函数不得有参数、async/generator；函数体仅允许顺序静态 `const`、空语句和一个直接 `return`，不执行组件。最终仍须是一个 `app/page` 根，不会把任意 HTML、嵌套函数里的 JSX 或运行时分支误作业务声明。
+
+Hooks、事件、条件渲染和列表 `.map()` 放在普通 React UI 组件中；不能用它们动态生成 Schema。模板内静态常量可供返回树和客户端回调捕获，保持词法遮蔽及私有依赖边界；`.diu.tsx` 仍只展开既有静态声明，不改为执行函数。
+
 ## 表单权限与动作
 
 公开 create form 只赋予单条表单策略对应的新增能力，不开放列表、详情、更新和删除；table 不自动授权读取。多个表单策略不得并集。create form 的 fields 必须覆盖资源中必填且无默认值的字段，否则在 check 阶段诊断，不能留下永远无法成功提交的表单。action 必须显式 name/handler/runtime=server|client|shared/permission=anonymous|user|admin，handler 需已导出的函数；Server/Shared 通过受限 QuickJS 和 Execute 权限调用，Client 用于浏览器函数登记。page 可声明 permission，导航继承目标页面角色。

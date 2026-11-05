@@ -17,7 +17,9 @@ use crate::{
     },
 };
 
-pub trait ClientCodeTransformer {
+use super::static_eval::FunctionTemplateParser;
+
+pub trait ClientCodeTransformer: FunctionTemplateParser {
     fn transpile(&self, source: &str, name: &str, jsx: bool) -> Result<String, JsDiagnostic>;
 }
 
@@ -65,10 +67,13 @@ pub(crate) fn slice(
     let mut collector = Collector {
         program,
         module,
+        template_parser: transformer,
+        template_bindings: BTreeMap::new(),
         reference,
         seen: BTreeSet::new(),
         pending: VecDeque::new(),
         pieces: BTreeMap::new(),
+        local_pieces: BTreeMap::new(),
         imports: BTreeMap::new(),
         import_code: BTreeMap::new(),
     };
@@ -159,7 +164,16 @@ pub(crate) fn slice(
     {
         export_name.push('_');
     }
-    source.push_str(&format!("export const {export_name} = ({result});\n"));
+    if collector.local_pieces.is_empty() {
+        source.push_str(&format!("export const {export_name} = ({result});\n"));
+    } else {
+        source.push_str(&format!("export const {export_name} = (() => {{\n"));
+        for code in collector.local_pieces.values() {
+            source.push_str(code);
+            source.push('\n');
+        }
+        source.push_str(&format!("return ({result});\n}})();\n"));
+    }
     let jsx = matches!(
         module
             .path
@@ -187,10 +201,13 @@ pub(crate) fn slice(
 struct Collector<'a> {
     program: &'a ProgramIR,
     module: &'a ModuleIR,
+    template_parser: &'a dyn FunctionTemplateParser,
+    template_bindings: BTreeMap<(usize, usize), BTreeSet<SymbolId>>,
     reference: &'a ModuleReference,
     seen: BTreeSet<SymbolId>,
     pending: VecDeque<SymbolId>,
     pieces: BTreeMap<usize, String>,
+    local_pieces: BTreeMap<usize, String>,
     imports: BTreeMap<String, ClientImportTarget>,
     import_code: BTreeMap<usize, String>,
 }

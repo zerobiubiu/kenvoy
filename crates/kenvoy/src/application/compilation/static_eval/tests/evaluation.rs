@@ -1,7 +1,7 @@
 use serde_json::Value;
 
-use super::super::{Evaluator, StaticValue};
-use super::{Project, TestResult, element};
+use super::super::StaticValue;
+use super::{Project, TestResult, element, evaluator};
 
 #[test]
 fn literal_tree_and_const_operators_are_evaluated_without_scanning_other_jsx() -> TestResult {
@@ -15,7 +15,7 @@ fn literal_tree_and_const_operators_are_evaluated_without_scanning_other_jsx() -
     "#,
     )])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     assert_eq!(nodes.len(), 1);
     let app = element(&nodes[0]);
     assert_eq!(
@@ -39,7 +39,7 @@ fn static_arrays_objects_members_and_ordered_object_spread_are_supported() -> Te
         "const defaults={label:'旧', required:true}; const config={...defaults,label:'名称'}; const values=[1,...[2,3]]; export default <app name={config.label}><page path='/test'><number name='value' min={values[0]} max={values.length}/></page></app>;",
     )])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     let app = element(&nodes[0]);
     assert_eq!(
         app.attributes["name"],
@@ -59,7 +59,7 @@ fn duplicate_attributes_and_conflicting_jsx_spreads_are_rejected() -> TestResult
     ] {
         let project = Project::new(&[("app.tsx", source)])?;
         let program = project.program()?;
-        let error = Evaluator::new(&program)
+        let error = evaluator(&program)
             .entry(&project.entry()?)
             .expect_err("应拒绝重复属性");
         assert_eq!(error.code, "KV1105");

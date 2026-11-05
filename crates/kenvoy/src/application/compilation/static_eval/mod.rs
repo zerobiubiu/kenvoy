@@ -1,22 +1,25 @@
-//! 声明专用的静态解释器，只消费 KEngine 公共 IR，不执行 JavaScript。
+//! 声明专用的静态解释器，消费 KEngine 公共 IR 和语法适配端口，不执行 JavaScript。
 
 mod bindings;
 mod evaluator;
 mod expressions;
 mod jsx;
 mod targets;
+mod templates;
 mod values;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-use kengine::{ExpressionId, ProgramIR, SourceSpan};
+use kengine::{ExpressionId, ProgramIR, SourceSpan, SymbolId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::domain::source::SourceLocation;
+
+pub use templates::{FunctionTemplate, FunctionTemplateParser};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedReference {
@@ -86,6 +89,7 @@ enum Evaluated {
 /// 每次入口求值使用独立预算和循环栈；错误结果不能用于生成 Schema。
 pub struct Evaluator<'a> {
     program: &'a ProgramIR,
+    template_parser: &'a dyn FunctionTemplateParser,
     limits: EvalLimits,
     steps: usize,
     nodes: usize,
@@ -93,6 +97,8 @@ pub struct Evaluator<'a> {
     expressions: Vec<(PathBuf, ExpressionId)>,
     schemas: Vec<(PathBuf, String, SourceLocation)>,
     checked_modules: BTreeSet<PathBuf>,
+    template_module: Option<&'a Path>,
+    template_values: BTreeMap<SymbolId, templates::TemplateValue>,
 }
 
 #[cfg(test)]

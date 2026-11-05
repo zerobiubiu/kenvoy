@@ -1,26 +1,34 @@
 mod evaluation;
+mod function_templates;
 mod references;
 mod restrictions;
+mod template_restrictions;
 
 use std::{
     error::Error,
     fs,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use kengine::{AnalyzeOptions, Engine, ProgramIR, ResolveOptions};
 
-use super::{StaticElement, StaticNode};
+use crate::infrastructure::javascript::SwcClientCodeTransformer;
+
+use super::{Evaluator, StaticElement, StaticNode};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+static NEXT_PROJECT: AtomicUsize = AtomicUsize::new(0);
 struct Project(PathBuf);
 impl Project {
     fn new(files: &[(&str, &str)]) -> TestResult<Self> {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let project = Self(
-            std::env::temp_dir().join(format!("kenvoy-static-{}-{stamp}", std::process::id())),
-        );
+        let project = Self(std::env::temp_dir().join(format!(
+            "kenvoy-static-{}-{stamp}-{}",
+            std::process::id(),
+            NEXT_PROJECT.fetch_add(1, Ordering::Relaxed)
+        )));
         fs::create_dir(&project.0)?;
         for (name, source) in files {
             fs::write(project.0.join(name), source)?;
@@ -62,4 +70,8 @@ fn element(node: &StaticNode) -> &StaticElement {
         StaticNode::Element(element) => element,
         _ => panic!("预期 Element"),
     }
+}
+
+fn evaluator(program: &ProgramIR) -> Evaluator<'_> {
+    Evaluator::new(program, &SwcClientCodeTransformer)
 }

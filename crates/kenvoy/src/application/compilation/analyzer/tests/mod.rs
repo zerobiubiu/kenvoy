@@ -1,11 +1,13 @@
 mod boundaries;
 mod fields_options;
 mod pages;
+mod templates;
 
 use std::{
     error::Error,
     fs,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -16,15 +18,17 @@ use crate::{domain::model::ApplicationIR, infrastructure::javascript::SwcClientC
 use super::{AnalyzeResult, analyze};
 
 type TestResult<T = ()> = std::result::Result<T, Box<dyn Error>>;
+static NEXT_FIXTURE: AtomicUsize = AtomicUsize::new(0);
 struct Fixture {
     root: PathBuf,
 }
 impl Fixture {
     fn new(app: &str, files: &[(&str, &str)]) -> TestResult<Self> {
         let root = std::env::temp_dir().join(format!(
-            "kenvoy-dsl-{}-{}",
+            "kenvoy-dsl-{}-{}-{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&root)?;
         fs::write(root.join("app.tsx"), app)?;

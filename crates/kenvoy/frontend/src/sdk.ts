@@ -14,7 +14,7 @@ export { Image, AttachmentList } from './presentation/images';
 export type { ImageProps } from './presentation/images';
 export type { FileUploadBinding, FileUploadState } from './application/uploads';
 export { normalizeInput, validateField, validateRecord } from './domain/validation';
-export { useI18n } from './presentation/i18n';
+export { useI18n, useLocale } from './presentation/i18n';
 export type { I18nContextValue } from './presentation/i18n';
 export type { I18n, I18nBundle, I18nFormatters, LanguageOption, MessageParams, Translate } from './domain/i18n/model';
 

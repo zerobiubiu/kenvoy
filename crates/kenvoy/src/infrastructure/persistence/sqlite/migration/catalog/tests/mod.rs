@@ -16,9 +16,11 @@ use serde_json::{Value, json};
 use std::{
     fs,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+static NEXT_FIXTURE: AtomicUsize = AtomicUsize::new(0);
 struct Fixture {
     root: PathBuf,
     path: PathBuf,
@@ -26,8 +28,11 @@ struct Fixture {
 impl Fixture {
     fn new() -> TestResult<Self> {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("kenvoy-catalog-{}-{stamp}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "kenvoy-catalog-{}-{stamp}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
         fs::create_dir(&root)?;
         Ok(Self {
             path: root.join("app.sqlite"),

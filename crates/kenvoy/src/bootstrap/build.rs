@@ -35,6 +35,7 @@ pub async fn candidate(
         let before = artifact::input_fingerprint(project)?;
         let stage = artifact::Staging::new(project)?;
         let (application, program) = super::compile(project, session)?;
+        javascript::validate_i18n(&program, stage.i18n()).map_err(Error::Dsl)?;
         let server = javascript::prepare(&program, &application, project.config.runtime.trust)?;
         let client = client_build::build(
             project,

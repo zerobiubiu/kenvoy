@@ -3,5 +3,5 @@
 mod compiler;
 mod runtime;
 
-pub use compiler::{SwcClientCodeTransformer, prepare, validate};
+pub use compiler::{SwcClientCodeTransformer, prepare, validate, validate_i18n};
 pub use runtime::JavascriptRuntime;

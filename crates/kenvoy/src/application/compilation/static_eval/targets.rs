@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use kengine::{
-    BindingPatternKind, ExpressionShape, ModuleBindingTarget, NodeKind, ScopeId, ScopeKind,
-    SymbolKind, SymbolNamespace,
+    BindingPatternKind, ExpressionId, ExpressionShape, ModuleBindingTarget, ModuleIR, NodeKind,
+    ScopeId, ScopeKind, SymbolIR, SymbolKind, SymbolNamespace,
 };
 
 use crate::domain::source::{DslDiagnostic, SourceLocation};
@@ -43,50 +43,33 @@ impl Evaluator<'_> {
                     self.error("KV1104", source.clone(), "符号引用无效", "重新分析源码")
                 })?;
                 if symbol.kind == SymbolKind::Const {
+                    if let Some(value) = self.template_value(&path, symbol.id, source)? {
+                        return Ok(value);
+                    }
                     if symbol.scope != ScopeId(0) {
                         return Err(self.error(
                             "KV1101",
                             source.clone(),
-                            "Schema 常量必须位于模块顶层",
-                            "将静态数据声明为模块顶层 const",
+                            "Schema 常量必须位于模块顶层或当前模板已经声明的静态 const",
+                            "按顺序声明模板 const，不能提前读取或捕获其他函数的局部作用域",
                         ));
                     }
-                    let declarator = module
-                        .declarations
-                        .iter()
-                        .flat_map(|declaration| &declaration.declarators)
-                        .find(|declarator| match &declarator.pattern.kind {
-                            BindingPatternKind::Identifier(identifier) => symbol
-                                .declarations
-                                .iter()
-                                .any(|span| span == &identifier.span),
-                            _ => false,
-                        });
-                    if let Some(initializer) =
-                        declarator.and_then(|declarator| declarator.initializer)
-                    {
-                        if module.expression(initializer).is_some_and(|value| {
-                            matches!(value.kind.as_str(), "ArrowFunction" | "Function" | "Class")
-                        }) {
-                            return self
-                                .reference_for_target(
-                                    &ModuleBindingTarget::Symbol {
-                                        module: path,
-                                        symbol: symbol.id,
-                                    },
-                                    source,
-                                )
-                                .map(Evaluated::Reference);
-                        }
-                        self.ensure_static_module(&path)?;
-                        return self.eval_expr(&path, initializer);
+                    let initializer = self.const_initializer(module, symbol, source)?;
+                    if module.expression(initializer).is_some_and(|value| {
+                        matches!(value.kind.as_str(), "ArrowFunction" | "Function" | "Class")
+                    }) {
+                        return self
+                            .reference_for_target(
+                                &ModuleBindingTarget::Symbol {
+                                    module: path,
+                                    symbol: symbol.id,
+                                },
+                                source,
+                            )
+                            .map(Evaluated::Reference);
                     }
-                    return Err(self.error(
-                        "KV1101",
-                        source.clone(),
-                        "此 const 没有可直接定位的静态初始值",
-                        "首版声明常量使用独立标识符绑定；解构结构保留但不进行值推导",
-                    ));
+                    self.ensure_static_module(&path)?;
+                    return self.eval_expr(&path, initializer);
                 }
                 if matches!(symbol.kind, SymbolKind::Function | SymbolKind::Class) {
                     return self
@@ -117,6 +100,33 @@ impl Evaluator<'_> {
                 "选择明确的模块导出成员",
             )),
         }
+    }
+
+    pub(super) fn const_initializer(
+        &self,
+        module: &ModuleIR,
+        symbol: &SymbolIR,
+        source: &SourceLocation,
+    ) -> Result<ExpressionId, DslDiagnostic> {
+        module
+            .declarations
+            .iter()
+            .flat_map(|declaration| &declaration.declarators)
+            .find(|declarator| match &declarator.pattern.kind {
+                BindingPatternKind::Identifier(identifier) => {
+                    symbol.declarations.contains(&identifier.span)
+                }
+                _ => false,
+            })
+            .and_then(|declarator| declarator.initializer)
+            .ok_or_else(|| {
+                self.error(
+                    "KV1101",
+                    source.clone(),
+                    "此 const 没有可直接定位的静态初始值",
+                    "声明常量使用独立标识符绑定；解构结构保留但不进行值推导",
+                )
+            })
     }
 
     pub(super) fn reference_for_target(

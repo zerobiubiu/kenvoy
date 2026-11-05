@@ -5,16 +5,21 @@ use serde_json::Value;
 
 use crate::domain::source::{DslDiagnostic, SourceLocation};
 
-use super::{EvalLimits, Evaluated, Evaluator, StaticNode};
+use super::{EvalLimits, Evaluated, Evaluator, FunctionTemplateParser, StaticNode};
 
 impl<'a> Evaluator<'a> {
-    pub fn new(program: &'a ProgramIR) -> Self {
-        Self::with_limits(program, EvalLimits::default())
+    pub fn new(program: &'a ProgramIR, template_parser: &'a dyn FunctionTemplateParser) -> Self {
+        Self::with_limits(program, template_parser, EvalLimits::default())
     }
 
-    pub fn with_limits(program: &'a ProgramIR, limits: EvalLimits) -> Self {
+    pub fn with_limits(
+        program: &'a ProgramIR,
+        template_parser: &'a dyn FunctionTemplateParser,
+        limits: EvalLimits,
+    ) -> Self {
         Self {
             program,
+            template_parser,
             limits,
             steps: 0,
             nodes: 0,
@@ -22,6 +27,8 @@ impl<'a> Evaluator<'a> {
             expressions: vec![],
             schemas: vec![],
             checked_modules: BTreeSet::new(),
+            template_module: None,
+            template_values: Default::default(),
         }
     }
 
@@ -38,13 +45,13 @@ impl<'a> Evaluator<'a> {
         }
         self.ensure_static_module(entry)?;
         let target = self.export_target(entry, "default", &location)?;
-        match self.eval_target(target, &location)? {
+        match self.eval_entry_target(target, &location)? {
             Evaluated::Nodes(nodes) => Ok(nodes),
             _ => Err(self.error(
                 "KV1101",
                 location,
-                "默认导出必须是静态 JSX 声明树",
-                "直接导出 JSX、Fragment 或引用具有静态 JSX 初始值的 const",
+                "默认导出必须是静态 JSX 声明树或直接返回声明树的函数模板",
+                "导出 JSX、Fragment、静态 const，或无参数且仅含静态 const 与直接 return 的函数",
             )),
         }
     }

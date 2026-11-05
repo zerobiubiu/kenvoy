@@ -19,6 +19,23 @@ impl Evaluator<'_> {
         path: &Path,
         id: ExpressionId,
     ) -> Result<Evaluated, DslDiagnostic> {
+        self.eval_expression(path, id, false)
+    }
+
+    pub(super) fn eval_entry_expr(
+        &mut self,
+        path: &Path,
+        id: ExpressionId,
+    ) -> Result<Evaluated, DslDiagnostic> {
+        self.eval_expression(path, id, true)
+    }
+
+    fn eval_expression(
+        &mut self,
+        path: &Path,
+        id: ExpressionId,
+        entry: bool,
+    ) -> Result<Evaluated, DslDiagnostic> {
         let module = self.module(path)?;
         let expression = module.expression(id).cloned().ok_or_else(|| {
             self.error(
@@ -43,12 +60,16 @@ impl Evaluator<'_> {
             ));
         }
         self.expressions.push((path.into(), id));
-        let result = self.eval_shape(path, &expression, &source);
+        let result = if entry {
+            self.eval_entry_shape(path, &expression, &source)
+        } else {
+            self.eval_shape(path, &expression, &source)
+        };
         self.expressions.pop();
         result
     }
 
-    fn eval_shape(
+    pub(super) fn eval_shape(
         &mut self,
         path: &Path,
         expression: &ExpressionIR,

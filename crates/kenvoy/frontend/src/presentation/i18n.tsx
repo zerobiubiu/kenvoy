@@ -39,6 +39,11 @@ export function useI18n(): I18nContextValue {
   return useRuntimeI18n();
 }
 
+/** 读取当前规范语言代码；页面内切换语言时自动更新，不读取历史偏好。 */
+export function useLocale(): string {
+  return useRuntimeI18n().locale;
+}
+
 export function LocaleSelector() {
   const { locale, languages, setLocale, t } = useRuntimeI18n();
   if (languages.length < 2) return null;

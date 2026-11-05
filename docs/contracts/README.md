@@ -18,12 +18,12 @@
 |---|---|---|
 | [KEngine 公共 API](kengine-api.md) | 参考 | 解析、项目分析、模块解析和增量会话的参数、返回值、结果所有权、诊断及错误边界。 |
 | [Generic IR v1](generic-ir.md) | 参考 | 通用源码、JSX、表达式、声明、语义、模块绑定和图的结构、位置及序列化兼容规则。 |
-| [已实现声明语法](dsl-specification.md) | 参考 | DSL 根结构、标签与字段、权限、Action、静态求值、模块边界和数据输入约束。 |
+| [已实现声明语法](dsl-specification.md) | 参考 | DSL 根结构、静态 React 函数模板、标签与字段、权限、Action、求值、模块边界和数据输入约束。 |
 | [Application IR 与客户端描述](application-ir.md) | 参考 | 统一业务模型、对象标识、模块引用、身份投影及运行代际与产物的衔接。 |
 | [项目配置与路径规则](project-configuration.md) | 参考 | `kenvoy.toml` 默认值、严格校验、路径保护、开发重载和生产部署输入。 |
 | [组件重载、数据绑定与联动选项](component-bindings.md) | 参考 | 系统组件重载、字段及表单绑定、静态与跨资源选项接口、权限和 `@kenvoy/client` SDK。 |
 | [多文件上传与图片展示](file-uploads.md) | 参考 | file 数组、SQLite 附件绑定与清理、上传/访问授权、图片节点及 SDK Image。 |
-| [kenvoy 项目原生国际化](i18n.md) | 参考 | 强制 languages、代码/别名/display、集中译文、生成 Schema、设备语言、SDK、权限投影与无源码交付。 |
+| [kenvoy 项目原生国际化](i18n.md) | 参考 | 强制 languages、集中译文/Schema、源码键启动预检、设备语言、useLocale/SDK、权限投影与无源码交付。 |
 
 ## 推荐阅读顺序
 

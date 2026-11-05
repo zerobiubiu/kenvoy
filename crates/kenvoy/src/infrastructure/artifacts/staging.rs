@@ -96,6 +96,9 @@ impl Staging {
     pub fn client(&self) -> PathBuf {
         self.directory.join("client")
     }
+    pub fn i18n(&self) -> &I18nBundle {
+        &self.i18n
+    }
     /// 开发候选先封存版本，只有数据库和运行态发布成功后才激活清单。
     pub fn seal(
         self,

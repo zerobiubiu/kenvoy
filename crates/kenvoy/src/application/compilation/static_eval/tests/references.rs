@@ -1,7 +1,7 @@
 use serde_json::Value;
 
-use super::super::{Evaluator, StaticValue};
-use super::{Project, TestResult, element};
+use super::super::StaticValue;
+use super::{Project, TestResult, element, evaluator};
 
 #[test]
 fn cross_module_constants_reexports_schema_fragments_and_ui_references_are_distinct() -> TestResult
@@ -26,7 +26,7 @@ fn cross_module_constants_reexports_schema_fragments_and_ui_references_are_disti
         ),
     ])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     let app = element(&nodes[0]);
     let resource = element(&app.children[0]);
     assert_eq!(resource.children.len(), 2);
@@ -65,7 +65,7 @@ fn exported_function_and_arrow_handlers_remain_module_references() -> TestResult
         ),
     ])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     for child in &element(&nodes[0]).children {
         assert!(matches!(
             element(child).attributes["handler"],
@@ -101,7 +101,7 @@ fn runtime_imports_preserve_barrels_aliases_and_namespace_export_names() -> Test
         ),
     ])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     let app = element(&nodes[0]);
     assert_eq!(
         app.attributes["name"],
@@ -145,7 +145,7 @@ fn external_reexports_keep_local_facade_and_local_exports_keep_their_module() ->
         ),
     ])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     let app = element(&nodes[0]);
     let first = element(&app.children[0]);
     let reference = first.module_ref.as_ref().ok_or("缺少组件引用")?;
@@ -179,7 +179,7 @@ fn nested_namespace_runtime_references_are_rejected_instead_of_losing_the_facade
             ("ui.tsx", "export function Card(){ return <div/>; }"),
         ])?;
         let program = project.program()?;
-        let error = Evaluator::new(&program)
+        let error = evaluator(&program)
             .entry(&project.entry()?)
             .expect_err("应诊断未支持的成员链");
         assert_eq!(error.code, "KV1104");
@@ -198,7 +198,7 @@ fn imported_lowercase_components_cannot_masquerade_as_builtin_fields() -> TestRe
         ("ui.tsx", "export function text(){return <input/>;}"),
     ])?;
     let program = project.program()?;
-    let nodes = Evaluator::new(&program).entry(&project.entry()?)?;
+    let nodes = evaluator(&program).entry(&project.entry()?)?;
     let field = element(&element(&element(&nodes[0]).children[0]).children[0]);
     assert_eq!(field.name, "text");
     assert!(field.module_ref.as_ref().is_some_and(

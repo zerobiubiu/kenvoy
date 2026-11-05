@@ -1,6 +1,7 @@
 import { I18nDemo } from './I18nDemo';
 
-export default <app name="国际化报名示例">
+export default function App() {
+  return <app name="国际化报名示例">
   <resource name="registrations">
     <text name="name" label="姓名" required maxLength={80} />
     <number name="guests" label="同行人数" integer min={1} max={10} default={1} />
@@ -24,4 +25,5 @@ export default <app name="国际化报名示例">
     <item path="/register" label="提交报名" />
     <item path="/registrations" label="查看报名" />
   </navigation>
-</app>;
+  </app>;
+}

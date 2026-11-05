@@ -4,6 +4,8 @@
 mod catalog;
 #[path = "i18n_support/http.rs"]
 mod http;
+#[path = "i18n_support/references.rs"]
+mod references;
 #[path = "i18n_support/reload.rs"]
 mod reload;
 #[path = "i18n_support/startup.rs"]

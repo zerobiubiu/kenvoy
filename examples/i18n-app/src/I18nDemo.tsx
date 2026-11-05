@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useI18n } from '@kenvoy/client';
+import { useI18n, useLocale } from '@kenvoy/client';
 
 export function I18nDemo() {
-  const { locale, t, formatNumber, formatDate, formatDateTime } = useI18n();
+  const locale = useLocale();
+  const { t, formatNumber, formatDate, formatDateTime } = useI18n();
   const [count, setCount] = useState(1);
   return <section className="kv-stack" aria-label={t('demo.title')}>
     <h2>{t('demo.title')}</h2>

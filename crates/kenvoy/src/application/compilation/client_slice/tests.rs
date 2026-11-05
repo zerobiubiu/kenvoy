@@ -164,3 +164,74 @@ fn plain_typescript_generics_and_generated_export_names_are_preserved() -> TestR
     assert!(!slice.code.contains("<T>"));
     Ok(())
 }
+
+#[tokio::test]
+async fn template_local_constants_are_captured_without_executing_the_entry_or_private_action()
+-> TestResult {
+    let fixture = Fixture::new(
+        "import {Card} from './card'; import {secret} from './secret.server'; const prefix='外层';export function readPrefix(){return prefix;} export default function App(){const prefix='模板',label=prefix+'局部';return <app name='模板'><action name='secret' runtime='server' permission='admin' handler={secret}/><page path='/test'><Card onClick={()=>label+readPrefix()}/></page></app>;}",
+        &[
+            ("card.tsx", CARD),
+            (
+                "secret.server.ts",
+                "export function secret(){throw new Error('不能进入客户端');}",
+            ),
+        ],
+    )?;
+    let program = fixture.program()?;
+    let app = analyze(&program, &fixture.0.join("app.tsx").canonicalize()?, "测试")
+        .application
+        .ok_or("函数模板分析失败")?;
+    let reference = app
+        .module_references
+        .iter()
+        .find(|reference| reference.kind == ModuleReferenceKind::ClientExpression)
+        .ok_or("缺少局部常量的客户端表达式")?;
+    let slice = client_slice(&program, &app, reference)?;
+    assert!(slice.imports.is_empty());
+    let runtime = rquickjs::AsyncRuntime::new()?;
+    let context = rquickjs::AsyncContext::full(&runtime).await?;
+    let value = context
+        .async_with(async |ctx| -> rquickjs::Result<String> {
+            let (module, ready) = rquickjs::Module::declare(
+                ctx.clone(),
+                "template-local.mjs",
+                slice.code.as_bytes(),
+            )?
+            .eval()?;
+            ready.into_future::<()>().await?;
+            let factory: rquickjs::Function = module.get(slice.export_name.as_str())?;
+            let callback: rquickjs::Function = factory.call(())?;
+            callback.call(())
+        })
+        .await?;
+    assert_eq!(value, "模板局部外层");
+    Ok(())
+}
+
+#[test]
+fn template_local_aliases_cannot_hide_private_client_dependencies() -> TestResult {
+    let fixture = Fixture::new(
+        "import {Card} from './card'; import {secret} from './secret.server'; export default ()=>{const callback=secret;return <page path='/test'><Card onClick={()=>callback()}/></page>;};",
+        &[
+            ("card.tsx", CARD),
+            (
+                "secret.server.ts",
+                "export function secret(){return 'PRIVATE';}",
+            ),
+        ],
+    )?;
+    let result = analyze(
+        &fixture.program()?,
+        &fixture.0.join("app.tsx").canonicalize()?,
+        "测试",
+    );
+    assert!(result.application.is_none());
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|error| error.code == "KV2101")
+    );
+    Ok(())
+}

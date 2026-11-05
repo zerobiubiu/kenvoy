@@ -42,7 +42,7 @@ pub fn analyze(
     default_name: &str,
     transformer: &impl ClientCodeTransformer,
 ) -> AnalyzeResult {
-    let nodes = match Evaluator::new(program).entry(entry) {
+    let nodes = match Evaluator::new(program, transformer).entry(entry) {
         Ok(nodes) => nodes,
         Err(error) => {
             return AnalyzeResult {

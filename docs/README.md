@@ -44,6 +44,8 @@
 
 工作流入口已在本地按[0036](changes/0036-workflow-entrypoints.md)收敛为 main 自动/手动完整发布与六个独立手动打包入口；本轮尚未推送或触发远端任务。操作方式见[发布操作](operations/releasing.md)。
 
+dev 后续增加显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；实现及本轮验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未发布，不改变既有 0.4.4 发行与标签。
+
 ## 文档规范
 
 ### 存放、分类与命名

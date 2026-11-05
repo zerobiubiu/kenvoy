@@ -1,13 +1,20 @@
 //! 服务端模块的 TypeScript 转换与可持久化白名单；不在编译阶段执行项目代码。
 
+mod i18n;
 mod parser;
 mod prepare;
+mod templates;
 mod validation;
 
 use crate::application::{
-    compilation::client_slice::ClientCodeTransformer, execution::JsDiagnostic,
+    compilation::{
+        client_slice::ClientCodeTransformer,
+        static_eval::{FunctionTemplate, FunctionTemplateParser},
+    },
+    execution::JsDiagnostic,
 };
 
+pub use i18n::validate_i18n;
 pub use prepare::prepare;
 pub use validation::validate;
 
@@ -17,6 +24,16 @@ pub struct SwcClientCodeTransformer;
 impl ClientCodeTransformer for SwcClientCodeTransformer {
     fn transpile(&self, source: &str, name: &str, jsx: bool) -> Result<String, JsDiagnostic> {
         parser::transpile(source, name, jsx)
+    }
+}
+
+impl FunctionTemplateParser for SwcClientCodeTransformer {
+    fn function_template(
+        &self,
+        module: &kengine::ModuleIR,
+        span: &kengine::SourceSpan,
+    ) -> Result<FunctionTemplate, crate::domain::source::DslDiagnostic> {
+        templates::extract(module, span)
     }
 }
 

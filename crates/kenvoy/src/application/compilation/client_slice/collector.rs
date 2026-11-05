@@ -1,6 +1,6 @@
 use kengine::{
-    DeclarationKind, ReferenceKind, ResolvedModule, ScopeId, SourceSpan, SymbolId, SymbolKind,
-    SymbolNamespace,
+    DeclarationKind, ReferenceKind, ResolvedModule, ScopeId, SourceSpan, SymbolIR, SymbolId,
+    SymbolKind, SymbolNamespace,
 };
 
 use crate::application::execution::JsDiagnostic;
@@ -56,7 +56,7 @@ impl Collector<'_> {
             {
                 continue;
             }
-            if symbol.scope != ScopeId(0) {
+            if symbol.scope != ScopeId(0) && !self.template_local(symbol)? {
                 return Err(failure(
                     self.reference,
                     "客户端表达式捕获了声明模块之外的局部作用域",
@@ -201,13 +201,16 @@ impl Collector<'_> {
                     "声明模块的客户端依赖包含无法证明无副作用的初始化",
                 ));
             }
-            self.pieces.insert(
-                declarator.span.start,
-                format!(
-                    "const {};",
-                    raw(self.module, &declarator.span, self.reference)?
-                ),
+            let code = format!(
+                "const {};",
+                raw(self.module, &declarator.span, self.reference)?
             );
+            let pieces = if symbol.scope == ScopeId(0) {
+                &mut self.pieces
+            } else {
+                &mut self.local_pieces
+            };
+            pieces.insert(declarator.span.start, code);
             self.capture(&declarator.span.clone())?;
         } else {
             return Err(failure(
@@ -216,6 +219,53 @@ impl Collector<'_> {
             ));
         }
         Ok(())
+    }
+
+    fn template_local(&mut self, symbol: &SymbolIR) -> Result<bool, JsDiagnostic> {
+        if symbol.kind != SymbolKind::Const {
+            return Ok(false);
+        }
+        let span = self
+            .module
+            .declarations
+            .iter()
+            .filter(|declaration| declaration.kind == DeclarationKind::Function)
+            .map(|declaration| &declaration.span)
+            .chain(
+                self.module
+                    .expressions
+                    .iter()
+                    .filter(|expression| {
+                        matches!(expression.kind.as_str(), "ArrowFunction" | "Function")
+                    })
+                    .map(|expression| &expression.span),
+            )
+            .filter(|span| {
+                symbol
+                    .declarations
+                    .iter()
+                    .all(|binding| within(binding, span))
+            })
+            .min_by_key(|span| span.end - span.start);
+        let Some(span) = span else {
+            return Ok(false);
+        };
+        let key = (span.start, span.end);
+        if !self.template_bindings.contains_key(&key) {
+            let template = self
+                .template_parser
+                .function_template(self.module, span)
+                .map_err(|error| failure(self.reference, error.message))?;
+            self.template_bindings.insert(
+                key,
+                template
+                    .bindings
+                    .into_iter()
+                    .map(|(symbol, _)| symbol)
+                    .collect(),
+            );
+        }
+        Ok(self.template_bindings[&key].contains(&symbol.id))
     }
 }
 

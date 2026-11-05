@@ -11,7 +11,7 @@ use swc_ecma_visit::{Visit, VisitWith};
 
 use super::{MAX_MODULE_BYTES, failure};
 use crate::{application::execution::JsDiagnostic, domain::source::SourceLocation};
-fn location(name: &str, source: &str, start: usize, end: usize) -> SourceLocation {
+pub(super) fn location(name: &str, source: &str, start: usize, end: usize) -> SourceLocation {
     let position = |offset: usize| {
         let prefix = &source[..offset.min(source.len())];
         let mut line = 1;
@@ -46,7 +46,7 @@ fn location(name: &str, source: &str, start: usize, end: usize) -> SourceLocatio
     }
 }
 
-fn parse(
+pub(super) fn parse(
     source: &str,
     name: &str,
     typescript: bool,

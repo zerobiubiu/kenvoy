@@ -1,8 +1,8 @@
 # 原生 i18n 报名示例
 
-此示例展示 Kenvoy 原生国际化：DSL 默认文案、根目录集中中英文译文、内置表单/后台/错误、框架语言选择器和 `useI18n()` 共用一套语言状态。原生国际化始终启用，没有第三方 i18n 库、应用 Provider 或自建语言路由。
+此示例展示 Kenvoy 原生国际化：DSL 默认文案、根目录集中中英文译文、内置表单/后台/错误、框架语言选择器、`useI18n()` 和 `useLocale()` 共用一套语言状态。原生国际化始终启用，没有第三方 i18n 库、应用 Provider 或自建语言路由。
 
-要求 **Kenvoy CLI 0.4.0 或以上兼容版本**，项目格式为 **0.4.0**。也可使用本仓库源码构建的 CLI；若未加入 PATH，将下文 `kenvoy` 替换为仓库 `target/debug/kenvoy`（Windows 为 `.exe`）的路径。
+本例的函数模板入口和 `useLocale()` 要求使用本仓库 dev 源码构建的 CLI，尚未包含在已发布的 0.4.4 中；项目格式保持 **0.4.0**。若未加入 PATH，将下文 `kenvoy` 替换为仓库 `target/debug/kenvoy`（Windows 为 `.exe`）的路径。
 
 ## 运行
 
@@ -41,8 +41,8 @@ kenvoy dev
 | 文件 | 职责 |
 |---|---|
 | `kenvoy.toml` | 声明最低 CLI/项目格式 0.4.0，以及 `[languages]` 的回退代码、语言代码、别名和显示名称 |
-| `src/app.tsx` | 正常编写业务资源、默认标签、页面、分组、导航和权限，不在 Schema 中调用 t |
-| `src/I18nDemo.tsx` | 直接从 `@kenvoy/client` 使用 useI18n，演示命名参数、复数、缓存 Intl 格式化和 Hooks 状态 |
+| `src/app.tsx` | 用 `export default function App()` 直接返回静态业务声明，保留资源、标签、页面、导航及权限，不执行组件或在 Schema 中调用 Hook |
+| `src/I18nDemo.tsx` | 从 `@kenvoy/client` 使用 useLocale 读取当前语言，结合 useI18n 演示命名参数、复数、缓存 Intl 格式化和 Hooks 状态 |
 | `translations.json` | 集中保存每个词条的全部语言译文，包含必需的 `$schema` 引用 |
 | `language.schema.json` | 按语言配置生成的 Draft 2020-12 JSON Schema，约束完整语言覆盖和代码/别名互斥 |
 | `migrations/manifest.json`、`migrations/steps/000001.json` | 从空 Schema 建立报名资源的正式迁移，不依赖部署时业务函数 |
@@ -65,7 +65,7 @@ kenvoy check
 
 词条名由业务自由定义；除了 `$schema`，顶层没有固定必填词条。`title`、`description`、`content` 不是保留必填字段。未写入集中译文的 DSL 文案继续使用源码默认文字，系统文案使用框架内置中文/英文回退；已存在的词条则必须为全部配置语言提供非空字符串，不允许缺语言、未知语言、重复 JSON 键或同时出现同一语言的代码与别名。本例保留英文 `demo.people.one`，并为它补齐中文“演示计数：{count} 人”；中文复数实际使用 `demo.people.other`。
 
-`dev` / `run` 先更新 Schema，再严格校验根译文；译文文件缺失、缺少或写错 `$schema`、词条不合法均会在数据库创建、迁移和用户代码运行前阻断。`check` / `build` 执行只读校验。需要新增语言时，修改配置后执行 `kenvoy i18n`，并手工为所有已有词条补齐该语言；命令不会替你填入译文。词典不可存放密钥、私人说明或业务记录。
+`dev` / `run` 先更新 Schema，再严格校验根译文及源码显式 `t(...)` 引用；漏词条、无法证明完整集合的动态键、缺失译文文件、错误 `$schema` 或非法语言矩阵，都会在数据库迁移和用户代码运行前阻断。`check` / `build` 同样检查源码引用；传 fallback 也不能豁免漏词条。需要新增语言时，修改配置后执行 `kenvoy i18n`，并手工为所有已有词条补齐该语言；命令不会替你填入译文。词典不可存放密钥、私人说明或业务记录。
 
 修改词典或标签不生成数据库迁移；dev 按候选校验后发布，损坏候选保留旧运行态。修改字段结构时使用正常 generate/seal 流程并停服重启，不删除数据库。完整 `dist` 包含私有规范化词典和正式链；无源码生产交付仍须同时携带匹配产物的 `kenvoy.toml`、根目录 `translations.json` 和完整 `dist/`，不能只依赖产物内词典跳过根译文校验。可不携带 `src/` 和源码迁移目录，`language.schema.json` 可由 `run` 按配置重建。根译文变动后应从源码重新构建匹配产物，不能修改根译文后继续冒用旧产物。
 
