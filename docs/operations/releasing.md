@@ -1,19 +1,21 @@
 # Git 分支、版本标签与发布操作
 
-状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI 与 KEngine，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，本轮变更见 [0021](../changes/0021-dev-main-release-rules.md)；已发布 0.2.0 的历史证据见 [0019](../changes/0019-crates-and-binary-release.md)。
+状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI 与 KEngine，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，最新入口约定见 [0036](../changes/0036-workflow-entrypoints.md)；双分支历史见 [0021](../changes/0021-dev-main-release-rules.md)，0.4.4 正式发行证据见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
 ## 分支与授权
 
 | 分支 | 用途 | 自动触发 |
 |---|---|---|
 | `dev` | 所有开发、验证与版本演进，常驻分支 | 推送和 tag 均不触发 CI/CD；可显式手动打包 |
-| `main` | 用户决定发布后合入的最新版本代码 | 推送触发当前版本发布检测；无缺项则跳过 |
+| `main` | 用户决定发布后合入的最新版本代码 | 推送自动进入完整发布；也可显式手动执行同一范围，已完成内容跳过 |
 
 不再创建 `dev.MAJOR.MINOR.PATCH` 分支。PATCH 与其他版本一样在 dev 完成，经用户授权合并 main 后发布；不存在从开发分支紧急发布的旁路。
 
 一波完整逻辑修改验证通过后自动本地提交，使用中文信息。只暂存本次授权文件，不夹带用户改动、凭据、依赖目录、构建产物或业务数据。自动提交和自动本地打 tag **不授权推送、切分支、合并、变基或改写历史**；这些操作仍须用户明确要求。
 
 工作流文件在 dev/main 共享，防止普通合并删除 main 的发布配置。发布入口、共享发布实现及实际写操作都检查 main；文件出现在 dev 不表示 dev 可以发布。
+
+对外业务入口恰好八个：一个 main 自动发布、一个 main 手动完整发布，以及六个独立手动打包。内部共用主发布、渠道接续和单目标打包实现，不要求操作者再单独触发渠道。两个正式发布入口都覆盖 crates.io、六平台 GitHub Release、npm、Homebrew、Scoop；手动打包不属于发布。
 
 ## 根节点与版本标签
 
@@ -47,32 +49,45 @@ git config --local core.hooksPath .githooks
 
 ```mermaid
 flowchart TD
-  A[dev 完成修改与版本更新] --> B[验证并本地提交 自动补版本 tag]
-  B --> C[用户批准发布 逐个推送所需 tag]
-  C --> D[用户合并 dev 到 main 并推送 main]
-  D --> E[只检查当前 main 提交和当前版本]
-  E -->|已被新 main 替代 或源包及资产已齐| F[跳过 不发布历史版本]
-  E -->|当前版本缺项| G[先校验远端 tag 再验证并串行发布缺失源包]
-  G --> H[各系统原生 Runner 构建缺失二进制]
-  H --> I[核验 ZIP 与 SHA256 补齐当前 Release]
+  A[push main 自动发布] --> C[共用 main 当前版本与缺项检查]
+  B[手动 main 发布 confirm=yes] --> C
+  C --> D[按需发布缺失源包]
+  D --> E[按需构建缺失平台二进制]
+  E --> F[核验并补齐 GitHub Release]
+  F --> G[成功后内部接续 channels]
+  G --> H[npm 单包]
+  G --> I[Homebrew]
+  G --> J[Scoop]
 ```
 
 必须**先推版本 tag，再合并/推送 main**，例如 `git push origin v0.3.1`；逐个推送仅限本次获授权的标签，不用 `--tags` / `--follow-tags` 批量上传未核对版本。tag 推送本身不会触发本仓库发布，因此此规则不是依赖 tag 事件数量限制。
 
 CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一致、已合入 main、版本相符。若有新源包待发布，main 源码树必须与版本标签一致；标签后继续修改源码应完成新版本并打新标签，不能让旧标签描述另一份代码。缺标签、标签冲突、源代码漂移都在上传前失败；工作流不自动创建或移动远端 tag。
 
-自动与手动兜底共用并发组，写入前再次核对远端 main。旧运行被新 main 取代时不继续发布；无缺项的当前版本不构建、不上传，也不扫描其他 tag 的发布状态。
+自动与手动正式发布共用并发组，主发布写入前再次核对远端 main。旧主发布运行被新 main 取代时不继续写入；已完成的主发布阶段跳过，不扫描其他 tag 的发布状态。成功后的渠道检查固定使用父运行的源码 SHA 和其中的当前版本，不接受另填版本；整体完成需主发布和渠道后续均成功，但不需要第二次手动触发。
 
 ## 工作流职责
 
 | 文件 | 触发与职责 |
 |---|---|
-| [release.yml](../../.github/workflows/release.yml) | 仅 `push main` 自动进入当前版本发布流程 |
-| [patch-release.yml](../../.github/workflows/patch-release.yml) | main 手动兜底，必须 `confirm=yes`；无任意版本输入，不再表示 PATCH 开发分支发布 |
-| [release-one-version.yml](../../.github/workflows/release-one-version.yml) | 两入口共用：只读规划 → 缺失源包 → 缺失二进制 → 当前 Release；拒绝非 main |
-| [manual-package.yml](../../.github/workflows/manual-package.yml) | 任意选定分支手动打一个系统 × 一个架构，只上传 artifact，不发布 |
+| [release.yml](../../.github/workflows/release.yml) | 仅 `push main` 的自动完整发布入口；dev/tag 推送不触发 |
+| [manual-release.yml](../../.github/workflows/manual-release.yml) | 仅 `workflow_dispatch`，必须 main 且 `confirm=yes`；发布范围与自动入口一致 |
+| [manual-package-windows-x86_64.yml](../../.github/workflows/manual-package-windows-x86_64.yml) | 仅手动；任意分支；只打包 Windows x86_64 |
+| [manual-package-windows-arm64.yml](../../.github/workflows/manual-package-windows-arm64.yml) | 仅手动；任意分支；只打包 Windows ARM64 |
+| [manual-package-linux-x86_64.yml](../../.github/workflows/manual-package-linux-x86_64.yml) | 仅手动；任意分支；只打包 Linux x86_64 |
+| [manual-package-linux-arm64.yml](../../.github/workflows/manual-package-linux-arm64.yml) | 仅手动；任意分支；只打包 Linux ARM64 |
+| [manual-package-macos-x86_64.yml](../../.github/workflows/manual-package-macos-x86_64.yml) | 仅手动；任意分支；只打包 macOS x86_64 |
+| [manual-package-macos-arm64.yml](../../.github/workflows/manual-package-macos-arm64.yml) | 仅手动；任意分支；只打包 macOS ARM64 |
 
-旧 `distribution.yml` 的历史扫描链路已删除，不保留另一套发布入口。CI 的 HTTP/状态协调位于 [.github/scripts](../../.github/scripts/)，使用标准库 Python，轻量检测不先编译产品；本地 Git/归档工程能力继续由 Rust xtask 提供。
+内部实现不提供独立人工入口：
+
+| 文件 | 调用方式与边界 |
+|---|---|
+| [release-one-version.yml](../../.github/workflows/release-one-version.yml) | 仅 `workflow_call`；两个正式入口共用，拒绝非 main |
+| [channels.yml](../../.github/workflows/channels.yml) | 仅监听两个正式入口成功结束的 `workflow_run`；校验 main、本仓库与父事件，保留 OIDC 文件身份 |
+| [package-one-target.yml](../../.github/workflows/package-one-target.yml) | 仅 `workflow_call`；六个入口共用，唯一目标来自统一 JSON，`source-mode: checkout`，只上传 artifact |
+
+旧 `distribution.yml` 历史扫描链路已删除；旧 `patch-release.yml` 已改名为 `manual-release.yml`，旧单一 `manual-package.yml` 已改为内部 `package-one-target.yml`，不保留旧入口或别名。CI 协调位于 [.github/scripts](../../.github/scripts/)，与 Rust xtask 分工，不恢复 tools 或额外业务流程。
 
 ### crates.io 与失败恢复
 
@@ -103,18 +118,18 @@ GitHub Release 先以草稿收集缺失资产，齐全并验证后公开；标�
 手动打包例子（仅在获准触发远端任务后执行）：
 
 ```text
-gh workflow run manual-package.yml --ref dev -f platform=windows -f arch=ARM64
+gh workflow run manual-package-windows-arm64.yml --ref dev
 ```
 
-它只选择一个目标，上传 ZIP 与侧车为 Actions artifact，保留 14 天，不需要发布 Token、不创建 tag、不上传 crates.io、不创建 Release。
+在 Actions 中选定六个入口之一，再选择所需分支；平台/架构由入口固定，版本读取该分支源码，不额外填写平台或版本参数。每次只打一个目标，ZIP 与侧车作为 Actions artifact 保留 14 天；不需要发布 Token，不创建 tag/Release，不上传 crates.io/npm，也不更新辅助仓库。
 
-main 手动发布兜底：
+main 手动完整发布：
 
 ```text
-gh workflow run patch-release.yml --ref main -f confirm=yes
+gh workflow run manual-release.yml --ref main -f confirm=yes
 ```
 
-只检查当时 main 当前版本；不得指定 dev、历史版本或用兜底发布未合并代码。
+只处理当时 main 当前版本；不得指定 dev 或历史版本发布。主发布成功后自动接续 npm、Homebrew、Scoop，不再要求额外运行 `channels.yml`。上述命令均为操作示例，不表示本轮已触发远端任务。
 
 ## 验证边界
 

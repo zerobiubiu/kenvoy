@@ -6,14 +6,14 @@
 
 ```mermaid
 flowchart TD
-  A[main 发布成功 GitHub Release] --> B[渠道工作流 workflow_run]
+  A[main 自动或手动主发布成功] --> B[内部渠道接续 workflow_run]
   B --> C[assets.json 六归档 + 官方 sha256]
   C --> D[npm 单包 kenvoy 安装器]
   C --> E[Homebrew tap formula]
   C --> F[Scoop bucket]
 ```
 
-渠道工作流为 [.github/workflows/channels.yml](../../.github/workflows/channels.yml)：由 `main 最新版本自动发布` 成功结束触发，也支持 `workflow_dispatch` 指定已发布版本补发。`prepare` 在任何 Secret 消费前检查当前 ref、来源分支和来源仓库，拒绝 dev、tag 与外仓事件；后续 job 固定检出 `prepare` 确认的源码提交，不混用运行期间变化的 main。它只消费已存在的 GitHub Release 资产，不重新编译、不改动 crate 或 Release。每个渠道独立 job，单渠道失败不撤销已经完成的 Release。
+渠道工作流为 [.github/workflows/channels.yml](../../.github/workflows/channels.yml)：仅作为 `main 最新版本自动发布` 和 `main 最新版本手动发布` 成功结束后的内部接续；父事件分别为 push 或 workflow_dispatch。不再提供独立 workflow_dispatch 或版本输入，不需要操作者再手动运行渠道。`prepare` 检查当前 ref、来源分支和来源仓库，拒绝 dev、tag 与外仓事件；checkout 固定父运行 head_sha，版本从该源码的 Cargo.toml 读取，后续 job 继续固定同一 source_sha。它只消费正式 Release 资产，不重新编译、不改动 crate 或 Release。每个渠道独立 job，失败不撤销已完成的 Release；完整发布需主流程及三个渠道均成功。入口变更见 [0036](../changes/0036-workflow-entrypoints.md)。
 
 前置条件：版本 tag 已推送；对应正式 Release 已发布、非 draft/prerelease，六个 ZIP 均带 GitHub 官方 digest。下载和复用缓存都核对 SHA-256，不覆盖损坏缓存。缺归档或摘要不符时停止，不进入各渠道。0.2.0 及更早的 Release 使用旧的三元组文件名，不在自动发现兼容范围内；渠道发布从采用 `kenvoy-{version}-{platform}-{arch}.zip` 的版本开始。
 

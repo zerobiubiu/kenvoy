@@ -15,15 +15,21 @@
 | Homebrew | formula 0.4.4 已自动推送，macOS/Linux 四目标 URL/SHA256 与正式归档一致；提交 151bdf98b60c2c57f423564af31a7b1bcfb7c734 |
 | Scoop | 清单 0.4.4 已自动推送，Windows x64/ARM64 URL/SHA256 与正式归档一致；提交 fc92ef75c9d987cb84866fb618654069226e07bb |
 | 已退役渠道 | APT、RPM、Alpine、Arch、WinGet、Chocolatey、AUR；不恢复专用实现或凭据 |
-| 工作流 | prepare/npm/homebrew/scoop；npm job 只上传生成的 `kenvoy/` |
+| 工作流 | 本地已收敛为两个完整发布入口与六个独立手动打包入口；channels 仅接续自动/手动 main 发布，npm 仍只上传 `kenvoy/`；本轮入口调整尚未推送 |
 | 源码版本 | CLI 0.4.4，KEngine 0.2.0；项目格式仍 0.4.0，新建最低 CLI 取创建时版本 |
-| 本轮 Git 操作 | 已推送版本标签并快进同步 dev/main；v0.4.4 固定指向 6a2d863，旧标签不动；后续只收尾发布工程与文档，不重传已发布源码 |
+| 0.4.4 发行基线 | v0.4.4 固定指向 6a2d863，已发行产物及旧标签保持不动；本轮入口修改仅在 dev 本地，未推送或合并 main |
 
 取消平台分包和 Linux 软件源不等于取消平台支持：Windows、Linux、macOS 的 x64/ARM64 官方 ZIP 继续保留。安装包约定与具体测试证据以 0033 为准，不以 npm install 退出码 0 推定安装脚本已执行。
 
 正式证据：[主发布 41922611322](https://github.com/zerobiubiu/kenvoy/actions/runs/41922611322)、[三渠道自动发布 41929186955](https://github.com/zerobiubiu/kenvoy/actions/runs/41929186955)、[Release v0.4.4](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.4.4)。源包与草稿后处理曾失败；按已提交状态恢复后成功，不把早期失败描述为回滚或首次运行全绿。
 
 验收边界：npm 的 Windows/Linux x64 实际安装及 CLI 执行已完成；Homebrew/Scoop 验证到真实仓库提交与清单一致性，未执行两者的原生安装命令；未额外进行 macOS/ARM64 的本机安装验收。
+
+## 工作流入口调整（本地，未推送）
+
+按用户新要求，main 自动和手动发布均接续全部保留渠道；`manual-release.yml` 取代旧手动发布文件，六个 `manual-package-*.yml` 取代单一打包入口。共享打包与渠道工作流只作为内部实现，不增加人工操作。OIDC 仍绑定 `channels.yml`，不修改权限或凭据。
+
+本次未推送、未触发 Actions，以上 0.4.4 发行证据不作为新入口的远端验收证明。实施及本地验证见 [0036](../changes/0036-workflow-entrypoints.md)。
 
 ## npm 安装与脚本审批
 

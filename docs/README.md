@@ -42,6 +42,8 @@
 
 渠道仅保留 npm、Homebrew、Scoop。npm 只发布单个 `kenvoy`，安装时按系统与架构下载官方二进制；实现与手动首发见[0033](changes/0033-single-npm-package-download.md)，crates.io 鉴权修复和 0.4.4 恢复见[0034](changes/0034-cargo-auth-and-044-release.md)。渠道退役见[0032](changes/0032-retire-linux-and-winget-channels.md)，当前注册表状态及发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 仍保留六目标 ZIP。
 
+工作流入口已在本地按[0036](changes/0036-workflow-entrypoints.md)收敛为 main 自动/手动完整发布与六个独立手动打包入口；本轮尚未推送或触发远端任务。操作方式见[发布操作](operations/releasing.md)。
+
 ## 文档规范
 
 ### 存放、分类与命名

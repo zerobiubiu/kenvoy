@@ -1,0 +1,43 @@
+name: main 最新版本手动发布
+
+# 仅在 main 手动发布当前版本；与自动发布复用同一实现和并发组。
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 输入 yes，补齐 main 当前版本的缺失发布步骤
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kenvoy-release-main
+  cancel-in-progress: false
+
+jobs:
+  confirm:
+    if: github.ref == 'refs/heads/main'
+    name: 核对手动发布确认
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 未确认时明确失败，不接续渠道
+        shell: bash
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != yes ]; then
+            echo '手动发布必须输入 yes；未执行发布。' >&2
+            exit 1
+          fi
+
+  publish:
+    needs: confirm
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'yes'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-one-version.yml
+    secrets:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}

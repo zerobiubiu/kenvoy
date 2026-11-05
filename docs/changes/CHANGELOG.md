@@ -2,6 +2,12 @@
 
 状态：参考；治理：持续维护的版本概要。详细执行事实保留在编号变更记录中，不以本页替代验证证据。
 
+## 发布工程调整（本地，未推送）
+
+- 自动与手动正式发布均仅允许 main，成功后自动接续 npm、Homebrew、Scoop；取消渠道独立手动入口与任意版本输入。
+- 手动打包拆成 Windows/Linux/macOS 各 x86_64、ARM64 六个独立入口，允许任意分支，仅提供 Actions artifact 下载。
+- 复用现有构建/发布实现，保留 OIDC 文件身份；不增加发布源、PR/定时流程，不变更 CLI 0.4.4、KEngine 0.2.0 或既有标签。实施记录见 [0036](0036-workflow-entrypoints.md)。
+
 ## 0.4.4
 
 发布状态：已发布，2026-11-04（UTC）；crates.io、GitHub Release 六目标归档、npm OIDC、Homebrew 与 Scoop 均已核验。经用户确认替代上传前失败的 0.4.3，KEngine 保持 0.2.0，项目格式仍为 0.4.0。

@@ -1,19 +1,17 @@
-name: 手动单平台打包
+name: 单目标打包实现
 
-# 任意分支均可手动选择一个系统与架构；只上传 artifact，不发布 crate 或 Release。
+# 仅由手动打包入口调用；任意分支均可打包，只上传 artifact，不发布 crate 或 Release。
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       platform:
         description: 目标平台
         required: true
-        type: choice
-        options: [windows, linux, macos]
+        type: string
       arch:
         description: 目标架构
         required: true
-        type: choice
-        options: [x86_64, ARM64]
+        type: string
 
 permissions:
   contents: read
