@@ -56,6 +56,8 @@
 | 0040 | [五个示例的开发类型安装与检查](0040-example-typecheck-dependencies.md) | 已执行；显式授权安装、五例 tsc 正反向与静态资源模型复核 | 开发依赖/锁文件、CSS 副作用声明、静态 JSX 插值及用户暂存保护 |
 | 0041 | [examples 切换 Bun 包管理](0041-examples-bun-package-manager.md) | 已执行；按用户要求仅切换，未验证 | 五份包管理器声明、Bun 锁替换 npm 锁、示例命令与框架边界说明 |
 
+0041 记录切换 Bun 时提交锁文件的历史事实；后按用户要求，examples 下的锁文件不再由 Git 跟踪，本地文件保留。当前安装方式见[示例总览](../../examples/README.md)。
+
 ## 关联代码与配置
 
 变更集中于 [KEngine](../../crates/kengine/)、[Kenvoy](../../crates/kenvoy/)、[测试成员](../../crates/kenvoy-tests/)、[xtask](../../xtask/) 与 [examples](../../examples/)。原 tools 已退役，旧路径仅作为历史正文中的实施事实保留。文件清单和接口差异保留在各次记录中；当前路线见[实施路线](../development/development-roadmap.md)，产品验收历史见[最终验收](../verification/0012-final-acceptance.md)。

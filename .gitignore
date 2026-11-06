@@ -20,6 +20,13 @@
 
 /**/node_modules/
 
+# 示例依赖锁只保留在本地，不提交到 Git。
+/examples/**/*.lock
+/examples/**/bun.lockb
+/examples/**/package-lock.json
+/examples/**/npm-shrinkwrap.json
+/examples/**/pnpm-lock.yaml
+
 .idea/
 .vscode/
 *.swp

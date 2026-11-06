@@ -6,13 +6,13 @@
 
 ```text
 kenvoy types
-bun install --frozen-lockfile --ignore-scripts --omit=peer
+bun install --ignore-scripts --omit=peer
 bun run typecheck
 kenvoy check
 kenvoy dev
 ```
 
-`bun.lock` 随源码提交并锁定 `clsx 2.1.1`、`@radix-ui/react-slot 1.5.0` 与开发类型依赖，不保留 package-lock.json。先用 Bun 准备项目依赖，再运行 Kenvoy；不要使用当前仍走 npm 的 `--install-deps`。React、SDK 与框架工具链由 CLI 缓存管理，不用编写 Vite 配置。上面的安装和检查命令仅供后续使用，本次切换未执行它们。
+`bun.lock` 由 Bun 在本地生成或使用，不提交 Git；`package.json` 声明 `clsx 2.1.1`、`@radix-ui/react-slot 1.5.0` 与开发类型依赖。先用 Bun 准备项目依赖，再运行 Kenvoy；不要使用当前仍走 npm 的 `--install-deps`。React、SDK 与框架工具链由 CLI 缓存管理，不用编写 Vite 配置。无共享锁文件时，不同环境可能解析出不同的间接依赖。
 
 访问 `http://127.0.0.1:3000/customers`。点击“增加数量”调用捕获 `step` 常量的客户端回调；点击“计算折扣”经同源 CSRF/Session 通道执行服务端函数，返回 0.8。表单提交写入项目 `data/app.sqlite`，与组件内的临时计数状态分开。
 

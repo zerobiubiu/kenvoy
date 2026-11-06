@@ -26,19 +26,19 @@
 | uploads-app | 24 | Bun 1.4.3 | 按要求未执行 |
 | i18n-app | 24 | Bun 1.4.3 | 按要求未执行 |
 
-各示例保留并提交文本 `bun.lock`，删除根目录旧 package-lock.json，不同时维护两套锁。直接依赖版本固定仍不能代替完整依赖锁定；后续使用时可在示例目录执行：
+示例的依赖锁文件只在本地生成和使用，不提交 Git；保留 package.json 中的依赖声明。没有共享锁文件时，各次安装解析出的间接依赖可能不同。后续使用时可在示例目录执行：
 
 ```text
 kenvoy types
-bun install --frozen-lockfile --ignore-scripts --omit=peer
+bun install --ignore-scripts --omit=peer
 bun run typecheck
 ```
 
-以上安装与检查命令本轮没有运行，只执行了锁文件转换。`node_modules` 与 `.kenvoy/types` 仍不入库，bun.lock 必须入库；更新依赖时使用 Bun 更新锁，不手改锁文件。
+本地没有 bun.lock 时，Bun 安装过程可生成它；已有本地锁文件不会因停止 Git 跟踪而删除。`node_modules`、`.kenvoy/types` 和示例锁文件均不入库；没有本地锁时不要使用 `--frozen-lockfile`。
 
 本轮只切换示例项目，不切换 CLI 内部的框架工具链。自定义客户端构建仍需 Node.js 24.22+ 与其配套 npm，由 CLI 管理框架缓存。示例先用 Bun 安装依赖，再运行 `kenvoy dev/build/run`，不要使用当前仍走 npm 的 `--install-deps` 重新生成 npm 锁。当前 CLI 尚未把 bun.lock 纳入构建输入指纹，仅更新 Bun 锁后请显式执行 `kenvoy build` 再使用 run，避免复用旧资产。
 
-声明生成和此前 npm 类型检查事实分别见 [0039](../docs/changes/0039-example-editor-types.md)、[0040](../docs/changes/0040-example-typecheck-dependencies.md)；本次仅执行 Bun 切换见 [0041](../docs/changes/0041-examples-bun-package-manager.md)。
+声明生成和此前 npm 类型检查事实分别见 [0039](../docs/changes/0039-example-editor-types.md)、[0040](../docs/changes/0040-example-typecheck-dependencies.md)；[0041](../docs/changes/0041-examples-bun-package-manager.md) 中提交锁文件的做法是当时的历史记录，现按用户要求不再跟踪示例锁文件。
 
 
 

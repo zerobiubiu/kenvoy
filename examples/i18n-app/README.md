@@ -6,11 +6,11 @@
 
 ## 运行
 
-本例项目依赖统一使用 Bun 1.4.3，保留并提交 bun.lock，不保留 package-lock.json。React、SDK 与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；这不改变项目使用 Bun 的约定。不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。下列命令仅供后续使用，本轮未执行安装、检查或启动。
+本例项目依赖统一使用 Bun 1.4.3，bun.lock 只在本地生成或使用，不提交 Git。React、SDK 与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。
 
 ```text
 cd examples/i18n-app
-bun install --frozen-lockfile --ignore-scripts --omit=peer
+bun install --ignore-scripts --omit=peer
 kenvoy i18n
 kenvoy check
 kenvoy dev
