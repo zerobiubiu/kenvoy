@@ -5,36 +5,40 @@
 | 示例 | 内容 | 运行入口 |
 |---|---|---|
 | [customer-app](customer-app/kenvoy.toml) | 内置 DSL 客户登记，基础应用不需要 Node | 在示例目录执行 `kenvoy dev` |
-| [extensions-app](extensions-app/README.md) | Schema 组合、自定义 React/Radix、第三方包与异步服务端动作 | 首次执行 `kenvoy dev --install-deps` |
-| [options-app](options-app/README.md) | 静态/远程联动 select、系统重载、统一数据绑定 | 首次执行 `kenvoy dev --install-deps` |
-| [uploads-app](uploads-app/README.md) | 多文件上传、图片预览/下载、URL 图片与受控 SDK 图库 | 首次执行 `kenvoy dev --install-deps` |
-| [i18n-app](i18n-app/README.md) | 集中中英文译文、语言代码/别名混用、DSL 自动词条、语言切换、SDK 插值/复数/格式化与正式迁移 | 执行 `kenvoy dev`，SDK 演示需 Node/npm，无项目依赖 |
+| [extensions-app](extensions-app/README.md) | Schema 组合、自定义 React/Radix、第三方包与异步服务端动作 | 先用 Bun 安装项目依赖，再执行 `kenvoy dev` |
+| [options-app](options-app/README.md) | 静态/远程联动 select、系统重载、统一数据绑定 | 先用 Bun 安装项目依赖，再执行 `kenvoy dev` |
+| [uploads-app](uploads-app/README.md) | 多文件上传、图片预览/下载、URL 图片与受控 SDK 图库 | 先用 Bun 安装开发依赖，再执行 `kenvoy dev` |
+| [i18n-app](i18n-app/README.md) | 集中中英文译文、语言代码/别名混用、DSL 自动词条、语言切换、SDK 插值/复数/格式化与正式迁移 | 先用 Bun 安装开发依赖，再执行 `kenvoy dev` |
 
 前四个示例显式只启用 `zh-CN`，`translations.json` 仅含 `"$schema": "./language.schema.json"`，界面沿用 DSL 默认文案和框架内置中文；这不是关闭国际化。`i18n-app` 显式启用中文和英文，每个业务词条完整提供两种语言。
 
 在任一示例目录执行 `kenvoy i18n` 会更新 Schema、仅在译文文件不存在时创建只含 Schema 引用的文件，然后严格校验译文；不会提取源码、自动翻译或覆盖已有词条。新增词条必须覆盖配置中的全部语言，每种语言的代码与别名恰好选一个。`dev`、`run` 启动前同样更新 Schema 并校验；`check`、`build` 只读校验。
 
-编辑器类型支持需要 dev 源码构建的 CLI：先在示例目录执行 `kenvoy types`，按报告补齐已有配置，再显式安装报告中的开发类型依赖并执行 `npm run typecheck`。没有配置时命令创建默认文件；已有第三方依赖清单不会被覆盖。不要另外安装 React 运行包或空壳 `@kenvoy/client`。详见[编辑器操作](../docs/operations/cli-design.md#编辑器类型)；此步骤只影响编辑支持，不改变示例业务库。
+五个示例统一使用 **Bun 1.4.3**，package.json 中固定 `packageManager: bun@1.4.3`。编辑器类型支持需要 dev 源码构建的 CLI；先在示例目录执行 `kenvoy types`，项目依赖和脚本使用 Bun 管理，不照搬 types 报告中面向默认 npm 安装器的命令。不要安装空壳 `@kenvoy/client`。
 
 本轮已为全部示例生成编辑器类型；`.kenvoy/types` 是本机派生缓存，不随 Git 提交，重新克隆或清理缓存后再次执行 `kenvoy types`。
 
-| 示例 | SDK 派生声明 | 开发类型依赖 | typecheck |
+| 示例 | 先前生成的 SDK 声明 | 项目包管理器 | 本轮验证 |
 |---|---:|---|---|
-| customer-app | 24 | 已安装 | 通过 |
-| extensions-app | 24 | 已安装，保留原第三方依赖 | 通过 |
-| options-app | 24 | 已安装，保留原第三方依赖 | 通过 |
-| uploads-app | 24 | 已安装 | 通过 |
-| i18n-app | 24 | 已安装 | 通过 |
+| customer-app | 24 | Bun 1.4.3 | 按要求未执行 |
+| extensions-app | 24 | Bun 1.4.3 | 按要求未执行 |
+| options-app | 24 | Bun 1.4.3 | 按要求未执行 |
+| uploads-app | 24 | Bun 1.4.3 | 按要求未执行 |
+| i18n-app | 24 | Bun 1.4.3 | 按要求未执行 |
 
-经显式授权，五个示例均已安装匹配的 TypeScript/React 开发类型并补齐 typecheck 脚本。重新克隆后可在各示例目录执行：
+各示例保留并提交文本 `bun.lock`，删除根目录旧 package-lock.json，不同时维护两套锁。直接依赖版本固定仍不能代替完整依赖锁定；后续使用时可在示例目录执行：
 
 ```text
 kenvoy types
-npm ci --include=dev --omit=peer --ignore-scripts
-npm run typecheck
+bun install --frozen-lockfile --ignore-scripts --omit=peer
+bun run typecheck
 ```
 
-`--omit=peer` 保留版本解析与约束检查，但不另装框架已共享的 React peer 运行包；不使用 legacy-peer-deps 或关闭 strict。全局 CSS 使用无 JavaScript 导出的副作用类型声明，静态 JSX 值以插值组合。生成记录见 [0039](../docs/changes/0039-example-editor-types.md)，本轮安装与正反向类型验收见 [0040](../docs/changes/0040-example-typecheck-dependencies.md)。
+以上安装与检查命令本轮没有运行，只执行了锁文件转换。`node_modules` 与 `.kenvoy/types` 仍不入库，bun.lock 必须入库；更新依赖时使用 Bun 更新锁，不手改锁文件。
+
+本轮只切换示例项目，不切换 CLI 内部的框架工具链。自定义客户端构建仍需 Node.js 24.22+ 与其配套 npm，由 CLI 管理框架缓存。示例先用 Bun 安装依赖，再运行 `kenvoy dev/build/run`，不要使用当前仍走 npm 的 `--install-deps` 重新生成 npm 锁。当前 CLI 尚未把 bun.lock 纳入构建输入指纹，仅更新 Bun 锁后请显式执行 `kenvoy build` 再使用 run，避免复用旧资产。
+
+声明生成和此前 npm 类型检查事实分别见 [0039](../docs/changes/0039-example-editor-types.md)、[0040](../docs/changes/0040-example-typecheck-dependencies.md)；本次仅执行 Bun 切换见 [0041](../docs/changes/0041-examples-bun-package-manager.md)。
 
 
 

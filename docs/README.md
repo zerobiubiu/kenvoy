@@ -47,7 +47,7 @@
 
 dev 后续增加显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；实现及本轮验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未发布，不改变既有 0.4.4 发行与标签。
 
-dev 编辑支持增加 `kenvoy types`、新项目默认 TypeScript 配置、真实 SDK 声明和独立 JSX 类型入口；使用与配置保护规则见[CLI](operations/cli-design.md#编辑器类型)，实现见[0038](changes/0038-editor-types-and-jsx-runtime.md)，五例声明生成见[0039](changes/0039-example-editor-types.md)，开发依赖安装与实际类型检查见[0040](changes/0040-example-typecheck-dependencies.md)。该能力尚未发布，不要求为基础运行安装另一份 React。
+dev 编辑支持增加 `kenvoy types`、新项目默认 TypeScript 配置、真实 SDK 声明和独立 JSX 类型入口；实现见[0038](changes/0038-editor-types-and-jsx-runtime.md)，五例声明生成见[0039](changes/0039-example-editor-types.md)，既有 npm 类型检查见[0040](changes/0040-example-typecheck-dependencies.md)，examples 仅执行 Bun 切换见[0041](changes/0041-examples-bun-package-manager.md)。该能力尚未发布，示例使用 Bun 不改变 CLI 内部的框架工具链。
 
 ## 文档规范
 

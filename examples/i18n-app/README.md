@@ -6,10 +6,11 @@
 
 ## 运行
 
-本例包含自定义 React SDK 演示组件，首次构建需要 Node.js 24.22+ 与 npm。React、SDK 和锁定工具链由框架管理；本例没有项目 npm 依赖，不需要 `--install-deps`。原生 i18n 本身不要求 Node，额外要求来自这个可交互 SDK 组件。
+本例项目依赖统一使用 Bun 1.4.3，保留并提交 bun.lock，不保留 package-lock.json。React、SDK 与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；这不改变项目使用 Bun 的约定。不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。下列命令仅供后续使用，本轮未执行安装、检查或启动。
 
 ```text
 cd examples/i18n-app
+bun install --frozen-lockfile --ignore-scripts --omit=peer
 kenvoy i18n
 kenvoy check
 kenvoy dev

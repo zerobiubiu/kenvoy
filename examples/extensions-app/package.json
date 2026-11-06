@@ -2,6 +2,7 @@
   "name": "kenvoy-extensions-example",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.3",
   "type": "module",
   "description": "Kenvoy 自定义组件、Schema 组合与服务端动作示例",
   "scripts": {

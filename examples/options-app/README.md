@@ -1,11 +1,14 @@
 # 联动 select 与系统组件重载
 
-要求 Kenvoy CLI 0.4.0 或以上兼容版本，项目格式为 0.4.0。首次构建需要 Node.js 24.22+ 与 npm。从仓库根目录执行：
+项目格式为 0.4.0，使用本仓库 dev 源码构建的 Kenvoy CLI；项目依赖统一由 Bun 1.4.3 和 bun.lock 管理。框架内部客户端工具链仍需 Node.js 24.22+ 与配套 npm，不在本次切换范围。从仓库根目录可使用：
 
 ```text
+bun install --cwd examples/options-app --frozen-lockfile --ignore-scripts --omit=peer
 target/debug/kenvoy --project examples/options-app admin init --username admin
-target/debug/kenvoy --project examples/options-app dev --install-deps
+target/debug/kenvoy --project examples/options-app dev
 ```
+
+保留 bun.lock，不保留 package-lock.json；不要对本示例使用当前仍走 npm 的 `--install-deps`。本次仅转换锁文件和修改配置，未执行上述安装或运行命令。
 
 先登录 `/admin/cities`，新增来源记录，例如 `{code:"hz",name:"杭州",province:"zj"}` 和 `{code:"nj",name:"南京",province:"js"}`；内部备注不会进入选项投影。然后访问 `/entries`，切换省份会更新服务区与远程城市选项。
 

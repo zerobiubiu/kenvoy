@@ -4,15 +4,16 @@
 
 ## 运行
 
-要求 Kenvoy CLI 0.4.0 或以上兼容版本，项目格式为 0.4.0。先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy。从仓库根目录执行：
+项目格式为 0.4.0，使用本仓库 dev 源码构建的 Kenvoy CLI，项目依赖统一由 Bun 1.4.3 和 bun.lock 管理。先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy。从仓库根目录可使用：
 
 ```powershell
+bun install --cwd examples/uploads-app --frozen-lockfile --ignore-scripts --omit=peer
 .\target\debug\kenvoy.exe --project examples/uploads-app check
 .\target\debug\kenvoy.exe --project examples/uploads-app admin init --username admin
-.\target\debug\kenvoy.exe --project examples/uploads-app dev --install-deps
+.\target\debug\kenvoy.exe --project examples/uploads-app dev
 ```
 
-初始化管理员时输入你自己的密码，不把密码写入源码或命令参数。首次自定义客户端构建需要 Node/npm，`--install-deps` 显式准备框架锁定工具链；无需手工 `npm install`，示例没有额外用户包。之后复用缓存。
+初始化管理员时输入你自己的密码，不把密码写入源码或命令参数。项目依赖先使用 Bun 准备，保留 bun.lock 并移除 package-lock.json；不要使用当前仍走 npm 的 `--install-deps`。框架内部的锁定客户端工具链仍需 Node/npm，由 CLI 自行管理，不在本次切换范围。以上仅为后续使用命令，本轮未安装依赖、构建或启动应用。
 
 默认监听 `http://127.0.0.1:3000`，访问根地址 `/` 后自动进入上传页；和其他示例同时运行时，修改本示例 `kenvoy.toml` 的端口。
 

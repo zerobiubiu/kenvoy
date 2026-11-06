@@ -2,21 +2,21 @@
 
 此示例保留真实客户登记与 SQLite 持久化，同时展示 Schema Component、React Hooks、Props、内联回调捕获、门面模块 CSS、第三方 `clsx`，以及 TypeScript ES Module 异步服务端动作。
 
-当前编辑器与 JSX 接线需要本仓库 dev 源码构建的 Kenvoy CLI、Node.js 24.22 或更高兼容版本及配套 npm；项目格式保持 0.4.0。在本目录执行：
+当前编辑器与 JSX 接线需要本仓库 dev 源码构建的 Kenvoy CLI；本示例项目依赖统一用 Bun 1.4.3 管理。自定义客户端的框架内部工具链仍需 Node.js 24.22+ 及配套 npm，本次不切换该内部实现；项目格式保持 0.4.0。在本目录使用：
 
 ```text
 kenvoy types
-npm ci --include=dev --omit=peer --ignore-scripts
-npm run typecheck
+bun install --frozen-lockfile --ignore-scripts --omit=peer
+bun run typecheck
 kenvoy check
 kenvoy dev
 ```
 
-`npm ci` 准备 package-lock.json 锁定的 `clsx 2.1.1`、`@radix-ui/react-slot 1.5.0` 和开发类型依赖；`--omit=peer` 不另装框架已提供的 React 运行包，`--ignore-scripts` 不执行依赖安装脚本。React、SDK 与 Vite 由框架缓存管理，不必添加到用户依赖，也不用编写 Vite 配置。
+`bun.lock` 随源码提交并锁定 `clsx 2.1.1`、`@radix-ui/react-slot 1.5.0` 与开发类型依赖，不保留 package-lock.json。先用 Bun 准备项目依赖，再运行 Kenvoy；不要使用当前仍走 npm 的 `--install-deps`。React、SDK 与框架工具链由 CLI 缓存管理，不用编写 Vite 配置。上面的安装和检查命令仅供后续使用，本次切换未执行它们。
 
 访问 `http://127.0.0.1:3000/customers`。点击“增加数量”调用捕获 `step` 常量的客户端回调；点击“计算折扣”经同源 CSRF/Session 通道执行服务端函数，返回 0.8。表单提交写入项目 `data/app.sqlite`，与组件内的临时计数状态分开。
 
-停止后可直接再次执行 `kenvoy dev`。生产模式执行 `kenvoy run`；存在源码而产物过期时自动构建，不启动文件监听。已经安装的 npm 依赖复用，不需要重复 `--install-deps`。
+停止后可直接再次执行 `kenvoy dev`。生产模式执行 `kenvoy run`；Bun 锁更新后先显式执行 `kenvoy build`，再使用 run。已经安装的项目依赖直接复用，不重复安装，也不切回 npm。
 
 管理数据前先在本目录执行 `kenvoy admin init --username admin`，按隐藏交互提示设置密码，然后登录 `/admin/login` 并访问 `/admin/customers`。没有默认管理员密码。此示例仅明确开放登记表单提交与纯计算动作；匿名列表、详情、修改和删除仍然禁止。
 
