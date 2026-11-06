@@ -53,6 +53,7 @@
 | 0037 | [翻译引用预检与 React 函数模板](0037-i18n-reference-check-and-react-templates.md) | 已执行；本地源码、CLI/HTTP、浏览器与回归验收，未发布 | 缺词启动阻断、useLocale、静态函数入口、模板闭包及并发夹具隔离 |
 | 0038 | [编辑器 SDK 类型与 JSX Runtime](0038-editor-types-and-jsx-runtime.md) | 已执行；原生声明交付、CLI 配置保护、真实 TypeScript 正反向与浏览器验收，未发布 | types/create、SDK 声明闭包、DSL/HTML/SVG 类型隔离、共享 React 与工具链缓存升级 |
 | 0039 | [五个示例的编辑器类型生成](0039-example-editor-types.md) | 已执行；五例声明与配置生成、摘要保护核对，未安装依赖 | 五份 tsconfig、三份新开发清单、两份原清单保留与本地派生声明 |
+| 0040 | [五个示例的开发类型安装与检查](0040-example-typecheck-dependencies.md) | 已执行；显式授权安装、五例 tsc 正反向与静态资源模型复核 | 开发依赖/锁文件、CSS 副作用声明、静态 JSX 插值及用户暂存保护 |
 
 ## 关联代码与配置
 

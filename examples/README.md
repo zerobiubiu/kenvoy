@@ -18,15 +18,23 @@
 
 本轮已为全部示例生成编辑器类型；`.kenvoy/types` 是本机派生缓存，不随 Git 提交，重新克隆或清理缓存后再次执行 `kenvoy types`。
 
-| 示例 | 声明文件 | tsconfig.json | package.json |
+| 示例 | SDK 派生声明 | 开发类型依赖 | typecheck |
 |---|---:|---|---|
-| customer-app | 24 | 已创建 | 已创建开发类型清单 |
-| extensions-app | 24 | 已创建 | 原清单保留 |
-| options-app | 24 | 已创建 | 原清单保留 |
-| uploads-app | 24 | 已创建 | 已创建开发类型清单 |
-| i18n-app | 24 | 已创建 | 已创建开发类型清单 |
+| customer-app | 24 | 已安装 | 通过 |
+| extensions-app | 24 | 已安装，保留原第三方依赖 | 通过 |
+| options-app | 24 | 已安装，保留原第三方依赖 | 通过 |
+| uploads-app | 24 | 已安装 | 通过 |
+| i18n-app | 24 | 已安装 | 通过 |
 
-本次没有安装依赖或执行 TypeScript 检查。extensions-app、options-app 仍需按 types 报告为原清单补齐开发类型依赖和 typecheck 脚本；其余三个示例可显式安装新清单中的开发依赖。生成记录见 [0039](../docs/changes/0039-example-editor-types.md)。
+经显式授权，五个示例均已安装匹配的 TypeScript/React 开发类型并补齐 typecheck 脚本。重新克隆后可在各示例目录执行：
+
+```text
+kenvoy types
+npm ci --include=dev --omit=peer --ignore-scripts
+npm run typecheck
+```
+
+`--omit=peer` 保留版本解析与约束检查，但不另装框架已共享的 React peer 运行包；不使用 legacy-peer-deps 或关闭 strict。全局 CSS 使用无 JavaScript 导出的副作用类型声明，静态 JSX 值以插值组合。生成记录见 [0039](../docs/changes/0039-example-editor-types.md)，本轮安装与正反向类型验收见 [0040](../docs/changes/0040-example-typecheck-dependencies.md)。
 
 
 

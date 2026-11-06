@@ -7,7 +7,7 @@ const step = 2;
 export default (
   <app name="客户管理扩展示例">
     <resource name="customers">
-      <CustomerFields />
+      {CustomerFields}
     </resource>
 
     <page path="/customers" title="客户登记">
