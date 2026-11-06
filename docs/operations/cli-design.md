@@ -2,7 +2,7 @@
 
 状态：参考（现状文档）。正式迁移、兼容门禁、旧库接入和快照见 [迁移操作](migration-design.md)；早期生命周期证据见[原验收报告](../verification/0011-cli-lifecycle.md)，不将历史动态迁移行为作为当前契约。
 
-本文新增能力对应源码版本 **0.5.0**，与 **`@kenvoy/types@0.5.0`** 准备同步正式发行，尚未实际上传或完成该版本的安装验收；当前已发布 CLI 仍为 0.4.4。KEngine 保持 0.2.0，发行前请使用本仓库 dev 的 0.5.0 源码构建。
+本文能力对应已发布的 **Kenvoy CLI 0.5.0 与 `@kenvoy/types@0.5.0`**，KEngine 保持 0.2.0。真实注册表安装、CLI 创建及默认类型接线已通过，发行与验证边界见 [0044](../changes/0044-cli-0.5.0-and-types-first-publish.md)。
 
 ## 创建与检查
 
@@ -27,7 +27,7 @@ kenvoy check --resource customers --input patch.json --patch
 
 ## 编辑器类型
 
-以下能力要求 **Kenvoy CLI 0.5.0 与 `@kenvoy/types@0.5.0`**，目前处于正式发行准备阶段。编辑器类型由独立 npm 包提供，版本与 CLI 完全一致；新项目自动写入精确版本的开发依赖。CLI 不再内嵌或导出编辑器声明，旧 `kenvoy types` 命令已删除。
+以下能力要求 **Kenvoy CLI 0.5.0 与同版 `@kenvoy/types`**。编辑器类型已由独立公开 npm 包提供；新项目自动写入精确版本开发依赖。CLI 不再内嵌或导出编辑器声明，旧 `kenvoy types` 命令已删除。
 
 已有项目保留原配置，只做以下接线：
 
@@ -47,7 +47,7 @@ kenvoy check --resource customers --input patch.json --patch
 
 默认配置继续采用 strict、noEmit、Bundler，不设置 baseUrl、skipLibCheck 或任意标签 any 索引。类型包从真实 SDK 源码和两个 JSX runtime 根生成声明，用环境模块连接 `@kenvoy/client`、生产与开发 JSX runtime；不提供 JavaScript，也不污染普通 `React.JSX`。React 运行包仍由 Kenvoy 共享，不安装重复 React 或占位 npm `@kenvoy/client`。
 
-**首次 npm 发布尚未执行。** 已发布 CLI 0.4.4 源码包不含新类型包目录，不能拿新 HEAD 回填旧版本；首次正式发行安排为 0.5.0，须先发布携带完整声明目录的同版 CLI crate。用户已确认拥有 `@kenvoy` scope 发布权限，但本机 `npm whoami` 实际返回 401，登录仍待用户完成；`@kenvoy/types` 独立 Trusted Publisher 尚未配置、执行或验证，原 `kenvoy` 授权不覆盖新包。正式发布后，正常项目仅需安装 package.json 的开发依赖，不再运行 CLI 生成类型。
+**0.5.0 已完成首次正式发布。** 普通项目执行 `npm install --save-dev --save-exact @kenvoy/types@0.5.0`，或安装 CLI 已生成清单中的开发依赖，再运行 typecheck，不需要先执行 CLI 生成声明。已发布 0.4.4 不含新接口和类型目录，不能把新包当作其兼容声明或用 HEAD 回填；版本与实际安装记录见 [0044](../changes/0044-cli-0.5.0-and-types-first-publish.md)。
 
 源码开发在仓库根执行：
 

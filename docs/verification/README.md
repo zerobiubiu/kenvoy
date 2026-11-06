@@ -44,6 +44,7 @@
 | [changes/0041：examples Bun 切换](../changes/0041-examples-bun-package-manager.md) | 按用户要求未验证；仅记录五次锁转换，不代表安装、类型检查或运行通过 | [示例使用说明](../../examples/README.md) |
 | [changes/0042：独立编辑器类型包](../changes/0042-published-editor-types-package.md#执行验证记录) | 已执行；真实 tarball TypeScript 正反向、五例 Bun 安装/类型检查、无 Node 的项目创建及同版包消费、发布来源与类型优先边界；未远端发布 | [编辑器操作](../operations/cli-design.md#编辑器类型)、[示例](../../examples/README.md)、[渠道操作](../operations/distribution-channels.md) |
 | [changes/0043：0.5.0 同步发行准备](../changes/0043-cli-0.5.0-release-preparation.md#执行验证记录) | 已执行；0.5.0 本地构建、完整标准 Rust 套件、144 项前端、五例 CLI check 与工程门禁；不代表远端发行或 MSRV 验收 | [发布操作](../operations/releasing.md)、[渠道进度](../development/channel-rollout-status.md) |
+| [changes/0044：0.5.0 与类型包正式发行](../changes/0044-cli-0.5.0-and-types-first-publish.md#执行验证记录) | 已执行；真实源包/14 资产/注册表双包、Windows x64 匿名 CLI 运行及新项目类型接线、两种 JSX 和 52 错误位置、辅助渠道文件全量对照 | [发行进度](../development/channel-rollout-status.md)、[编辑器操作](../operations/cli-design.md#编辑器类型)、[渠道操作](../operations/distribution-channels.md) |
 
 ## 初始审查与准备计划
 

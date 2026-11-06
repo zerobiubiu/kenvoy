@@ -4,7 +4,7 @@
 
 ## 0.5.0
 
-发布状态：准备中，尚未实际上传或完成该版本的安装验收。Kenvoy CLI 与 `@kenvoy/types` 统一为 0.5.0，KEngine 保持 0.2.0；项目格式仍为 0.4.0，0.5.0 create 的新项目最低 CLI 为 0.5.0。已发布 0.4.4、既有资产和旧标签保持不动。
+发布状态：已发布，2026-11-06（UTC）。Kenvoy CLI 与 `@kenvoy/types` 均为 0.5.0，KEngine 保持 0.2.0；CLI 源包、14 项 GitHub 资产、两个 npm 包、Homebrew/Scoop 及 Windows x64 匿名消费者验收已完成。项目格式仍为 0.4.0，新项目最低 CLI 为 0.5.0；旧版资产与标签保持不动。完整执行与限制见 [0044](0044-cli-0.5.0-and-types-first-publish.md)。
 
 ### 功能
 
@@ -18,8 +18,9 @@
 - 自动与手动正式发布均仅允许 main，成功后自动接续 npm、Homebrew、Scoop；取消渠道独立手动入口与任意版本输入。
 - 手动打包拆成 Windows/Linux/macOS 各 x86_64、ARM64 六个独立入口，允许任意分支，仅提供 Actions artifact 下载。
 - 复用现有构建/发布实现，保留 OIDC 文件身份；不增加发布源、PR/定时流程，不改动既有标签。此前本地实施记录见 [0036](0036-workflow-entrypoints.md)。
-- 增加同版纯类型 tarball/摘要的正式 Release 资产，首次安排为 `kenvoy-types-0.5.0.tgz`；只从同版已发布 CLI 源码包提取并校验，不用新 HEAD 回填旧版。npm 在类型版本可见后再发布同版 CLI 安装器，实施边界见 [0042](0042-published-editor-types-package.md)。
-- 用户已确认拥有 `@kenvoy` scope 发布权限；本机 `npm whoami` 实际返回 401，登录仍待用户完成，`@kenvoy/types` 的独立 Trusted Publisher 尚未配置、执行或验证，首次上传也未发生。现有 `kenvoy` OIDC 授权不自动覆盖新包，前置与后续远端证据统一维护于[渠道进度](../development/channel-rollout-status.md)。
+- 首次交付 `kenvoy-types-0.5.0.tgz` 及摘要，只从同版已发布 CLI crate 提取，匿名 npm 下载与正式资产逐字一致，不用 HEAD 回填旧版。npm 在类型版本可见后发布同版 CLI 安装器。
+- 类型包由用户会话首发，独立可信发布配置已读回核对并保留既有权限；CLI 实际通过 GitHub OIDC 发布并附 provenance，不把手动首发或跳过已有类型版本当作类型包 OIDC 验证。
+- 首轮 macOS hosted runner 容量取消只恢复单个 job；渠道首轮新类型包授权前置只恢复 npm job，没有重传成功源包或覆盖旧资产。真实 registry 安装、CLI 创建项目与默认类型检查均通过。
 
 ## 0.4.4
 

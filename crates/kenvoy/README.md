@@ -2,7 +2,7 @@
 
 将 TypeScript/JSX 声明解释为 React 页面、受控 API、管理后台和 SQLite 持久化应用的 Rust 原生 CLI。
 
-本源码版本为 **0.5.0**，与 **`@kenvoy/types@0.5.0`** 准备同步正式发行，KEngine 保持 **0.2.0**；0.5.0 尚未实际上传或完成该版本的安装验收。当前已发布 CLI 为 **0.4.4**，下列默认安装命令获取实际已发布版本，不将源码版本或 Git 标签当作线上可安装证据；完整发行状态见仓库的渠道进度与版本日志。
+本源码版本为 **0.5.0**，CLI 与 **`@kenvoy/types@0.5.0`** 均已正式发布，KEngine 保持 **0.2.0**。本版已完成 Windows x64 匿名 npm 安装、实际 CLI 运行、新建项目从注册表安装类型并检查；其他平台构建和辅助渠道证据以仓库渠道进度与版本日志为准，不将其扩大为全部平台本机运行验收。
 
 ## 安装
 
@@ -55,7 +55,7 @@ dev/run 使用同一持久化数据库；不要通过删除 data 目录修复前
 
 基础界面使用 React、TypeScript 与原生 CSS。自定义客户端组件首次构建需要 Node 24.22.0 或以上及 npm；只有显式 `--install-deps` 才准备应用声明的用户依赖，不会静默修改应用的 package.json。
 
-0.5.0 将编辑器声明独立交付为同版本的 `@kenvoy/types@0.5.0` npm 开发依赖。新项目自带 TypeScript 配置与精确版本依赖，已有项目加入类型包和 `types: ["@kenvoy/types"]`；`kenvoy types` 已删除，不再生成 `.kenvoy/types`。无需安装重复 React 运行包或占位 `@kenvoy/client`。该类型包尚未首次发布；发行前的源码开发可构建并安装同版真实 tarball，详见仓库 dev 文档。
+0.5.0 将编辑器声明独立交付为同版本的 `@kenvoy/types@0.5.0` npm 开发依赖。新项目自带 TypeScript 配置与精确版本依赖，已有项目可执行 `npm install --save-dev --save-exact @kenvoy/types@0.5.0` 并加入 `types: ["@kenvoy/types"]`；`kenvoy types` 已删除，不再生成 `.kenvoy/types`。无需安装重复 React 运行包或占位 `@kenvoy/client`。仓库源码开发也可使用同版真实 tarball，详见仓库文档。
 
 
 0.5.0 的默认入口还支持静态 React 函数/箭头函数返回 JSX、局部常量与静态重导出；这不是执行任意 React 代码生成 Schema，动态 UI 与 Hooks 仍属于普通客户端组件。

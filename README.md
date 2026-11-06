@@ -54,9 +54,9 @@ kenvoy dev                           # http://127.0.0.1:3000
 
 访问 `/customers` 登记数据；登录 `/admin/customers` 查询、编辑和删除。匿名只有声明允许的表单提交权限。
 
-本次源码发行版本为 Kenvoy CLI **0.5.0**，与 **`@kenvoy/types@0.5.0`** 准备同步正式发行，尚未实际上传或完成该版本的安装验收；现有已发布 CLI 仍为 **0.4.4**，KEngine 保持 **0.2.0**。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
+Kenvoy CLI **0.5.0** 与 **`@kenvoy/types@0.5.0`** 已正式发布，KEngine 保持 **0.2.0**；发行与匿名 npm 安装证据见 [0044](docs/changes/0044-cli-0.5.0-and-types-first-publish.md)。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
 
-### 编辑器类型支持（0.5.0，发行准备中）
+### 编辑器类型支持
 
 0.5.0 CLI 为新项目生成 `tsconfig.json` 和私有开发依赖清单，`@kenvoy/types` 开发依赖精确使用 **0.5.0**；新建 `min_cli_version` 为 **0.5.0**，项目格式仍为 **0.4.0**。`kenvoy types` 已删除，不再生成 `.kenvoy/types`。类型包包含真实 SDK、React JSX 与 DSL 声明，不提供运行时代码。基础 DSL 运行仍不要求 Node。
 
@@ -70,7 +70,13 @@ kenvoy dev                           # http://127.0.0.1:3000
 }
 ```
 
-`@kenvoy/types@0.5.0` 尚未发布到 npm。发行前的源码开发先执行 `npm --prefix crates/kenvoy/frontend run build:types`，产物为带 CLI 版本与内容摘要的本地 tarball，路径记录于 `frontend/dist/types-artifact.json`；构建同时同步仓库五个示例的类型开发依赖，不改写独立用户项目。Bun 通过实际 tarball 安装，不依赖 CLI 生成声明。正式发布后由包管理器安装同版 `@kenvoy/types`，Release 资产名为 `kenvoy-types-0.5.0.tgz`，完整操作和首次发布前提见[编辑器类型](docs/operations/cli-design.md#编辑器类型)。
+类型包已公开，可在应用目录安装同 CLI 精确版本：
+
+```text
+npm install --save-dev --save-exact @kenvoy/types@0.5.0
+```
+
+仓库示例仍使用面向源码开发的本地包：先执行 `npm --prefix crates/kenvoy/frontend run build:types`，产物为带 CLI 版本与内容摘要的 tarball，路径记录于 `frontend/dist/types-artifact.json`；构建只同步五个示例的类型开发依赖，不改写独立应用。正式 Release 的类型资产名为 `kenvoy-types-0.5.0.tgz`，完整接线见[编辑器类型](docs/operations/cli-design.md#编辑器类型)。
 
 保留已有应用的其他 TypeScript 设置，只移除旧的三个虚拟模块 `paths` 并加入类型包。不要安装空壳 `@kenvoy/client` 或重复 React 运行包，也不要用 `any`、空模块声明或关闭 strict 消红；该分发方式尚未包含在已发布的 CLI 0.4.4 中。
 
@@ -164,17 +170,18 @@ cargo xtask browser    # 显式运行真实浏览器用例
 
 ## 分发状态
 
-本次 **0.5.0** 仍处于正式发行准备阶段，下面保留的是 **0.4.4** 的已发行事实，不代表 0.5.0 已上传、已安装或新类型包已获 OIDC 授权。
+**0.5.0 已完成正式发行**；旧版 0.4.4 的资产与标签保持不动，历史证据见 [0035](docs/changes/0035-cargo-package-checksum-recovery.md)，本版见 [0044](docs/changes/0044-cli-0.5.0-and-types-first-publish.md)。
 
 当前已发布：
 
-- [crates.io](https://crates.io/crates/kenvoy)：`kenvoy` CLI 0.4.4 与 `kengine` 库 0.2.0
-- [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.4.4)：Windows MSVC、Linux musl、macOS 的 x86_64 / ARM64 六份预编译 ZIP 与 SHA256
-- [npm](https://www.npmjs.com/package/kenvoy)：`kenvoy@0.4.4` 单包，经 GitHub OIDC 发布；Windows x64 与 Linux x64 已实际安装运行
-- [Homebrew](https://github.com/zerobiubiu/homebrew-tap/blob/main/Formula/kenvoy.rb)：0.4.4 二进制 formula
-- [Scoop](https://github.com/zerobiubiu/scoop-bucket/blob/main/bucket/kenvoy.json)：0.4.4 清单
+- [crates.io](https://crates.io/crates/kenvoy)：`kenvoy` CLI 0.5.0 与 `kengine` 库 0.2.0
+- [GitHub Releases](https://github.com/zerobiubiu/kenvoy/releases/tag/v0.5.0)：六目标预编译 ZIP、同版类型 tarball 及各自 SHA256，共 14 项资产
+- [npm CLI](https://www.npmjs.com/package/kenvoy)：`kenvoy@0.5.0`，GitHub OIDC 与 provenance；Windows x64 已匿名隔离安装并实际运行
+- [npm 类型包](https://www.npmjs.com/package/@kenvoy/types)：`@kenvoy/types@0.5.0`，账号首发，匿名严格 SDK/JSX 与新建项目接线通过
+- [Homebrew](https://github.com/zerobiubiu/homebrew-tap/blob/main/Formula/kenvoy.rb)：0.5.0 二进制 formula
+- [Scoop](https://github.com/zerobiubiu/scoop-bucket/blob/main/bucket/kenvoy.json)：0.5.0 清单
 
-npm 使用单个 `kenvoy` 包，安装时自动下载当前平台的官方二进制，不依赖平台分包；npm 首发与 OIDC、Homebrew/Scoop 的实际状态见[渠道发布进度](docs/development/channel-rollout-status.md)。APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 渠道均已取消；GitHub Release 的六目标 ZIP 继续保留。
+npm 的 `kenvoy` 安装器只下载当前平台的官方二进制，不依赖平台分包；`@kenvoy/types` 是同版纯开发声明，不带 React 运行包。新类型包独立可信发布配置已核对，本轮手动首发不冒充其 OIDC 上传验证。准确边界见[渠道进度](docs/development/channel-rollout-status.md)。已退役渠道不恢复；Homebrew/Scoop 已核对远端文件与正式摘要，未执行两者的原生安装。
 
 ## 参与贡献
 

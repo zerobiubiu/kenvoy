@@ -57,6 +57,7 @@
 | 0041 | [examples 切换 Bun 包管理](0041-examples-bun-package-manager.md) | 已执行；按用户要求仅切换，未验证 | 五份包管理器声明、Bun 锁替换 npm 锁、示例命令与框架边界说明 |
 | 0042 | [独立编辑器类型包与同版发布](0042-published-editor-types-package.md) | 已执行；真实 tarball、Bun 五例、新建项目与本地发布边界验证；未首次发布 | `@kenvoy/types` 单一版本源、包管理器接线、移除 types/cache、同版 registry 源包和类型优先渠道 |
 | 0043 | [CLI 0.5.0 与类型包同步发行准备](0043-cli-0.5.0-release-preparation.md) | 已执行；本地版本、完整标准 Rust/前端套件、五例检查与首发前置；尚未上传 | CLI/types 0.5.0、KEngine 0.2.0、i18n 最低 CLI、同版正式来源与首次会话/TP 顺序 |
+| 0044 | [CLI 0.5.0 与类型包首次正式发布](0044-cli-0.5.0-and-types-first-publish.md) | 已执行；源包、14 项 Release、两个 npm 包、三渠道与匿名消费者验收 | 单 job 容量恢复、原始类型 tarball 摘要、账号首发、CLI OIDC、新绑定读回及真实新建项目 |
 
 0041 记录切换 Bun 时提交锁文件的历史事实；后按用户要求，examples 下的锁文件不再由 Git 跟踪，本地文件保留。当前安装方式见[示例总览](../../examples/README.md)。
 

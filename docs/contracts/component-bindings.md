@@ -71,7 +71,7 @@ file 重载额外取得 `uploadState/upload/removeUpload/cancelUpload`，复用�
 
 ## 编辑器与 JSX 类型
 
-dev 后续实现通过同 CLI 版本的 `@kenvoy/types` 开发依赖交付真实 SDK 声明，尚未首次发布。操作见 [CLI 编辑器类型](../operations/cli-design.md#编辑器类型)：使用 `types: ["@kenvoy/types"]`，不再执行 `kenvoy types` 或配置三个本地缓存 paths。不要在项目中写空壳 `declare module '@kenvoy/client'`，也不要安装同名占位 npm 包。
+已发布 CLI 0.5.0 通过同版 `@kenvoy/types` npm 开发依赖交付真实 SDK 声明。操作见 [CLI 编辑器类型](../operations/cli-design.md#编辑器类型)：使用 `types: ["@kenvoy/types"]`，不再执行 `kenvoy types` 或配置三个缓存 paths；匿名注册表 SDK/JSX 正反向验收见 [0044](../changes/0044-cli-0.5.0-and-types-first-publish.md)。不要写空壳 `declare module '@kenvoy/client'` 或安装同名占位包。
 
 `jsxImportSource: @kenvoy/client` 使用独立 JSX 类型命名空间：DSL 的 app/page/resource/字段等具有具体属性，text、form、select、image 等同名标签与普通 React HTML/SVG 分支择一匹配，保留事件、aria、children、ref 和自定义组件 props 检查。不全局污染 React.JSX，不用任意标签 any 索引消除诊断。浏览器中的 jsx/jsxs/jsxDEV/Fragment 仍转发到同一 React 运行时。
 

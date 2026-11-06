@@ -2,11 +2,11 @@
 
 此示例展示 Kenvoy 原生国际化：DSL 默认文案、根目录集中中英文译文、内置表单/后台/错误、框架语言选择器、`useI18n()` 和 `useLocale()` 共用一套语言状态。原生国际化始终启用，没有第三方 i18n 库、应用 Provider 或自建语言路由。
 
-本例的函数模板入口、`useLocale()` 和显式翻译键预检要求 **Kenvoy CLI 0.5.0**，编辑器声明精确匹配 **`@kenvoy/types@0.5.0`**；项目最低 CLI 为 **0.5.0**，项目格式仍为 **0.4.0**。0.5.0 正在准备正式发行，尚未实际上传或完成该版本的安装验收，发行前使用本仓库 dev 的 0.5.0 源码构建及同版本本地类型 tarball，不能使用已发布 0.4.4 运行这些新能力。若未加入 PATH，将下文 `kenvoy` 替换为仓库 `target/debug/kenvoy`（Windows 为 `.exe`）的路径。
+本例的函数模板入口、`useLocale()` 和翻译引用预检要求已发布的 **Kenvoy CLI 0.5.0**，编辑器类型精确匹配 **`@kenvoy/types@0.5.0`**；项目最低 CLI 为 **0.5.0**，项目格式仍为 **0.4.0**。普通项目可从 npm 安装类型，本仓库示例保留源码开发用的本地 tarball。若未加入 PATH，将下文 `kenvoy` 替换为已安装 CLI 或仓库 `target/debug/kenvoy`（Windows 为 `.exe`）的路径。
 
 ## 运行
 
-本例项目依赖统一使用 Bun 1.4.3，bun.lock 只在本地生成或使用、不提交 Git。编辑器声明由 `@kenvoy/types@0.5.0` 开发依赖提供，发行前安装依赖须先按[示例总览](../README.md)构建同 CLI 版本的本地 tarball；`kenvoy types` 已删除。React 运行时、SDK 运行值与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。
+本例依赖统一用 Bun 1.4.3，bun.lock 只保留在本地、不提交 Git。编辑器由 `@kenvoy/types@0.5.0` 开发依赖提供，仓库示例安装前先按[总览](../README.md)生成同版本地 tarball；`kenvoy types` 已删除。React 运行时、SDK 运行值和内部工具链仍由 CLI 管理，自定义客户端构建需要 Node.js 24.22+ 与 npm；不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。
 
 ```text
 cd examples/i18n-app

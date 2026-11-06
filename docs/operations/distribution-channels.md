@@ -2,7 +2,7 @@
 
 状态：参考；治理：现状文档。适用范围：Kenvoy CLI 二进制分发到 npm、Homebrew、Scoop，以及同版本 `@kenvoy/types` npm 开发类型包。crates.io 与 GitHub Release 沿用 [Git 与发布操作](releasing.md)；渠道退役见 [0032](../changes/0032-retire-linux-and-winget-channels.md)，CLI 单安装器切换与首发见 [0033](../changes/0033-single-npm-package-download.md)，类型包接续见 [0042](../changes/0042-published-editor-types-package.md)，实际进度见[渠道进度](../development/channel-rollout-status.md)。安装命令不代表尚未发布版本已上线。
 
-本次准备同步正式发行 **`kenvoy@0.5.0` 与 `@kenvoy/types@0.5.0`**，KEngine 保持 0.2.0；0.5.0 尚未实际上传或完成该版本的安装验收。已公开的 CLI 安装器仍为 0.4.4，其 OIDC 发行证据不代表新类型包已获授权。
+**`kenvoy@0.5.0` 与 `@kenvoy/types@0.5.0` 已同步公开**，KEngine 保持 0.2.0；两包 latest 均为 0.5.0。CLI 由 GitHub OIDC 发布并附 provenance，类型包首次由用户会话发布，独立可信发布配置已核对；不沿用旧版或 CLI 的证据宣称新类型包已完成 OIDC 上传验证。
 
 ## 总体结构
 
@@ -102,4 +102,4 @@ APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 均已退役，不再配
 
 ## 验证边界
 
-CLI 安装器的六目标选择、真实 ZIP 下载/双重校验/原子安装、命令运行与失败保护保留 [0033](../changes/0033-single-npm-package-download.md#执行验证记录) 的实际证据。此前类型包的真实 tarball 消费、Bun 示例和本地发布边界验证见 [0042](../changes/0042-published-editor-types-package.md#执行验证记录)，其中当时的 0.4.4 本地产物不是 0.5.0 的上传或安装证据。0.5.0 尚未实际上传、安装或触发远端 Actions；用户已确认 scope 权限，但本机 `npm whoami` 返回 401，登录仍待用户完成，新包独立 Trusted Publisher 也尚未配置、执行或验证。不将本地生成版本、旧 CLI 发行或未运行平台冒充新类型包已上线。
+本次 0.5.0 的正式源包、14 项 Release 资产、两个 npm 包、辅助渠道与匿名消费者验收见 [0044](../changes/0044-cli-0.5.0-and-types-first-publish.md#执行验证记录)。Windows x64 实际 npm 安装及 CLI 创建/类型检查通过；Homebrew/Scoop 的远端文件逐字匹配正式资产生成结果，未执行原生安装；其他平台成功构建不等于本机运行验收。此前安装器行为见 [0033](../changes/0033-single-npm-package-download.md)，类型实现见 [0042](../changes/0042-published-editor-types-package.md)。provenance 的存在不等于独立密码学验签。
