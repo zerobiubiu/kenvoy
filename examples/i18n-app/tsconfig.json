@@ -1,42 +1,31 @@
 {
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "allowJs": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "@kenvoy/client",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "noEmit": true,
-    "paths": {
-      "@kenvoy/client": [
-        "./.kenvoy/types/sdk.d.ts"
-      ],
-      "@kenvoy/client/jsx-dev-runtime": [
-        "./.kenvoy/types/presentation/jsx-dev-runtime.d.ts"
-      ],
-      "@kenvoy/client/jsx-runtime": [
-        "./.kenvoy/types/presentation/jsx-runtime.d.ts"
-      ]
+    "compilerOptions": {
+        "allowImportingTsExtensions": true,
+        "allowJs": true,
+        "jsx": "react-jsx",
+        "jsxImportSource": "@kenvoy/client",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "noEmit": true,
+        "paths": {
+            "@kenvoy/client": ["./.kenvoy/types/sdk.d.ts"],
+            "@kenvoy/client/jsx-dev-runtime": [
+                "./.kenvoy/types/presentation/jsx-dev-runtime.d.ts",
+            ],
+            "@kenvoy/client/jsx-runtime": [
+                "./.kenvoy/types/presentation/jsx-runtime.d.ts",
+            ],
+        },
+        "strict": true,
+        "target": "ES2022",
     },
-    "strict": true,
-    "target": "ES2022"
-  },
-  "exclude": [
-    "**/node_modules",
-    "./.kenvoy",
-    "./migrations",
-    "./dist",
-    "./data"
-  ],
-  "include": [
-    "./**/*.ts",
-    "./**/*.tsx",
-    "./**/*.js",
-    "./**/*.jsx"
-  ]
+    "exclude": [
+        "**/node_modules",
+        "./.kenvoy",
+        "./migrations",
+        "./dist",
+        "./data",
+    ],
+    "include": ["./**/*.ts", "./**/*.tsx", "./**/*.js", "./**/*.jsx"],
 }
