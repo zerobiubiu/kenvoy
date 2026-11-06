@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import registry
+import type_package
 from release_common import (
     GitHub, ReleaseError, asset_name, git, manifest_at,
     release_assets, release_context, require_tag, write_outputs,
@@ -25,7 +26,8 @@ def plan_release(root, environ, github=None, registry_client=registry):
         "engine_version": engine_version, "tag": f"v{version}",
         "active": False, "publish_engine": False, "publish_kenvoy": False,
         "release_required": False, "matrix": {"include": []},
-        "archives": [], "reason": "当前版本的源包与二进制资产均已发布，本次跳过。",
+        "archives": [], "types_archive": type_package.archive_name(version),
+        "reason": "当前版本的源包、二进制与类型资产均已发布，本次跳过。",
     }
     if github.main_sha() != sha:
         plan["reason"] = "此运行已不是远端 main 最新提交，跳过，不补发历史版本。"
@@ -45,10 +47,11 @@ def plan_release(root, environ, github=None, registry_client=registry):
     if cli_state is not None:
         payload = registry_client.download_crate("kenvoy", version, cli_state)
         published_manifest = registry_client.package_manifest(payload, "kenvoy", version)
+        type_package.crate_files(payload, version, repository)
     targets = json.loads(git(root, "show", f"{sha}:.github/distribution-targets.json"))
     if len(targets) != 6 or len({item["target"] for item in targets}) != 6:
         raise ReleaseError("发布目标必须是六个互不重复的系统/架构组合")
-    expected = set()
+    expected = {plan["types_archive"], f"{plan['types_archive']}.sha256"}
     for target in targets:
         name = asset_name(published_manifest, target["target"], version, repository)
         if name in expected:
@@ -75,7 +78,7 @@ def plan_release(root, environ, github=None, registry_client=registry):
         f"仅处理 main 当前版本 {version}："
         f"kengine {'待发布' if plan['publish_engine'] else '已存在'}，"
         f"kenvoy {'待发布' if plan['publish_kenvoy'] else '已存在'}，"
-        f"需构建 {len(plan['matrix']['include'])} 个目标；不扫描历史版本。"
+        f"需构建 {len(plan['matrix']['include'])} 个目标并核对同版本类型资产；不扫描历史版本。"
     )
     return plan
 

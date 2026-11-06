@@ -1,4 +1,4 @@
-"""从已发布 Release 生成渠道发布所需的 assets.json，并校验六个归档。"""
+"""从正式 Release 生成 assets.json，校验六平台归档和同版本纯类型资产。"""
 
 import argparse
 import hashlib
@@ -8,6 +8,8 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+import type_assets
 
 PLATFORMS = {"windows", "linux", "macos"}
 ARCHES = {"x86_64", "ARM64"}
@@ -40,6 +42,8 @@ def build(version, repository, tag, assets):
         raise AssetError(f"版本必须是正式 X.Y.Z，实际 {version}")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise AssetError("仓库标识无效")
+    if tag != f"v{version}":
+        raise AssetError("渠道资产 tag 必须与 CLI 版本一致")
     uploaded = {item["name"]: item for item in assets if item.get("state") == "uploaded"}
     entries = []
     for platform in sorted(PLATFORMS):
@@ -67,7 +71,8 @@ def build(version, repository, tag, assets):
                 "url": f"https://github.com/{repository}/releases/download/{tag}/{name}",
                 "binary": "kenvoy.exe" if platform == "windows" else "kenvoy",
             })
-    return {"version": version, "tag": tag, "repository": repository, "assets": entries}
+    return {"version": version, "tag": tag, "repository": repository, "assets": entries,
+            "types": type_assets.build(version, repository, tag, assets)}
 
 
 def download(zips, assets):
@@ -98,16 +103,19 @@ def main():
     parser.add_argument("--repository", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--zips", help="同时下载六个 ZIP 到该目录")
+    parser.add_argument("--types", help="同时下载并校验类型 tarball 与 SHA256 侧车")
     arguments = parser.parse_args()
     tag = f"v{arguments.version}"
     manifest = build(arguments.version, arguments.repository, tag,
                      release_assets(arguments.repository, tag, os.environ.get("GH_TOKEN")))
     if arguments.zips:
         download(Path(arguments.zips), manifest)
+    if arguments.types:
+        type_assets.download(Path(arguments.types), manifest, download)
     Path(arguments.output).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"资产清单完成：{arguments.version}，6 个归档")
+    print(f"资产清单完成：{arguments.version}，6 个二进制归档与同版本类型资产")
 
 
 if __name__ == "__main__":

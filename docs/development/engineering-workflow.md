@@ -32,7 +32,11 @@ xtask/                     # 不发布的 Rust 工程编排
 
 xtask 不自动安装工具或框架依赖。首次从源码构建仍需按[根 README](../../README.md)准备 npm 依赖；浏览器需要已有 Playwright/Chromium。内部 Cargo 命令使用 `--offline --locked`。CLI 路径从 Cargo 的 compiler-artifact 消息取得，并通过 `KENVOY_BINARY` 传给测试，支持不同 target 目录和构建 profile。
 
-前端 `npm run build` 先生成 Vite 资产，再通过 `tsconfig.types.json` 从真实 SDK 与两个 JSX runtime 根生成 `dist/types` 声明闭包；Cargo 构建要求两类产物齐全，发布源包也包含这些声明。不要仅运行 Vite 或手写一份 SDK 声明替代该步骤。编辑器消费回归由 `frontend/tests/editor-types.test.mjs` 使用真实 TypeScript 执行正反向检查；项目生成与保护边界由 `kenvoy/tests/types_cli.rs` 验证。
+前端 `npm run build` 先生成 Vite 资产，再执行 `npm run build:types`：从真实 SDK 与两个 JSX runtime 根生成 `dist/types` 声明闭包，并按 CLI Cargo 元数据生成 `dist/types-package`、本地 `dist/kenvoy-types-<CLI版本>-<内容摘要>.tgz` 与 SHA256；`dist/types-artifact.json` 记录产物文件名、完整摘要与版本。构建仅同步本仓库五个示例的该开发依赖，保留其余配置，不改写独立应用。内容寻址避免 Bun 复用同一路径下的旧 tarball，CLI 和 SDK 变化均能刷新。
+
+只改编辑器接线时可单独执行 `npm run build:types`，不必重建 UI。CLI 不再嵌入编辑器声明；发布源码包包含完整类型包目录，正式类型资产只从同版本已发布 CLI 源码包提取并打为 `kenvoy-types-X.Y.Z.tgz`，不带本地摘要后缀，也不能用新 HEAD 补造旧版本类型。不要手写另一份 SDK 声明替代生成步骤。
+
+`frontend/tests/editor-types.test.mjs` 将真实 tarball 安装到干净应用，执行 SDK、生产/开发 JSX 的正反向 TypeScript 检查；项目生成的实际行为边界由 `kenvoy/tests/cli.rs` 验证。消费方通过 `types: ["@kenvoy/types"]` 接入，不配置 `.kenvoy/types` 路径。
 
 
 dist 仅做已有程序的归档与验收，不隐式发布到 registry 或 GitHub；发布与交叉编译流程见[发布操作](../operations/releasing.md)。正式对外操作由发布操作者在对应门禁完成后执行。

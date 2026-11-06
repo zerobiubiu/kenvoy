@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+import { runNpm } from '../scripts/type-package-npm.mjs';
 const frontend = fileURLToPath(new URL('../', import.meta.url));
 const fixtures = fileURLToPath(new URL('./types/', import.meta.url));
 const compiler = join(frontend, 'node_modules/typescript/bin/tsc');
@@ -25,13 +26,8 @@ function configuration(root, files, jsx = 'react-jsx') {
     compilerOptions: {
       target: 'ES2022', lib: ['ES2022', 'DOM', 'DOM.Iterable'], module: 'ESNext',
       moduleResolution: 'Bundler', strict: true, noEmit: true, jsx,
-      jsxImportSource: '@kenvoy/client', types: ['react', 'react-dom'],
+      jsxImportSource: '@kenvoy/client', types: ['@kenvoy/types', 'react', 'react-dom'],
       allowImportingTsExtensions: true, verbatimModuleSyntax: true, erasableSyntaxOnly: true,
-      paths: {
-        '@kenvoy/client': ['./.kenvoy/types/sdk.d.ts'],
-        '@kenvoy/client/jsx-runtime': ['./.kenvoy/types/presentation/jsx-runtime.d.ts'],
-        '@kenvoy/client/jsx-dev-runtime': ['./.kenvoy/types/presentation/jsx-dev-runtime.d.ts'],
-      },
     },
     files: files.map(file => `./src/${file}`),
   }, null, 2));
@@ -50,17 +46,21 @@ function expectedErrors(files) {
   return expected;
 }
 
-test('真实 SDK 声明在仅有开发类型依赖的应用内保持严格 JSX 与 API 检查', { timeout: 180_000 }, () => {
+test('实际安装的 @kenvoy/types 在仅有开发类型依赖的应用内保持严格 JSX 与 API 检查', { timeout: 180_000 }, () => {
   const root = mkdtempSync(join(tmpdir(), 'kenvoy-editor-types-'));
   try {
-    mkdirSync(join(root, 'node_modules'), { recursive: true });
-    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
-    // 不链接 React 运行包或 frontend 源码，声明只依赖开发类型及其真实传递依赖。
-    for (const dependency of ['@types', 'csstype']) {
-      symlinkSync(join(frontend, 'node_modules', dependency), join(root, 'node_modules', dependency), linkType);
-    }
-    const emitted = compile(['-p', join(frontend, 'tsconfig.types.json'), '--outDir', join(root, '.kenvoy/types')], frontend);
-    assert.equal(emitted.status, 0, emitted.output);
+    writeFileSync(join(root, 'package.json'), JSON.stringify({
+      name: 'kenvoy-type-consumer', private: true, type: 'module',
+      devDependencies: Object.fromEntries(['@types/react', '@types/react-dom', 'csstype'].map(name =>
+        [name, pathToFileURL(join(frontend, 'node_modules', name)).href])),
+    }));
+    const artifact = JSON.parse(readFileSync(join(frontend, 'dist/types-artifact.json'), 'utf8'));
+    const tarball = join(frontend, 'dist', artifact.file);
+    // 安装实际 npm tarball；显式提供开发类型，不解析或安装运行依赖及 peer。
+    runNpm([
+      'install', tarball, '--ignore-scripts', '--offline', '--no-audit', '--no-fund',
+      '--no-package-lock', '--omit=peer', '--include=dev', '--no-save',
+    ], root);
     const positive = 'editor-positive.tsx';
     const negatives = ['editor-negative.tsx', 'editor-react-negative.tsx'];
     mkdirSync(join(root, 'src'));

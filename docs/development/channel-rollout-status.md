@@ -6,7 +6,7 @@
 
 | 项 | 当前状态 |
 |---|---|
-| npm 包形态 | 只生成和发布 `kenvoy`；安装时按系统/架构下载一个对应 ZIP，不再发布或依赖平台分包 |
+| npm 包形态 | 现有 `kenvoy` 仍为单个 CLI 安装器、无平台分包；dev 新增同 CLI 版本的纯声明 `@kenvoy/types`，本轮未执行其首次发布 |
 | npm 当前版本 | `kenvoy@0.4.4` 已公开，latest=0.4.4；注册表发布者为 GitHub Actions、trustedPublisher=github，附 provenance；Windows/Linux x64 匿名隔离安装通过 |
 | 旧 Windows 分包 | 最新查询 `kenvoy-win32-x64` 返回 E404，旧包已不在注册表；不再生成或发布任何平台分包 |
 | 其它旧分包 | Windows ARM64 发布已停止，其余平台分包未上传 |
@@ -15,7 +15,7 @@
 | Homebrew | formula 0.4.4 已自动推送，macOS/Linux 四目标 URL/SHA256 与正式归档一致；提交 151bdf98b60c2c57f423564af31a7b1bcfb7c734 |
 | Scoop | 清单 0.4.4 已自动推送，Windows x64/ARM64 URL/SHA256 与正式归档一致；提交 fc92ef75c9d987cb84866fb618654069226e07bb |
 | 已退役渠道 | APT、RPM、Alpine、Arch、WinGet、Chocolatey、AUR；不恢复专用实现或凭据 |
-| 工作流 | 本地已收敛为两个完整发布入口与六个独立手动打包入口；channels 仅接续自动/手动 main 发布，npm 仍只上传 `kenvoy/`；本轮入口调整尚未推送 |
+| 工作流 | 两个完整发布入口与六个独立手动打包入口不变；dev 的 channels 改为先类型包后同版安装器，主发布增加类型 tarball/摘要；本轮未推送 |
 | 源码版本 | CLI 0.4.4，KEngine 0.2.0；项目格式仍 0.4.0，新建最低 CLI 取创建时版本 |
 | 0.4.4 发行基线 | v0.4.4 固定指向 6a2d863，已发行产物及旧标签保持不动；本轮入口修改仅在 dev 本地，未推送或合并 main |
 
@@ -30,6 +30,15 @@
 按用户新要求，main 自动和手动发布均接续全部保留渠道；`manual-release.yml` 取代旧手动发布文件，六个 `manual-package-*.yml` 取代单一打包入口。共享打包与渠道工作流只作为内部实现，不增加人工操作。OIDC 仍绑定 `channels.yml`，不修改权限或凭据。
 
 本次未推送、未触发 Actions，以上 0.4.4 发行证据不作为新入口的远端验收证明。实施及本地验证见 [0036](../changes/0036-workflow-entrypoints.md)。
+
+## 独立开发类型包（本地，未首次发布）
+
+`@kenvoy/types` 的构建版本只取 CLI Cargo 元数据，当前本地产物为 0.4.4；不增加独立手工版本。已移除 `kenvoy types` 和 `.kenvoy/types` 接线，五个 Bun 示例通过本地 tarball 开发依赖消费真实 SDK/JSX 声明。
+
+正式资产必须来自同版本已发布 CLI 源码包的完整声明目录；当前已发布 0.4.4 源码不具备该目录，不能用新 HEAD 补造。首次正式接续需未来 CLI 新版本，npm 先类型后安装器；本轮没有更改产品版本、旧标签或既有发行资产。
+
+本地包消费、真实新项目和发布安全边界已验证，记录见 [0042](../changes/0042-published-editor-types-package.md)。尚未执行类型包 npm 上传，也未配置或验证 `@kenvoy` scope 权限和新包 Trusted Publisher；现有 `kenvoy` OIDC 发行证据不能自动扩展到新包。
+
 
 ## npm 安装与脚本审批
 
@@ -48,9 +57,10 @@ kenvoy --version
 - 0.2.0 手动首发由用户本机终端完成 npm CLI 认证及提交；未在聊天中收取密码或验证码。退出 0/HTTP 202 不等于正式版本已公开，最终已核验精确版本及摘要。
 - 用户已为 `kenvoy` 创建 Trusted Publisher：GitHub `zerobiubiu/kenvoy`、工作流文件 `channels.yml`，允许 npm publish、npm stage publish 与 npm dist-tag；不改动用户选择的权限。
 - OIDC 已完成真实发布验证：`kenvoy@0.4.4` 的注册表记录为 GitHub Actions 与 trustedPublisher=github，并附 provenance；不需要新增 NPM_TOKEN。用户选择的 npm dist-tag 权限保留，本轮通过 publish 更新 latest，没有额外修改其他标签。
+- `@kenvoy/types` 需独立绑定相同仓库与 `channels.yml`、environment 留空并允许 `npm publish`，同时确认 `@kenvoy` scope 发布权限；本轮未设置此授权，也未使用或修改现有 Secret。
 
 ## 后续自动发布
 
-后续新版本继续在 dev 完成验证和版本提交，先推对应标签，再快进并推送 main。首次源码发布仍须标签树与发布树一致；主发布成功后自动运行三个保留渠道，不扫描或补发历史源码版本。
+后续新版本继续在 dev 完成验证和版本提交，先推对应标签，再快进并推送 main。首次源码发布仍须标签树与发布树一致，CLI 源码包须携带同版完整类型目录；主发布补齐六个 ZIP、类型 tarball 及各自摘要后接续三个渠道，npm 内先类型包后同版安装器。不扫描或补发历史源码版本。
 
 已经正式发布的源包不可重传。0.4.4 发布后的 CI 与文档修补不改变程序版本或既有标签；补齐流程从实际 registry 包构建，并按已发布资产检查缺项。0.4.3 保留为未发行标签，不追补发布。

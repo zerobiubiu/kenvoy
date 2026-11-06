@@ -12,7 +12,7 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；dev 后续实现还创建编辑器 tsconfig.json、私有 package.json 和 .kenvoy/types 声明。项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.4），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装 npm 或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；dev 后续实现还创建编辑器 tsconfig.json 和声明同 CLI 精确版本 `@kenvoy/types` 的私有 package.json，不再生成 `.kenvoy/types`。项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.4），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装依赖或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
 
 check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 
@@ -25,29 +25,37 @@ kenvoy check --resource customers --input patch.json --patch
 
 ## 编辑器类型
 
-以下为 dev 未发布能力，需要本仓库源码构建的 CLI：
+以下为 dev 未发布能力。编辑器类型由独立 npm 包 `@kenvoy/types` 提供，版本与 CLI 完全一致；新项目自动写入精确版本的开发依赖。CLI 不再内嵌或导出编辑器声明，旧 `kenvoy types` 命令已移除。
 
-```text
-kenvoy --project customer-app types
+已有项目保留原配置，只做以下接线：
+
+1. 在 `devDependencies` 加入与当前 CLI **相同精确版本**的 `@kenvoy/types`，保留框架匹配版本的 `typescript`、`@types/react`、`@types/react-dom`。
+2. 删除原先指向 `.kenvoy/types` 的三个虚拟模块 paths，加入以下设置。
+3. 由项目包管理器安装开发依赖，再执行 `typecheck`；CLI 升级时同步更新类型包版本。
+
+```json
+{
+  "compilerOptions": {
+    "types": ["@kenvoy/types"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@kenvoy/client"
+  }
+}
 ```
 
-命令把真实 SDK 源码生成的声明写到 `.kenvoy/types`，包括 `sdk.d.ts`、生产/开发 JSX runtime 及传递类型；不解析或执行项目源码、不校验译文内容、不打开业务库，也不调用 npm。缺少 `tsconfig.json` / `package.json` 时创建默认文件；已有文件即使损坏也逐字保留，不自动合并或覆盖。
+默认配置继续采用 strict、noEmit、Bundler，不设置 baseUrl、skipLibCheck 或任意标签 any 索引。类型包从真实 SDK 源码和两个 JSX runtime 根生成声明，用环境模块连接 `@kenvoy/client`、生产与开发 JSX runtime；不提供 JavaScript，也不污染普通 `React.JSX`。React 运行包仍由 Kenvoy 共享，不安装重复 React 或占位 npm `@kenvoy/client`。
 
-JSON 报告的 `status` 是 `declarations_generated`，不是“项目已通过类型检查”；`configuration_review_required`、两项配置的 `created/preserved`、`required_tsconfig`、`recommended_package`、`install_command` 与 `typecheck_command` 指明还需做什么。新建清单可在项目根显式执行 `npm install --ignore-scripts`；已有清单按报告安装精确开发依赖并补 `scripts.typecheck`，再执行 `npm run typecheck`。
+**首次 npm 发布尚未执行。** 当前已发布 CLI 0.4.4 源码包不含新类型包目录，不能拿新 HEAD 回填旧版本；首次正式发布需未来 CLI 新版本完整携带目录，并配置 `@kenvoy` scope 权限与 `@kenvoy/types` 独立 Trusted Publisher。正式发布后，正常项目仅需安装 package.json 的开发依赖，不再运行 CLI 生成类型。
 
-默认配置采用 strict、noEmit、Bundler、`jsx: react-jsx` 和 `jsxImportSource: @kenvoy/client`，三项路径映射为：
+源码开发在仓库根执行：
 
-| 模块 | 相对 tsconfig.json 的类型文件 |
-|---|---|
-| `@kenvoy/client` | `./.kenvoy/types/sdk.d.ts` |
-| `@kenvoy/client/jsx-runtime` | `./.kenvoy/types/presentation/jsx-runtime.d.ts` |
-| `@kenvoy/client/jsx-dev-runtime` | `./.kenvoy/types/presentation/jsx-dev-runtime.d.ts` |
+```text
+npm --prefix crates/kenvoy/frontend run build:types
+```
 
-开发依赖为与框架匹配的 `typescript`、`@types/react`、`@types/react-dom`，版本来自框架 package.json。React 运行包仍由 Kenvoy 共享，不要求安装另一个 React 或 npm `@kenvoy/client`。配置覆盖项目内 JS/TS/JSX/TSX，排除生成目录、依赖、迁移、构建输出及持久化目录；不会设置 baseUrl、skipLibCheck 或任意标签 any 索引。
+该命令生成 `frontend/dist/types-package`、带 CLI 版本与内容摘要的本地 tarball 及侧车；`frontend/dist/types-artifact.json` 记录实际文件名、完整摘要和版本。构建自动同步仓库五个 Bun 示例的该开发依赖，SDK 或 CLI 版本变化换用新路径，避免 Bun 的同路径旧包缓存，不改写独立用户应用。独立应用将实际 tarball 放入项目后，可把 `@kenvoy/types` 开发依赖设为 `file:./实际文件名.tgz` 再安装。正式 Release 使用 `kenvoy-types-X.Y.Z.tgz`，来源只能是相同版本已发布的 CLI 源码包。
 
-CLI 升级、重新克隆或清理 `.kenvoy` 后重新执行 `kenvoy types`。生成清单用摘要接管自身声明，拒绝同名用户文件、改动过的当前声明、越界路径及链接；只清理仍归属生成器的过期声明。编辑器仍显示缓存诊断时，重新加载 TypeScript 项目或重启 TS Server，并选择项目安装的 TypeScript 版本。
-
-`npm run typecheck` 检查编辑器/API 类型，`kenvoy check` 检查声明语义、权限、Schema 和模块边界，两者不能互相替代。实现和实际正反向检查见 [0038](../changes/0038-editor-types-and-jsx-runtime.md)。
+清理 `.kenvoy` 不影响类型包。编辑器仍显示缓存诊断时，重新加载 TypeScript 项目或重启 TS Server，并选择项目安装的 TypeScript 版本。`typecheck` 检查编辑器/API 类型，`kenvoy check` 检查声明语义、权限、Schema 和模块边界，两者不能互相替代。切换及实际包消费记录见 [0042](../changes/0042-published-editor-types-package.md)。
 
 
 ## 查看解析结果

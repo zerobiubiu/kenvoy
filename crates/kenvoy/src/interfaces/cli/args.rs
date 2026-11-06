@@ -23,8 +23,6 @@ pub(crate) struct Cli {
 pub(crate) enum Command {
     /// 创建包含客户登记示例的项目。
     Create { path: PathBuf },
-    /// 生成 SDK/JSX 编辑器声明与缺失配置；保留已有配置，不执行源码、不安装依赖。
-    Types,
     /// 检查源码、模块、声明、权限与路由，不连接数据库。
     Check {
         /// 验证 JSON 记录所对应的资源。

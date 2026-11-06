@@ -1,9 +1,16 @@
 use std::{fs, io::Write, path::Path};
 
+use serde_json::{Value, json};
+
 use super::{
     config::Config,
     error::{ProjectError as Error, Result, io},
 };
+
+const FRONTEND_PACKAGE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/frontend/package.json"
+));
 
 pub const CUSTOMER_APP: &str = r#"export default (
   <app name="客户管理系统">
@@ -78,6 +85,8 @@ pub fn create(target: &Path) -> Result<()> {
     config.project.format_version = Some(super::compatibility::CURRENT_PROJECT_FORMAT.into());
     let encoded =
         toml::to_string_pretty(&config).map_err(|error| Error::InvalidConfig(error.to_string()))?;
+    let tsconfig = encoded_json(&editor_tsconfig(&config))?;
+    let package = encoded_json(&development_package()?)?;
     let mut schema = serde_json::to_string_pretty(&super::i18n::schema(&config.languages)?)
         .map_err(|error| Error::InvalidConfig(error.to_string()))?;
     schema.push('\n');
@@ -90,6 +99,8 @@ pub fn create(target: &Path) -> Result<()> {
     }
     for (path, content) in [
         ("kenvoy.toml", encoded.as_str()),
+        ("tsconfig.json", tsconfig.as_str()),
+        ("package.json", package.as_str()),
         ("src/app.tsx", CUSTOMER_APP),
         ("translations.json", CUSTOMER_TRANSLATIONS),
         ("language.schema.json", schema.as_str()),
@@ -99,7 +110,7 @@ pub fn create(target: &Path) -> Result<()> {
         ),
         (
             "README.md",
-            "# Kenvoy 应用\n\n`kenvoy create` 已固化初始迁移，尚未写入业务数据库。执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 查看数据库迁移位置，`kenvoy migrate history` 查看历史。\n\n原生国际化始终启用，无需安装国际化库或自行装配 Provider。kenvoy.toml 的 [languages] 声明 fallback 与每种语言的 display、可选 alias；模板默认中文、英文、韩文三种语言，业务译文已完整提供，系统内置文案仍只有中文和英文并按 fallback 回退。每次打开或刷新优先精确匹配设备默认语言，不支持时使用 fallback；页面内可手动切换，label 使用配置 display。\n\n根 translations.json 是集中业务词典，必须保留 \"$schema\":\"./language.schema.json\"；每条消息都必须覆盖全部配置语言，每种语言的 code 或 alias 恰好写一个，不能同时写、漏写或使用未知语言。没有业务词条也合法；没有对应词条的原生 DSL 文案继续使用源码文字。词典会交付客户端，请勿写入密钥。\n\n修改 [languages] 后执行 `kenvoy i18n` 刷新 language.schema.json；它从不覆盖已有 translations.json，首次缺失时仅创建 Schema 引用，不伪造译文。dev/run 也会刷新 Schema 并严格校验，build/check 只读校验，词典缺失或无效会阻断；无需源码即可校验。配置、词典与 Schema 请一同提交，切换语言不会修改业务数据或未提交草稿。\n\n数据库 Schema 变化后执行 `kenvoy migrate generate --description \"说明本次变化\"`，审查候选并通过 `kenvoy migrate seal` 固化，再停服重启 `kenvoy dev` 或 `kenvoy run`。构建和热重载不会隐式生成正式迁移。\n\n`kenvoy build` 准备包含完整迁移链的产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
+            "# Kenvoy 应用\n\n`kenvoy create` 已固化初始迁移，尚未写入业务数据库。执行 `kenvoy dev` 启动，访问 http://127.0.0.1:3000/customers。\n\n通过 `kenvoy admin init --username admin` 隐藏输入密码初始化管理员，再访问 /admin/customers；没有默认密码。\n\n`kenvoy check` 检查声明，`kenvoy inspect customers` 查看资源，`kenvoy migrate status` 查看数据库迁移位置，`kenvoy migrate history` 查看历史。\n\n编辑器通过独立的 @kenvoy/types 开发依赖读取真实 SDK/JSX 类型，其版本与 CLI 精确一致；运行时的 React 和 @kenvoy/client 仍由 CLI 提供，无需安装重复运行包。create 只生成 tsconfig.json 与私有 package.json，不安装依赖、不执行 npm 或 Bun。请显式使用包管理器安装开发依赖，再执行 `npm run typecheck`（或 `bun run typecheck`）。开发版或尚未首发的类型包必须安装本仓库构建的同版本本地 tarball，不能假定 registry 已可用；只有对应版本正式发布后，才可直接执行 `npm install --ignore-scripts` 或 `bun install`。升级 CLI 时同步更新 @kenvoy/types 到相同精确版本，不需要生成本地声明缓存。\n\n原生国际化始终启用，无需安装国际化库或自行装配 Provider。kenvoy.toml 的 [languages] 声明 fallback 与每种语言的 display、可选 alias；模板默认中文、英文、韩文三种语言，业务译文已完整提供，系统内置文案仍只有中文和英文并按 fallback 回退。每次打开或刷新优先精确匹配设备默认语言，不支持时使用 fallback；页面内可手动切换，label 使用配置 display。\n\n根 translations.json 是集中业务词典，必须保留 \"$schema\":\"./language.schema.json\"；每条消息都必须覆盖全部配置语言，每种语言的 code 或 alias 恰好写一个，不能同时写、漏写或使用未知语言。没有业务词条也合法；没有对应词条的原生 DSL 文案继续使用源码文字。词典会交付客户端，请勿写入密钥。\n\n修改 [languages] 后执行 `kenvoy i18n` 刷新 language.schema.json；它从不覆盖已有 translations.json，首次缺失时仅创建 Schema 引用，不伪造译文。dev/run 也会刷新 Schema 并严格校验，build/check 只读校验，词典缺失或无效会阻断；无需源码即可校验。配置、词典与 Schema 请一同提交，切换语言不会修改业务数据或未提交草稿。\n\n数据库 Schema 变化后执行 `kenvoy migrate generate --description \"说明本次变化\"`，审查候选并通过 `kenvoy migrate seal` 固化，再停服重启 `kenvoy dev` 或 `kenvoy run`。构建和热重载不会隐式生成正式迁移。\n\n`kenvoy build` 准备包含完整迁移链的产物；`kenvoy run` 会按需自动构建并启动生产服务，不需要事先执行 build。自定义组件的 npm 依赖已在 package.json 声明时，首次可明确使用 `kenvoy dev --install-deps`。\n\n源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。\n",
         ),
     ] {
         let path = target.join(path);
@@ -111,6 +122,56 @@ pub fn create(target: &Path) -> Result<()> {
         file.write_all(content.as_bytes())
             .map_err(|error| io(&path, error))?;
     }
-    super::editor::prepare_at(&target, &config)?;
     Ok(())
+}
+
+fn editor_tsconfig(config: &Config) -> Value {
+    let relative = |path: &Path| format!("./{}", path.to_string_lossy().replace('\\', "/"));
+    let data = config.database.path.parent().unwrap_or(Path::new("data"));
+    json!({
+        "compilerOptions": {
+            "target": "ES2022",
+            "lib": ["ES2022", "DOM", "DOM.Iterable"],
+            "module": "ESNext",
+            "moduleResolution": "Bundler",
+            "strict": true,
+            "noEmit": true,
+            "allowJs": true,
+            "allowImportingTsExtensions": true,
+            "jsx": "react-jsx",
+            "jsxImportSource": "@kenvoy/client",
+            "types": ["@kenvoy/types"]
+        },
+        "include": ["./**/*.ts", "./**/*.tsx", "./**/*.js", "./**/*.jsx"],
+        "exclude": ["**/node_modules", "./.kenvoy", "./migrations", relative(&config.build.out_dir), relative(data)]
+    })
+}
+
+fn development_package() -> Result<Value> {
+    let frontend: Value = serde_json::from_str(FRONTEND_PACKAGE)?;
+    let mut dependencies = serde_json::Map::new();
+    dependencies.insert(
+        "@kenvoy/types".into(),
+        Value::String(env!("CARGO_PKG_VERSION").into()),
+    );
+    for name in ["@types/react", "@types/react-dom", "typescript"] {
+        let version = frontend["devDependencies"][name].as_str().ok_or_else(|| {
+            Error::InvalidConfig(format!(
+                "框架 frontend/package.json 缺少开发类型依赖版本：{name}"
+            ))
+        })?;
+        dependencies.insert(name.into(), Value::String(version.into()));
+    }
+    Ok(json!({
+        "private": true,
+        "type": "module",
+        "scripts": { "typecheck": "tsc --noEmit" },
+        "devDependencies": dependencies
+    }))
+}
+
+fn encoded_json(value: &Value) -> Result<String> {
+    let mut encoded = serde_json::to_string_pretty(value)?;
+    encoded.push('\n');
+    Ok(encoded)
 }

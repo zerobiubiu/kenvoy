@@ -58,15 +58,21 @@ Kenvoy CLI **0.4.4** 已发布，KEngine 保持 **0.2.0**。create 生成 langua
 
 ### 编辑器类型支持（dev 未发布）
 
-源码构建的 CLI 为新项目生成 `tsconfig.json`、私有开发依赖清单和真实 SDK/JSX 声明；基础 DSL 运行仍不要求 Node。缺少这些配置的已有项目可执行：
+源码构建的 CLI 为新项目生成 `tsconfig.json` 和私有开发依赖清单，`@kenvoy/types` 开发依赖严格使用该 CLI 的版本；不再执行 `kenvoy types` 或生成 `.kenvoy/types`。类型包包含真实 SDK、React JSX 与 DSL 声明，不提供运行时代码。基础 DSL 运行仍不要求 Node。
 
-```text
-kenvoy types
-npm install --ignore-scripts
-npm run typecheck
+```json
+{
+  "compilerOptions": {
+    "types": ["@kenvoy/types"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@kenvoy/client"
+  }
+}
 ```
 
-若已有 `package.json` 或 `tsconfig.json`，`types` 会保留原文件，按其 JSON 报告补齐设置并执行 `install_command`，不要直接覆盖原配置。不要安装空壳 `@kenvoy/client` 或重复 React 运行包，也不要用 `any`、空模块声明或关闭 strict 消红。完整操作与限制见[编辑器类型](docs/operations/cli-design.md#编辑器类型)；该能力尚未包含在已发布的 0.4.4 中。
+当前类型包本轮未发布到 npm。源码开发先执行 `npm --prefix crates/kenvoy/frontend run build:types`，产物为带 CLI 版本与内容摘要的本地 tarball，路径记录于 `frontend/dist/types-artifact.json`；构建同时同步仓库五个示例的类型开发依赖，不改写独立用户项目。Bun 通过实际 tarball 安装，不依赖 CLI 生成声明。正式发布后由包管理器安装 `@kenvoy/types`，Release 资产名为 `kenvoy-types-X.Y.Z.tgz`，完整操作和首次发布前提见[编辑器类型](docs/operations/cli-design.md#编辑器类型)。
+
+保留已有应用的其他 TypeScript 设置，只移除旧的三个虚拟模块 `paths` 并加入类型包。不要安装空壳 `@kenvoy/client` 或重复 React 运行包，也不要用 `any`、空模块声明或关闭 strict 消红；该分发方式尚未包含在已发布的 CLI 0.4.4 中。
 
 
 

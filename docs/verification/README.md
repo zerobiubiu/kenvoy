@@ -42,6 +42,7 @@
 | [changes/0039：示例类型生成](../changes/0039-example-editor-types.md#执行验证记录) | 已执行；五次真实 types、每例 24 份声明摘要、原文件保护核对；未安装依赖或执行类型检查 | [示例状态](../../examples/README.md)、[编辑器操作](../operations/cli-design.md#编辑器类型) |
 | [changes/0040：示例依赖与类型检查](../changes/0040-example-typecheck-dependencies.md#执行验证记录) | 已执行；五例依赖安装及 tsc 通过、错误对照仍拒绝、Schema 模型不变；未启动应用或修改业务库 | [示例状态](../../examples/README.md)、[扩展示例](../../examples/extensions-app/README.md) |
 | [changes/0041：examples Bun 切换](../changes/0041-examples-bun-package-manager.md) | 按用户要求未验证；仅记录五次锁转换，不代表安装、类型检查或运行通过 | [示例使用说明](../../examples/README.md) |
+| [changes/0042：独立编辑器类型包](../changes/0042-published-editor-types-package.md#执行验证记录) | 已执行；真实 tarball TypeScript 正反向、五例 Bun 安装/类型检查、无 Node 的项目创建及同版包消费、发布来源与类型优先边界；未远端发布 | [编辑器操作](../operations/cli-design.md#编辑器类型)、[示例](../../examples/README.md)、[渠道操作](../operations/distribution-channels.md) |
 
 ## 初始审查与准备计划
 

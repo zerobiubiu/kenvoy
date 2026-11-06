@@ -2,10 +2,9 @@
 
 此示例保留真实客户登记与 SQLite 持久化，同时展示 Schema Component、React Hooks、Props、内联回调捕获、门面模块 CSS、第三方 `clsx`，以及 TypeScript ES Module 异步服务端动作。
 
-当前编辑器与 JSX 接线需要本仓库 dev 源码构建的 Kenvoy CLI；本示例项目依赖统一用 Bun 1.4.3 管理。自定义客户端的框架内部工具链仍需 Node.js 24.22+ 及配套 npm，本次不切换该内部实现；项目格式保持 0.4.0。在本目录使用：
+运行使用本仓库 dev 源码构建的 Kenvoy CLI；编辑器类型改由 `@kenvoy/types` 开发依赖提供，先按[示例总览](../README.md)构建同 CLI 版本的本地 tarball，不再由 CLI 生成声明。本示例使用 Bun 1.4.3 管理依赖，框架内部工具链仍需 Node.js 24.22+ 及配套 npm；项目格式保持 0.4.0。在本目录使用：
 
 ```text
-kenvoy types
 bun install --ignore-scripts --omit=peer
 bun run typecheck
 kenvoy check

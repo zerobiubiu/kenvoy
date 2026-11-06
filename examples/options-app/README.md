@@ -1,6 +1,6 @@
 # 联动 select 与系统组件重载
 
-项目格式为 0.4.0，使用本仓库 dev 源码构建的 Kenvoy CLI；项目依赖统一由 Bun 1.4.3 和 bun.lock 管理。框架内部客户端工具链仍需 Node.js 24.22+ 与配套 npm，不在本次切换范围。从仓库根目录可使用：
+项目格式为 0.4.0，运行使用本仓库 dev 源码构建的 Kenvoy CLI；编辑器由 `@kenvoy/types` 开发依赖提供声明，先按[示例总览](../README.md)构建同 CLI 版本的本地 tarball。项目依赖统一由 Bun 1.4.3 管理，框架内部客户端工具链仍需 Node.js 24.22+ 与配套 npm，不在本次切换范围。从仓库根目录可使用：
 
 ```text
 bun install --cwd examples/options-app --ignore-scripts --omit=peer

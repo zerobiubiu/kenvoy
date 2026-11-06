@@ -23,7 +23,7 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' &&
           (github.event.workflow_run.event == 'push' ||
            github.event.workflow_run.event == 'workflow_dispatch') }}
-    name: 解析版本与六个发布归档
+    name: 解析同版六平台与类型发布资产
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -63,26 +63,28 @@ jobs:
             || { echo "缺少版本标签 v${version}" >&2; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: 生成并下载六个官方 Release 归档
+      - name: 下载六平台与同版本类型资产并校验官方摘要
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python .github/scripts/channels/assets.py --version "${{ steps.version.outputs.version }}" \
             --repository "${{ github.repository }}" --output "$RUNNER_TEMP/assets.json" \
-            --zips "$RUNNER_TEMP/zips"
+            --zips "$RUNNER_TEMP/zips" --types "$RUNNER_TEMP/types"
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: channel-assets
           path: |
             ${{ runner.temp }}/assets.json
             ${{ runner.temp }}/zips/*.zip
+            ${{ runner.temp }}/types/*.tgz
+            ${{ runner.temp }}/types/*.tgz.sha256
           if-no-files-found: error
           retention-days: 14
 
   npm:
     needs: prepare
-    name: npm 单包与平台自动安装器
+    name: npm 同版类型包与 CLI 安装器
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -109,15 +111,17 @@ jobs:
           python .github/scripts/channels/npm_packages.py \
             --assets "$RUNNER_TEMP/channel/assets.json" --zips "$RUNNER_TEMP/channel/zips" \
             --output "$RUNNER_TEMP/npm"
-      - name: 只发布缺失的 kenvoy 版本
+      - name: 先发布缺失的类型包，再发布同版 CLI 安装器
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo '未配置 NPM_TOKEN：使用 npm Trusted Publishing，kenvoy 包必须已绑定 channels.yml。'
+            echo '未配置 NPM_TOKEN：使用 npm Trusted Publishing；@kenvoy/types 与 kenvoy 必须各自授权 channels.yml，且 @kenvoy scope 须有发布权限。'
           fi
-          python .github/scripts/channels/publish_npm.py --package "$RUNNER_TEMP/npm/kenvoy" --publish
+          python .github/scripts/channels/publish_types.py \
+            --assets "$RUNNER_TEMP/channel/assets.json" --types "$RUNNER_TEMP/channel/types" \
+            --package "$RUNNER_TEMP/npm/kenvoy" --publish
 
   homebrew:
     needs: prepare

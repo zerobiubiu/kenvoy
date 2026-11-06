@@ -2,7 +2,7 @@
 
 要求 Kenvoy CLI 0.4.0 或以上兼容版本，项目格式为 0.4.0。执行 `kenvoy dev` 启动，`kenvoy run` 用于生产运行。
 
-编辑器开发依赖统一使用 Bun 1.4.3，bun.lock 只保留在本地，不提交 Git。后续在本目录可执行 `bun install --ignore-scripts --omit=peer`，脚本使用 `bun run typecheck`。基础 DSL 运行仍不需要 Node，框架内部工具链不受影响。
+编辑器类型由 `@kenvoy/types` 开发依赖提供，先按[示例总览](../README.md)在仓库根构建同 CLI 版本的本地 tarball，不再执行 `kenvoy types`。项目依赖统一使用 Bun 1.4.3，bun.lock 只保留在本地、不提交 Git；在本目录执行 `bun install --ignore-scripts --omit=peer` 和 `bun run typecheck`。基础 DSL 运行仍不需要 Node，框架内部工具链不受影响。
 
 
 源码入口为 src/app.tsx，SQLite 保存在 data/app.sqlite；构建不会清理数据。

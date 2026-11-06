@@ -27,9 +27,12 @@ include = [
     "/frontend/src/**",
     "/frontend/scripts/client-builder.mjs",
     "/frontend/scripts/client-dev.mjs",
+    "/frontend/scripts/build-type-package.mjs",
+    "/frontend/scripts/type-package-npm.mjs",
+    "/frontend/types-package/**",
     "/frontend/dist/index.html",
     "/frontend/dist/assets/**",
-    "/frontend/dist/types/**",
+    "/frontend/dist/types-package/**",
 ]
 
 [package.metadata.binstall]

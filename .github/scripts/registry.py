@@ -135,6 +135,27 @@ def package_manifest(payload: bytes, crate: str, version: str) -> dict:
         return _manifest(archive, _members(archive, prefix), crate, version)
 
 
+def archive_files(payload: bytes, prefix: str, directory: str) -> dict[str, bytes]:
+    """复用源码包路径门禁，只读取指定目录内的普通文件，不执行归档内代码。"""
+    selected = tuple(directory.split("/")) if directory else ()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+            members = _members(archive, prefix)
+            files = {}
+            for parts, member in members.items():
+                relative = parts[1:]
+                if member.isdir() or relative[:len(selected)] != selected:
+                    continue
+                source = archive.extractfile(member)
+                if source is None:
+                    raise ValueError(f"无法读取归档文件：{member.name}")
+                with source:
+                    files["/".join(relative[len(selected):])] = source.read()
+            return files
+    except (tarfile.TarError, EOFError):
+        raise ValueError("归档必须是完整可读取的 gzip tar 文件") from None
+
+
 def extract_crate(payload: bytes, crate: str, version: str, output: Path) -> Path:
     """在 output 下独占创建 crate-version，不覆盖、不提取链接或越界路径。"""
     prefix = _identity(crate, version)

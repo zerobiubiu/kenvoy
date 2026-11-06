@@ -2,6 +2,8 @@ import { missingSdkExport } from '@kenvoy/client'; // @error unknown-sdk-export
 import { RuntimeContext } from '@kenvoy/client'; // @error private-runtime-export
 import { AttachmentList, Image, callAction, fileUrl, useField, useI18n, useResource } from '@kenvoy/client';
 import type { FieldBinding } from '@kenvoy/client';
+import type { RuntimeState } from '@kenvoy/types/sdk/presentation/runtime/context'; // @error private-type-path
+import { api } from '@kenvoy/client/infrastructure/api'; // @error private-virtual-path
 
 function StrictCard(props: { count: number; onSelect: (value: number) => void }) { return <span>{props.count}</span>; }
 function FieldView(props: FieldBinding) { return <span>{props.draft}</span>; }

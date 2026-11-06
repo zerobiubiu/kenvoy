@@ -1,6 +1,6 @@
 # Git 分支、版本标签与发布操作
 
-状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI 与 KEngine，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，最新入口约定见 [0036](../changes/0036-workflow-entrypoints.md)；双分支历史见 [0021](../changes/0021-dev-main-release-rules.md)，0.4.4 正式发行证据见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
+状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI、KEngine 及同 CLI 版本的 `@kenvoy/types`，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，入口约定见 [0036](../changes/0036-workflow-entrypoints.md)，类型包接续见 [0042](../changes/0042-published-editor-types-package.md)；双分支历史见 [0021](../changes/0021-dev-main-release-rules.md)，0.4.4 正式发行证据见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
 ## 分支与授权
 
@@ -15,13 +15,13 @@
 
 工作流文件在 dev/main 共享，防止普通合并删除 main 的发布配置。发布入口、共享发布实现及实际写操作都检查 main；文件出现在 dev 不表示 dev 可以发布。
 
-对外业务入口恰好八个：一个 main 自动发布、一个 main 手动完整发布，以及六个独立手动打包。内部共用主发布、渠道接续和单目标打包实现，不要求操作者再单独触发渠道。两个正式发布入口都覆盖 crates.io、六平台 GitHub Release、npm、Homebrew、Scoop；手动打包不属于发布。
+对外业务入口恰好八个：一个 main 自动发布、一个 main 手动完整发布，以及六个独立手动打包。内部共用主发布、渠道接续和单目标打包实现，不要求操作者再单独触发渠道。两个正式入口都覆盖 crates.io、六平台与类型 tarball 的 GitHub Release、npm、Homebrew、Scoop；npm 同版本先类型包后 CLI 安装器，手动打包不属于发布。
 
 ## 根节点与版本标签
 
 共同根为 `7d3b5c2860d6e3c64948612a53d0df74ddf47883`，原始提交消息、文件内容与 SHA 不改。其真实产品版本标签为 `v0.1.0`，与[已发布 0.1.0 的来源记录](https://docs.rs/crate/kenvoy/0.1.0/source/.cargo_vcs_info.json)一致。人工初始化标签 `v0.0.0` 已退役并删除，不再凭根节点身份额外生成它；标签只来自提交中真实声明的版本。
 
-- 产品版本来自各产品 `Cargo.toml`，不是 kenvoy 项目的配置版本或 IR 版本；Kenvoy CLI 的版本用于仓库 `vMAJOR.MINOR.PATCH` 标签与 Release 名称。
+- 产品版本来自各产品 `Cargo.toml`，不是 kenvoy 项目的配置版本或 IR 版本；Kenvoy CLI 的版本用于仓库 `vMAJOR.MINOR.PATCH` 标签、Release 名称和 `@kenvoy/types`，类型包没有第二个手工维护的版本源。
 - KEngine 保留自身 manifest 版本；Kenvoy 的依赖约束和 Cargo.lock 必须同步。仅工作流、文档、工程工具变更不机械递增产品版本。
 - dev 中已提交的 Kenvoy CLI 版本每次变化时，立即创建对应附注标签。缺失的历史标签补到该版本首次出现的提交，不挂到补齐时的 HEAD；根的真实版本同样纳入。工作区、暂存区尚未提交的版本不参与判断，同版本普通提交不重打标签；既有合法发布标签保留其原目标。
 - 既有合法标签保持原目标；不会自动移动、覆盖、删除或推送。轻量标签、指错版本、目标不在 dev 历史等冲突会阻断维护，不能强行改写。
@@ -53,9 +53,10 @@ flowchart TD
   B[手动 main 发布 confirm=yes] --> C
   C --> D[按需发布缺失源包]
   D --> E[按需构建缺失平台二进制]
-  E --> F[核验并补齐 GitHub Release]
+  E --> T[从同版已发布 CLI 源码包提取类型并 pack]
+  T --> F[核验并补齐 GitHub Release]
   F --> G[成功后内部接续 channels]
-  G --> H[npm 单包]
+  G --> H[npm 同版类型包 → CLI 安装器]
   G --> I[Homebrew]
   G --> J[Scoop]
 ```
@@ -93,11 +94,13 @@ CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一�
 
 只有 `kengine` 和 `kenvoy` 对外发布，`kenvoy-tests`、`xtask` 保持 `publish=false`。先查询两个包各自的精确版本：仅 404 表示缺失；鉴权、限流或网络错误不能当作未发布。
 
-新源包从 main 精确 Git SHA 的 `git archive` 创建仓库外独占快照，在快照生成 Kenvoy 内置前端；通过 Cargo metadata 获取 `target_directory`，执行 `cargo package --locked` 创建并编译验证正式归档，在上传前固化 SHA-256，再按 KEngine → Kenvoy CLI 上传缺失项并与 registry checksum 比较。不使用 `--allow-dirty` 或 `--no-verify`，不依赖 `cargo publish` 的内部临时归档路径；根 LICENSE 通过 workspace license-file 进入每个发布包。实现与恢复见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
+新源包从 main 精确 Git SHA 的 `git archive` 创建仓库外独占快照，在快照生成 Kenvoy 内置前端及完整 `frontend/dist/types-package`；通过 Cargo metadata 获取 `target_directory`，执行 `cargo package --locked` 创建并编译验证正式归档，在上传前固化 SHA-256，并校验 CLI 归档已携带同版纯声明目录，再按 KEngine → Kenvoy CLI 上传缺失项并与 registry checksum 比较。不使用 `--allow-dirty` 或 `--no-verify`，不依赖 `cargo publish` 的内部临时归档路径；根 LICENSE 通过 workspace license-file 进入每个发布包。实现与恢复见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
 上传是不可逆操作；不覆盖既有版本，不盲目重试上传写请求。KEngine 成功、Kenvoy 失败时，手动兜底只处理仍缺失的当前版本步骤。已发布源包补二进制时，从实际 registry 源包核对官方 SHA256 后构建，使用包内前端，不拿后来修改的工作区冒充原发布源码。
 
-GitHub Release 先以草稿收集缺失资产，齐全并验证后公开；标题固定为 `Kenvoy <version>`。既有 ZIP/侧车不使用 `--clobber`：已有 ZIP 缺侧车时按原 ZIP 计算校验值，不重新构建后替换；发现既有校验冲突即停，留给人工核查。历史已发布版本按其发布包的下载元数据识别资产，不因新命名规则重命名旧文件。
+GitHub Release 先以草稿收集缺失资产，六个 ZIP、类型 `kenvoy-types-X.Y.Z.tgz` 及各自 SHA256 共 14 项齐全并验证后公开；标题固定为 `Kenvoy <version>`。类型资产由 `package_types.py` 下载同版本已发布 CLI crate、校验官方 checksum、安全解包后从包内声明目录执行隔离凭据的 npm pack，不读取新 HEAD 补造旧版。当前已发布 0.4.4 源码包不含该目录，类型包首次正式发行需未来 CLI 新版本。
+
+既有归档/侧车不使用 `--clobber`：缺侧车时按原归档计算校验值，不重新构建后替换；类型 tarball 还须逐文件匹配同版 crate。发现既有校验冲突即停，留给人工核查。历史已发布版本按其下载元数据识别资产，不因新规则重命名旧文件；也不在旧版本名下补造新类型。
 
 按标签查询的 GitHub API 只返回已发布 Release；404 后须用有相应仓库权限的分页 Release 列表定位草稿，不能将已存在草稿误判为不存在。创建草稿、每次上传及最终完整性检查共用此读取规则，保留已有 ZIP 和缺侧车恢复语义。
 

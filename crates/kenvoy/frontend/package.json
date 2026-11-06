@@ -6,7 +6,8 @@
   "description": "由 Kenvoy Application IR 驱动的通用 React Runtime",
   "scripts": {
     "check": "tsc --noEmit",
-    "build": "vite build && tsc -p tsconfig.types.json",
+    "build": "vite build && npm run build:types",
+    "build:types": "tsc -p tsconfig.types.json && node scripts/build-type-package.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {

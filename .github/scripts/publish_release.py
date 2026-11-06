@@ -1,4 +1,4 @@
-"""补齐 main 当前版本 Release 的缺失资产；已有 ZIP 和标签一律不覆盖。"""
+"""补齐 main 当前版本 Release 的缺失资产；已有归档、类型包和标签一律不覆盖。"""
 
 import argparse
 import hashlib
@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import type_package
 
 from release_common import (
     GitHub, ReleaseError, load_current_plan, release_assets, release_context,
@@ -26,7 +28,7 @@ def checksum_text(digest, name):
 def read_checksum(path, name):
     parts = path.read_text(encoding="ascii").split()
     if len(parts) != 2 or parts[1] != name or not re.fullmatch(r"[0-9a-f]{64}", parts[0]):
-        raise ReleaseError(f"{path.name} 内容必须是对应 ZIP 的 SHA256 与精确文件名")
+        raise ReleaseError(f"{path.name} 内容必须是对应归档的 SHA256 与精确文件名")
     return parts[0]
 
 
@@ -65,15 +67,20 @@ def complete_release(root, plan, directory, github, environ):
     repository = plan["repository"]
     release = github.release(tag)
     assets = release_assets(release)
-    names = [item["name"] for item in plan["archives"]]
-    # 先核对全部本次需要上传的 ZIP，避免把坏包上传后再发现校验失败。
+    types_name = type_package.archive_name(plan["version"])
+    if plan["types_archive"] != types_name:
+        raise ReleaseError("计划中的类型资产与 CLI 版本不一致")
+    names = [item["name"] for item in plan["archives"]] + [types_name]
+    # 先核对全部本次需要上传的归档，避免把坏包上传后再发现校验失败。
     for name in names:
         if name not in assets:
             local_digest(directory, name)
+    if types_name not in assets:
+        type_package.tarball_files(directory / types_name, plan["version"], repository)
     title = f"Kenvoy {plan['version']}"
     if release is None:
         gh(repository, "create", tag, "--verify-tag", "--draft", "--title", title,
-           "--notes", f"{title}：Linux、Windows、macOS 各提供 ARM64 与 x86_64 二进制，ZIP 附 SHA256。")
+           "--notes", f"{title}：六平台二进制 ZIP 与同版本 @kenvoy/types 纯类型 tarball，均附 SHA256。")
 
     with tempfile.TemporaryDirectory(prefix="kenvoy-release-assets-", dir=environ.get("RUNNER_TEMP")) as temporary:
         temporary = Path(temporary)
@@ -89,12 +96,19 @@ def complete_release(root, plan, directory, github, environ):
                 if name not in assets:
                     raise ReleaseError(f"{name} 上传后未出现在 Release 中")
             digest = existing_digest(repository, tag, assets[name], work)
+            if name == types_name:
+                archive = work / name
+                if not archive.is_file():
+                    archive = download_asset(repository, tag, name, work)
+                if type_package.digest(archive) != digest:
+                    raise ReleaseError("类型资产与 GitHub 官方 digest 不一致，拒绝继续")
+                type_package.tarball_files(archive, plan["version"], repository)
             if sidecar_name in assets:
                 sidecar = download_asset(repository, tag, sidecar_name, work)
                 if read_checksum(sidecar, name) != digest:
                     raise ReleaseError(f"既有资产 {name} 的 SHA256 不一致，拒绝覆盖；需人工核查")
             else:
-                # ZIP 已存在但侧车缺失时，校验值来自既有 ZIP，不是重新构建的 ZIP。
+                # 归档已存在但侧车缺失时，摘要来自既有归档，不重新打包或替换它。
                 sidecar = work / sidecar_name
                 sidecar.write_text(checksum_text(digest, name), encoding="ascii", newline="\n")
                 gh(repository, "upload", tag, str(sidecar))
@@ -104,9 +118,9 @@ def complete_release(root, plan, directory, github, environ):
     assets = release_assets(final)
     expected = {entry for name in names for entry in (name, f"{name}.sha256")}
     if not expected.issubset(assets):
-        raise ReleaseError("六目标资产未齐，Release 保持原状态")
+        raise ReleaseError("六目标与同版本类型资产未齐，Release 保持原状态")
     gh(repository, "edit", tag, "--title", title, "--draft=false", "--latest")
-    print(f"{title} 已发布；六目标 ZIP/SHA256 完整，未覆盖既有资产")
+    print(f"{title} 已发布；六目标 ZIP 与类型 tarball/SHA256 完整，未覆盖既有资产")
 
 
 def main():
@@ -128,5 +142,5 @@ if __name__ == "__main__":
     try:
         main()
     except (ReleaseError, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
-        print(f"二进制发布失败：{error}", file=sys.stderr)
+        print(f"Release 发布失败：{error}", file=sys.stderr)
         sys.exit(1)

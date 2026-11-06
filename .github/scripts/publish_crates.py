@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import registry
+import type_package
 from release_common import (
     GitHub, ReleaseError, load_current_plan, release_context, require_latest, require_tag,
 )
@@ -94,12 +95,13 @@ def publish(root, plan, github, environ):
             ["cargo", "package", "--locked", *packages],
             cwd=source, env=environment, check=True,
         )
-        checksums = {
-            crate: hashlib.sha256(
-                (package_directory / f"{crate}-{versions[crate]}.crate").read_bytes()
-            ).hexdigest()
-            for crate in missing
-        }
+        checksums = {}
+        for crate in missing:
+            payload = (package_directory / f"{crate}-{versions[crate]}.crate").read_bytes()
+            checksums[crate] = hashlib.sha256(payload).hexdigest()
+            if crate == "kenvoy":
+                # 不可逆上传前确认正式归档已经包含同版本类型包，不能留到发布后补造。
+                type_package.crate_files(payload, versions[crate], plan["repository"])
         for crate in missing:
             require_latest(root, environ, github)
             version = versions[crate]

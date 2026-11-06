@@ -17,6 +17,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import publish_crates
+from type_package_fixture import type_files
 
 
 @unittest.skipUnless(shutil.which("cargo") and shutil.which("git"), "需要已有 Cargo 和 Git")
@@ -27,7 +28,10 @@ class CrateAuthenticationTests(unittest.TestCase):
     def test_publication_honors_an_external_target_directory(self):
         self.verify_publication(external_target=True)
 
-    def verify_publication(self, external_target=False):
+    def test_cli_archive_without_types_stops_before_any_registry_upload(self):
+        self.verify_publication(missing_types=True)
+
+    def verify_publication(self, external_target=False, missing_types=False):
         requests = []
         token = "kenvoy-local-registry-test-not-a-real-token"
         uploaded = {}
@@ -85,6 +89,11 @@ class CrateAuthenticationTests(unittest.TestCase):
                     'description = "Local authentication probe"\n', encoding="utf-8",
                 )
                 (source / "src/lib.rs").write_text("pub fn probe() {}\n", encoding="utf-8")
+                if not missing_types:
+                    for name, payload in type_files("0.0.0").items():
+                        path = source / "frontend/dist/types-package" / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(payload)
                 cargo_home = root / "cargo-home"
                 cargo_home.mkdir()
                 environment = {
@@ -147,7 +156,8 @@ class CrateAuthenticationTests(unittest.TestCase):
                         return {"num": "0.0.0"}
                     return dict(uploaded) if uploaded else None
 
-                plan = {"version": "0.0.0", "engine_version": "0.0.0", "sha": "fixture"}
+                plan = {"version": "0.0.0", "engine_version": "0.0.0", "sha": "fixture",
+                        "repository": "fixture/kenvoy"}
                 with (
                     patch.object(publish_crates, "snapshot", return_value=source),
                     patch.object(publish_crates, "prepare_frontend"),
@@ -156,9 +166,14 @@ class CrateAuthenticationTests(unittest.TestCase):
                     patch.object(publish_crates.registry, "registry_version", registry_version),
                     patch.object(publish_crates.subprocess, "run", run_cargo),
                 ):
-                    publish_crates.publish(root, plan, object(), environment)
+                    if missing_types:
+                        with self.assertRaisesRegex(ValueError, "禁止从当前 HEAD"):
+                            publish_crates.publish(root, plan, object(), environment)
+                    else:
+                        publish_crates.publish(root, plan, object(), environment)
 
-                self.assertEqual(requests, [("/api/v1/crates/new", token, "kenvoy", "0.0.0")])
+                self.assertEqual(requests, [] if missing_types else
+                                 [("/api/v1/crates/new", token, "kenvoy", "0.0.0")])
         finally:
             server.shutdown()
             server.server_close()

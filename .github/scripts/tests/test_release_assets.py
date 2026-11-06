@@ -10,7 +10,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import publish_release
-from release_common import GitHub
+from release_common import GitHub, ReleaseError
+from type_package_fixture import archive, type_files
 
 
 class DraftReleaseFixture:
@@ -66,21 +67,26 @@ class DraftReleaseFixture:
 
 
 class ReleaseAssetsTests(unittest.TestCase):
-    def publish_fixture(self, existing=False, preceding=0):
+    def publish_fixture(self, existing=False, preceding=0, type_exists=False):
         tag = "v1.2.3"
         fixture = DraftReleaseFixture(tag, preceding)
         names = [f"kenvoy-1.2.3-{platform}-{arch}.zip"
                  for platform in ("windows", "linux", "macos")
                  for arch in ("x86_64", "ARM64")]
-        payloads = {name: f"归档内容:{name}".encode() for name in names}
+        types_name = "kenvoy-types-1.2.3.tgz"
+        binaries = list(names)
+        names.append(types_name)
+        payloads = {name: f"归档内容:{name}".encode() for name in binaries}
+        payloads[types_name] = archive(type_files(), "package")
+        reused = types_name if type_exists else names[0]
         if existing:
             fixture.record = {"id": 1, "tag_name": tag, "draft": True}
-            fixture.payloads[names[0]] = payloads[names[0]]
+            fixture.payloads[reused] = payloads[reused]
         with tempfile.TemporaryDirectory(prefix="kenvoy-release-assets-test-") as temporary:
             root = Path(temporary)
             for name, payload in payloads.items():
-                if existing and name == names[0]:
-                    # 已有 ZIP 没有本地构建输入：恢复只能复用它，不能要求重新构建。
+                if existing and name == reused:
+                    # 已有归档没有本地构建输入：恢复只能复用它，不能要求重新打包。
                     continue
                 (root / name).write_bytes(payload)
                 (root / f"{name}.sha256").write_text(
@@ -89,7 +95,8 @@ class ReleaseAssetsTests(unittest.TestCase):
                 )
             github = GitHub("fixture/kenvoy", token="")
             plan = {"repository": "fixture/kenvoy", "sha": "fixture", "version": "1.2.3",
-                    "tag": tag, "archives": [{"name": name} for name in names]}
+                    "tag": tag, "archives": [{"name": name} for name in binaries],
+                    "types_archive": types_name}
             with (patch.object(github, "get", fixture.get),
                   patch.object(publish_release, "gh", fixture.gh),
                   patch.object(publish_release, "require_latest"),
@@ -106,13 +113,37 @@ class ReleaseAssetsTests(unittest.TestCase):
                              publish_release.checksum_text(
                                  hashlib.sha256(payload).hexdigest(), name).encode("ascii"))
         if existing:
-            self.assertNotIn(names[0], fixture.uploaded)
+            self.assertNotIn(reused, fixture.uploaded)
 
     def test_new_draft_remains_discoverable_through_all_asset_uploads(self):
         self.publish_fixture()
 
     def test_existing_draft_on_later_page_reuses_the_original_zip(self):
         self.publish_fixture(existing=True, preceding=100)
+
+    def test_existing_type_tarball_is_immutable_when_only_checksum_is_missing(self):
+        self.publish_fixture(existing=True, type_exists=True)
+
+    def test_conflicting_type_checksum_stops_without_overwriting_the_asset(self):
+        fixture = DraftReleaseFixture("v1.2.3")
+        fixture.record = {"id": 1, "tag_name": "v1.2.3", "draft": True}
+        name = "kenvoy-types-1.2.3.tgz"
+        fixture.payloads = {name: archive(type_files(), "package"),
+                            f"{name}.sha256": f"{'0' * 64}  {name}\n".encode()}
+        original = dict(fixture.payloads)
+        github = GitHub("fixture/kenvoy", token="")
+        plan = {"repository": "fixture/kenvoy", "sha": "fixture", "version": "1.2.3",
+                "tag": "v1.2.3", "archives": [], "types_archive": name}
+        with (tempfile.TemporaryDirectory() as temporary,
+              patch.object(github, "get", fixture.get),
+              patch.object(publish_release, "gh", fixture.gh),
+              patch.object(publish_release, "require_latest"),
+              patch.object(publish_release, "require_tag")):
+            with self.assertRaises(ReleaseError):
+                publish_release.complete_release(Path(temporary), plan, Path(temporary), github, {})
+        self.assertTrue(fixture.record["draft"])
+        self.assertEqual(fixture.payloads, original)
+        self.assertEqual(fixture.uploaded, [])
 
 
 if __name__ == "__main__":

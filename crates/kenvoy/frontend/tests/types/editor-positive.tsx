@@ -9,6 +9,19 @@ import type {
   FieldBinding, FieldDefinition, FormBinding, GroupBinding, ImageBinding,
   JsonValue, PageBinding, TableBinding,
 } from '@kenvoy/client';
+import type { FieldBinding as PackagedFieldBinding } from '@kenvoy/types/sdk';
+import type { JSX as PackagedJsx } from '@kenvoy/types/jsx-runtime';
+import type { JSX as PackagedDevJsx } from '@kenvoy/types/jsx-dev-runtime';
+import type { JSX as VirtualJsx } from '@kenvoy/client/jsx-runtime';
+import type { JSX as VirtualDevJsx } from '@kenvoy/client/jsx-dev-runtime';
+
+export type DeclarationEntries = [
+  PackagedFieldBinding,
+  PackagedJsx.IntrinsicElements['number'],
+  PackagedDevJsx.IntrinsicElements['svg'],
+  VirtualJsx.IntrinsicElements['div'],
+  VirtualDevJsx.IntrinsicElements['app'],
+];
 
 export function FieldView(binding: FieldBinding) {
   const current = useField(binding.field.name);

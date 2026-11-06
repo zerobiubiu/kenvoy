@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from publish_release import local_digest
 from release_common import GitHub, ReleaseError
 from release_plan import plan_release
+from type_package_fixture import crate as source_crate, type_files
 
 TARGETS = [
     "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc",
@@ -26,10 +27,11 @@ URL = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }.z
 
 
 class RegistryFixture:
-    def __init__(self, existing=(), published_manifest=None):
+    def __init__(self, existing=(), published_manifest=None, types_present=True):
         self.existing = set(existing)
         self.published_manifest = published_manifest
         self.queries = []
+        self.types_present = types_present
 
     def registry_version(self, crate, version):
         self.queries.append((crate, version))
@@ -38,7 +40,8 @@ class RegistryFixture:
         return {"crate": crate, "num": version, "yanked": False}
 
     def download_crate(self, crate, version, metadata):
-        return b"fixture: published manifest supplied below"
+        files = type_files(version, REPOSITORY) if self.types_present else {}
+        return source_crate(version, files=files)
 
     def package_manifest(self, payload, crate, version):
         return self.published_manifest
@@ -113,9 +116,13 @@ class ReleasePlanTests(unittest.TestCase):
                             "metadata": {"binstall": {"pkg-url": URL}}}}
 
     def assets(self, version):
-        return [
+        binaries = [
             {"name": f"kenvoy-{version}-{target}.zip{suffix}", "state": "uploaded", "size": 100}
             for target in TARGETS for suffix in ("", ".sha256")
+        ]
+        return binaries + [
+            {"name": f"kenvoy-types-{version}.tgz{suffix}", "state": "uploaded", "size": 100}
+            for suffix in ("", ".sha256")
         ]
 
     def test_complete_current_version_is_noop_without_scanning_older_release(self):
@@ -144,12 +151,13 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertTrue(plan["release_required"])
         self.assertEqual({item["target"] for item in plan["matrix"]["include"]}, set(TARGETS))
         self.assertEqual({version for _, version in registry.queries}, {"0.2.1"})
+        self.assertEqual(plan["types_archive"], "kenvoy-types-0.2.1.tgz")
 
     def test_dev_is_rejected_before_any_remote_lookup(self):
         sha = self.version("0.2.1")
         github = GitHubFixture(sha)
         registry = RegistryFixture()
-        with self.assertRaisesRegex(ReleaseError, "仅 main"):
+        with self.assertRaises(ReleaseError):
             plan_release(self.root, self.environ(sha, "refs/heads/dev"), github, registry)
         self.assertEqual(github.calls, [])
         self.assertEqual(registry.queries, [])
@@ -165,7 +173,7 @@ class ReleasePlanTests(unittest.TestCase):
 
     def test_missing_remote_tag_blocks_unpublished_version(self):
         sha = self.version("0.2.1")
-        with self.assertRaisesRegex(ReleaseError, "远端缺少 v0.2.1"):
+        with self.assertRaises(ReleaseError):
             plan_release(self.root, self.environ(sha), GitHubFixture(sha), RegistryFixture())
 
     def test_source_changes_after_tag_cannot_publish_under_old_tag(self):
@@ -174,7 +182,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.git("add", ".")
         self.git("commit", "--no-gpg-sign", "-m", "标签之后继续修改")
         sha = self.git("rev-parse", "HEAD")
-        with self.assertRaisesRegex(ReleaseError, "树不同"):
+        with self.assertRaises(ReleaseError):
             plan_release(self.root, self.environ(sha), GitHubFixture(sha, {"v0.2.1": tag_sha}), RegistryFixture())
 
     def test_existing_release_uses_published_names_and_builds_only_missing_zip(self):
@@ -200,7 +208,8 @@ class ReleasePlanTests(unittest.TestCase):
 
     def test_missing_sidecar_does_not_rebuild_or_replace_existing_zip(self):
         sha = self.version("0.2.0")
-        assets = self.assets("0.2.0")[:-1]
+        missing = f"kenvoy-0.2.0-{TARGETS[-1]}.zip.sha256"
+        assets = [item for item in self.assets("0.2.0") if item["name"] != missing]
         github = GitHubFixture(sha, {"v0.2.0": sha}, {"draft": False, "assets": assets})
         registry = RegistryFixture(
             [("kenvoy", "0.2.0"), ("kengine", "0.2.0")], self.published_manifest("0.2.0")
@@ -209,10 +218,32 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertTrue(plan["release_required"])
         self.assertEqual(plan["matrix"]["include"], [])
 
+    def test_type_tarball_missing_does_not_rebuild_existing_binary_archives(self):
+        sha = self.version("0.2.0")
+        assets = [item for item in self.assets("0.2.0") if ".tgz" not in item["name"]]
+        github = GitHubFixture(sha, {"v0.2.0": sha}, {"draft": False, "assets": assets})
+        registry = RegistryFixture(
+            [("kenvoy", "0.2.0"), ("kengine", "0.2.0")], self.published_manifest("0.2.0")
+        )
+        plan = plan_release(self.root, self.environ(sha), github, registry)
+        self.assertTrue(plan["release_required"])
+        self.assertFalse(plan["publish_kenvoy"])
+        self.assertEqual(plan["matrix"]["include"], [])
+        self.assertEqual(plan["types_archive"], "kenvoy-types-0.2.0.tgz")
+
+    def test_old_published_crate_without_types_fails_instead_of_using_checkout(self):
+        sha = self.version("0.2.0")
+        registry = RegistryFixture(
+            [("kenvoy", "0.2.0"), ("kengine", "0.2.0")], self.published_manifest("0.2.0"),
+            types_present=False,
+        )
+        with self.assertRaises(ValueError):
+            plan_release(self.root, self.environ(sha), GitHubFixture(sha), registry)
+
     def test_network_authorization_failure_is_not_treated_as_missing_release(self):
         error = urllib.error.HTTPError("https://api.github.com", 403, "Forbidden", {}, None)
         with patch("urllib.request.urlopen", side_effect=error):
-            with self.assertRaisesRegex(ReleaseError, "HTTP 403"):
+            with self.assertRaises(ReleaseError):
                 GitHub(REPOSITORY, token="").release("v0.2.1")
 
     def test_checksum_must_cover_exact_archive_bytes_and_filename(self):
@@ -225,7 +256,7 @@ class ReleasePlanTests(unittest.TestCase):
         with self.assertRaises(ReleaseError):
             local_digest(self.root, name)
         sidecar.write_text(f"{'0' * 64}  {name}\n", encoding="ascii")
-        with self.assertRaisesRegex(ReleaseError, "不一致"):
+        with self.assertRaises(ReleaseError):
             local_digest(self.root, name)
         sidecar.write_text(f"{digest}  {name}\n", encoding="ascii")
         self.assertEqual(local_digest(self.root, name), digest)

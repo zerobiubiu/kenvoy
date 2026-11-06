@@ -12,17 +12,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "paths": {
-      "@kenvoy/client": [
-        "./.kenvoy/types/sdk.d.ts"
-      ],
-      "@kenvoy/client/jsx-dev-runtime": [
-        "./.kenvoy/types/presentation/jsx-dev-runtime.d.ts"
-      ],
-      "@kenvoy/client/jsx-runtime": [
-        "./.kenvoy/types/presentation/jsx-runtime.d.ts"
-      ]
-    },
+    "types": ["@kenvoy/types"],
     "strict": true,
     "target": "ES2022"
   },

@@ -3,7 +3,6 @@ mod analysis;
 mod compatibility;
 mod config;
 mod create;
-pub mod editor;
 mod error;
 pub mod i18n;
 mod paths;

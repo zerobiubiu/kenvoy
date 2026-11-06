@@ -6,7 +6,7 @@
 
 ## 运行
 
-本例项目依赖统一使用 Bun 1.4.3，bun.lock 只在本地生成或使用，不提交 Git。React、SDK 与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。
+本例项目依赖统一使用 Bun 1.4.3，bun.lock 只在本地生成或使用、不提交 Git。编辑器声明由 `@kenvoy/types` 开发依赖提供，安装前按[示例总览](../README.md)构建同 CLI 版本的本地 tarball，不再执行 `kenvoy types`。React 运行时、SDK 运行值与框架内部工具链仍由 CLI 管理，自定义客户端首次构建仍需 Node.js 24.22+ 及配套 npm；不要用当前仍走 npm 的 `--install-deps` 准备本例依赖。
 
 ```text
 cd examples/i18n-app

@@ -1,0 +1,15 @@
+{
+  "name": "@kenvoy/types",
+  "description": "与 Kenvoy CLI 同版本的客户端 SDK、React JSX 和 DSL 编辑器类型",
+  "type": "module",
+  "license": "MIT",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts" },
+    "./sdk": { "types": "./sdk/sdk.d.ts" },
+    "./jsx-runtime": { "types": "./sdk/presentation/jsx-runtime.d.ts" },
+    "./jsx-dev-runtime": { "types": "./sdk/presentation/jsx-dev-runtime.d.ts" }
+  },
+  "files": ["index.d.ts", "sdk/**/*.d.ts", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" }
+}

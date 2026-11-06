@@ -55,7 +55,7 @@ dev/run 使用同一持久化数据库；不要通过删除 data 目录修复前
 
 基础界面使用 React、TypeScript 与原生 CSS。自定义客户端组件首次构建需要 Node 24.22.0 或以上及 npm；只有显式 `--install-deps` 才准备应用声明的用户依赖，不会静默修改应用的 package.json。
 
-dev 未发布实现提供编辑器类型支持：新项目自带 TypeScript 配置、私有开发依赖清单与真实 SDK/JSX 声明；旧项目执行 `kenvoy types`，按报告保留并补齐已有配置，显式安装开发类型后运行 `npm run typecheck`。无需安装重复 React 运行包或占位 `@kenvoy/client`。该命令尚未包含在已发布的 0.4.4 中，详见仓库 dev 文档。
+dev 未发布实现将编辑器声明独立交付为与 CLI 同版本的 `@kenvoy/types` npm 开发依赖。新项目自带 TypeScript 配置与精确版本依赖，已有项目加入类型包和 `types: ["@kenvoy/types"]`，不再生成 `.kenvoy/types` 或执行 `kenvoy types`。无需安装重复 React 运行包或占位 `@kenvoy/client`。该类型包尚未首次发布；源码开发可构建并安装真实 tarball，详见仓库 dev 文档。
 
 
 支持多文件字段、上传图片/URL 图片展示、系统组件重载、联动与跨资源选项、受限服务端 JavaScript。服务端始终执行认证、授权、字段约束和附件归属规则，不能以隐藏 UI 替代权限检查。

@@ -28,7 +28,11 @@ impl Fixture {
         self.0.join("customer-app")
     }
     fn create(&self) -> Result<()> {
-        let output = self.run(&["create", "customer-app"])?;
+        let output = Command::new(env!("CARGO_BIN_EXE_kenvoy"))
+            .current_dir(&self.0)
+            .env("PATH", self.0.join("no-programs"))
+            .args(["create", "customer-app"])
+            .output()?;
         assert!(
             output.status.success(),
             "{}",
@@ -50,6 +54,17 @@ impl Drop for Fixture {
 fn create_check_and_inspect_use_real_tsx_without_creating_a_database() -> Result {
     let fixture = Fixture::new()?;
     fixture.create()?;
+    assert!(fixture.project().join("migrations").is_dir());
+    assert!(!fixture.project().join("data/app.sqlite").exists());
+    for path in [
+        ".kenvoy",
+        "node_modules",
+        "package-lock.json",
+        "bun.lock",
+        "dist",
+    ] {
+        assert!(!fixture.project().join(path).exists(), "{path}");
+    }
     let checked = fixture.run(&["--project", "customer-app/src", "check"])?;
     assert!(
         checked.status.success(),

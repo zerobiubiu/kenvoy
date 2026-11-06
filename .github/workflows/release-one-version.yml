@@ -129,6 +129,9 @@ jobs:
       - uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.12.10'
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24.22.0'
       - uses: actions/download-artifact@v4.3.0
         with:
           name: release-plan
@@ -139,7 +142,14 @@ jobs:
           pattern: kenvoy-${{ needs.plan.outputs.version }}-*
           path: ${{ runner.temp }}/kenvoy-binaries
           merge-multiple: true
-      - name: 核验资产并发布（不覆盖既有 ZIP、侧车或 tag）
+      - name: 从同版本已发布 CLI 源码包准备纯类型 tarball
+        run: >-
+          python .github/scripts/package_types.py
+          --plan "$RUNNER_TEMP/kenvoy-plan/kenvoy-release-plan.json"
+          --output "$RUNNER_TEMP/kenvoy-binaries"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: 核验六平台与类型资产并发布（不覆盖既有资产或 tag）
         run: >-
           python .github/scripts/publish_release.py
           --plan "$RUNNER_TEMP/kenvoy-plan/kenvoy-release-plan.json"

@@ -57,7 +57,7 @@
 - Kenvoy CLI 每次已提交版本变化，都自动创建附注标签 `vMAJOR.MINOR.PATCH`，缺失标签及时补齐到该版本首次出现的提交，不能统一挂到当前 HEAD；同版本普通提交不重打标签。每次可写任务开始/收尾、提交后、切回 dev、合并到 dev 后及获准推送前均核对补齐，无须额外要求；只读任务不写引用。既有合法发布标签不移动、不覆盖，冲突必须报错；删除或重指需单独授权。标签默认只在本地创建，补 tag 不等于发布旧版本。具体命令与钩子见发布操作。
 - 获得推送授权后，本次分支与保留的版本 tag 一并同步到 GitHub，不遗漏先前补齐的标签；推送前再运行一次标签核对。标签逐个显式推送，仍不使用 `git push --tags` / `--follow-tags` 批量推送未核对版本。发布新版本前必须确认标签已在远端，指向已合入 main 的相同版本源码；CI 不自动创建或移动远端 tag。
 - 正式发布对外只有两个入口：`main` 推送自动触发，以及仅 `workflow_dispatch` 的 main 手动发布；两者执行相同的完整范围，包含 crates.io、六平台 GitHub Release 和全部保留渠道。dev 不触发自动发布。只处理 main 当前版本，不扫描或补发历史版本；已发布内容跳过，缺项可恢复。
-- 渠道发布仅保留 npm、Homebrew、Scoop，只消费已发布 GitHub Release 的六个归档与官方摘要，不重新编译、不改动 Release；作为自动和手动 main 发布成功后的内部接续，不提供独立手动入口或任意历史版本输入。npm 只发布 `kenvoy` 单包，由安装器按平台下载并校验对应二进制；不发布或依赖 Kenvoy 平台分包。缺凭据或账号未就绪必须明确失败，不得跳过或伪造成功。APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 已退役，不恢复其实现或凭据要求。配置见[多渠道发布](docs/operations/distribution-channels.md)。
+- 渠道发布仅保留 npm、Homebrew、Scoop，只消费已发布 GitHub Release 的官方归档、类型包与摘要，不重新编译或改动 Release；作为自动和手动 main 发布成功后的内部接续，不提供独立手动入口或任意历史版本输入。npm 发布 `kenvoy` CLI 安装器及同版本 `@kenvoy/types` 纯类型包；类型版本只来自 CLI Cargo.toml，正式类型资产取自同版本已发布 CLI 源码包，不拿最新源码冒充旧版本。CLI 安装器按平台下载校验二进制，不发布或依赖平台分包。缺凭据或账号未就绪必须明确失败，不得跳过或伪造成功。APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 已退役，不恢复其实现或凭据要求。配置见[多渠道发布](docs/operations/distribution-channels.md)。
 - 手动打包对外固定为 Windows/Linux/macOS 各 x86_64、ARM64 共六个独立入口，仅允许手动触发，所有分支均可执行；每次只打选定目标，只提供 Actions artifact 下载，不发布 crate、GitHub Release、npm 或更新 Homebrew/Scoop。共享实现不得成为额外的人工操作步骤。
 - 只暂存本次授权且已验证的文件或变更块，不夹带用户已有或无关改动；不提交密钥、个人配置、依赖目录、业务运行数据或构建产物，新增持久化目录前检查 ignore 保护。
 

@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@kenvoy/types": "file:../../crates/kenvoy/frontend/dist/kenvoy-types-0.4.4-0e231512d45077e0.tgz",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "typescript": "7.0.2"

@@ -4,7 +4,7 @@
 
 ## 运行
 
-项目格式为 0.4.0，使用本仓库 dev 源码构建的 Kenvoy CLI，项目依赖统一由 Bun 1.4.3 和 bun.lock 管理。先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy。从仓库根目录可使用：
+项目格式为 0.4.0，运行使用本仓库 dev 源码构建的 Kenvoy CLI，项目依赖统一由 Bun 1.4.3 管理。先按[项目说明](../../README.md#从源码构建与验证)构建 Kenvoy；前端构建同时生成同 CLI 版本的 `@kenvoy/types` 本地 tarball，由开发依赖提供编辑器声明，不再运行 `kenvoy types`。单独生成类型包见[示例总览](../README.md)。从仓库根目录可使用：
 
 ```powershell
 bun install --cwd examples/uploads-app --ignore-scripts --omit=peer

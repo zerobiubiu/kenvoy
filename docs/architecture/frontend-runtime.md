@@ -28,13 +28,13 @@ React + TypeScript + 原生 CSS + React Router 根据 `/_kenvoy/application` 的
 
 `infrastructure::client_build::build` 接收已经通过语义校验的 ProgramIR/ApplicationIR，只写调用方独占创建的空 staging。没有客户端模块引用时直接 `infrastructure::frontend::export` 内置资产，不检查或调用 Node/npm；清单仍记录内嵌框架依赖版本和 npm 锁文件摘要。存在自定义引用时，Rust 调用受控 `client-builder.mjs`，完成真实 Vite/Rolldown 打包；产物文件摘要和已解析的框架/用户 npm 版本交给统一清单。
 
-框架的 package.json、package-lock.json、Runtime 源码和构建脚本嵌入 CLI。锁定工具链位于项目 `.kenvoy/client-toolchain`，按包清单与锁文件联合摘要、操作系统、架构、Node 主版本分开；源码缓存另按内容指纹分开。首次准备工具链使用 `npm ci --ignore-scripts --include=dev`，此后验证标记、固定源码和工具可加载性后复用，不在每次启动重新安装。dev/build/run 不生成或修改用户 package.json；create/types 只在缺失时创建私有编辑器开发依赖清单，已有配置始终保留。只有显式 `--install-deps` 才在应用构建时准备用户锁文件并安装其已声明依赖；自动安装仅接受 npm registry 版本，不接受 Git、文件或 workspace 依赖说明符。
+框架的 package.json、package-lock.json、Runtime 源码和构建脚本嵌入 CLI。锁定工具链位于项目 `.kenvoy/client-toolchain`，按包清单与锁文件联合摘要、操作系统、架构、Node 主版本分开；源码缓存另按内容指纹分开。首次准备工具链使用 `npm ci --ignore-scripts --include=dev`，此后验证标记、固定源码和工具可加载性后复用，不在每次启动重新安装。dev/build/run 不生成或修改用户 package.json；create 在新目录创建私有编辑器开发依赖清单，不再提供 types 命令或声明缓存。只有显式 `--install-deps` 才在应用构建时准备用户锁文件并安装其已声明依赖；自动安装仅接受 npm registry 版本，不接受 Git、文件或 workspace 依赖说明符。
 
 普通 React 组件沿原始 import/barrel 入口打包，保留 CSS 副作用、Hooks、Props 与用户选择的第三方组件的 ESM 行为；仅 React、React DOM 和 React Router 统一解析到工具链，其他 UI 库解析到用户项目依赖，避免双 React 实例。声明入口及 `.diu` 文件不直接打包；可证明的函数、const 和客户端表达式由 Kenvoy 的同一词法闭包切片器提取，复杂可变捕获明确诊断并建议拆成独立客户端模块。切片表达式以 factory 注册，函数与组件以稳定引用 ID 注册，运行时不使用 `eval`。
 
 浏览器通过 `@kenvoy/client` 的 `useAction(name)` 或 `callAction(name,args)` 调用声明的服务端动作。SDK 复用页面的 ApiClient、同源 Cookie、CSRF 与应用代际；JSON 参数和返回值不包含函数对象。动作写请求同样不自动重试；网络中断或超时保留结果待核对状态。`useAction` 共享通用 Runtime 的 React Context，不创建另一套认证状态。
 
-编辑器声明在前端构建时从真实 SDK 与 JSX runtime 根执行 emitDeclarationOnly，保存在 `frontend/dist/types` 并随 CLI/源包交付；不进入 HTTP 的 BUNDLED_ASSETS。`kenvoy types` 将其导出到项目 `.kenvoy/types`，不要求在用户机上复制框架源码或执行声明构建。自动 JSX 的生产/开发入口映射到框架桥接文件，运行值仍来自共享 React，类型命名空间则同时表达严格 DSL 和原生 HTML/SVG。详见[编辑器类型操作](../operations/cli-design.md#编辑器类型)。
+编辑器声明在前端构建时从真实 SDK 与 JSX runtime 根执行 emitDeclarationOnly，再打包为 `@kenvoy/types`；版本只取 CLI Cargo 元数据。完整声明目录随 CLI 源码包交付，不嵌入 CLI Binary 或 HTTP 的 BUNDLED_ASSETS。正式 npm 类型 tarball 从同版本已发布 CLI 源码包提取，和二进制一起进入正式 Release，不能用新 HEAD 补造旧版。应用由包管理器安装开发依赖，使用 `types: ["@kenvoy/types"]` 加载，不要求执行 CLI 生成声明。自动 JSX 的运行值仍来自共享 React，类型命名空间同时表达严格 DSL 与原生 HTML/SVG。详见[编辑器类型操作](../operations/cli-design.md#编辑器类型)。
 
 
 构建入口禁用用户 Vite/PostCSS 配置和 `.env` 加载，拒绝 Node 内置模块、服务端私有闭包、声明入口原文、未分析的新源码、内部配置及越界文件；CSS 资源 URL 也经过文件类型/路径检查。分析后先核对源码字节，Vite load 再验证 SHA-256 并直接使用相同字节，构建完成后再次核对。子进程不经 Shell，标准输出与错误各最多保留 256 KiB；构建 120 秒、依赖准备 180 秒超时后停止并回收直接子进程。该工具链用于可信项目，不能作为不可信 npm 依赖的操作系统沙箱。

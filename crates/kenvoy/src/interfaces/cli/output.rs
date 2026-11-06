@@ -8,8 +8,9 @@ use crate::{
 
 pub(crate) fn created(path: &Path) {
     println!(
-        "已创建项目：{}\n下一步：进入项目目录，执行 kenvoy dev（原生运行不需要 npm）\n编辑器类型：已生成 .kenvoy/types、tsconfig.json 与私有 package.json；请显式执行 npm install --ignore-scripts，再执行 npm run typecheck。\nCLI 升级后执行 kenvoy types 刷新编辑器声明。",
-        path.display()
+        "已创建项目：{}\n下一步：进入项目目录，执行 kenvoy dev（原生运行不需要 npm）\n编辑器类型：已生成 tsconfig.json 与私有 package.json，开发依赖 @kenvoy/types 精确对应 CLI {}；尚未安装依赖。\n请显式使用包管理器安装开发依赖，再执行 npm run typecheck。开发版或尚未首发的类型包须安装本仓库构建的同版本本地 tarball，不能直接假定 registry 可用；对应版本正式发布后，可执行 npm install --ignore-scripts 或 bun install。",
+        path.display(),
+        env!("CARGO_PKG_VERSION")
     );
 }
 

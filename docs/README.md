@@ -41,13 +41,13 @@
 
 当前 Kenvoy CLI 为已发布的 0.4.4，KEngine 为 0.2.0；项目格式仍为 0.4.0，既有最低 CLI 声明为 0.4.0 的项目继续兼容。create 会把新项目的最低 CLI 设为创建时版本，本版生成值为 0.4.4。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；历史实施事实保留，不将原先的本地验收扩大为全部环境的上线证明。
 
-渠道仅保留 npm、Homebrew、Scoop。npm 只发布单个 `kenvoy`，安装时按系统与架构下载官方二进制；实现与手动首发见[0033](changes/0033-single-npm-package-download.md)，crates.io 鉴权修复和 0.4.4 恢复见[0034](changes/0034-cargo-auth-and-044-release.md)。渠道退役见[0032](changes/0032-retire-linux-and-winget-channels.md)，当前注册表状态及发布顺序统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 仍保留六目标 ZIP。
+渠道仅保留 npm、Homebrew、Scoop。已发行的 npm `kenvoy` 是按系统与架构下载官方二进制的单安装器，dev 另接入同版本 `@kenvoy/types` 开发声明包，不恢复平台分包。历史首发见[0033](changes/0033-single-npm-package-download.md)，0.4.4 恢复见[0034](changes/0034-cargo-auth-and-044-release.md)；当前发行状态与首次类型包前提统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 继续保留六目标 ZIP，新版本还交付同版类型 tarball 和摘要。
 
 工作流入口已在本地按[0036](changes/0036-workflow-entrypoints.md)收敛为 main 自动/手动完整发布与六个独立手动打包入口；本轮尚未推送或触发远端任务。操作方式见[发布操作](operations/releasing.md)。
 
 dev 后续增加显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；实现及本轮验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未发布，不改变既有 0.4.4 发行与标签。
 
-dev 编辑支持增加 `kenvoy types`、新项目默认 TypeScript 配置、真实 SDK 声明和独立 JSX 类型入口；实现见[0038](changes/0038-editor-types-and-jsx-runtime.md)，五例声明生成见[0039](changes/0039-example-editor-types.md)，既有 npm 类型检查见[0040](changes/0040-example-typecheck-dependencies.md)，examples 仅执行 Bun 切换见[0041](changes/0041-examples-bun-package-manager.md)。该能力尚未发布，示例使用 Bun 不改变 CLI 内部的框架工具链。
+dev 编辑器类型已从 CLI 生成缓存切换为 `@kenvoy/types` npm 开发依赖：真实 SDK/JSX 声明版本取 CLI Cargo 元数据，五个 Bun 示例消费本地 tarball，正式发行只从同版已发布 CLI 源码包提取并先发布类型包。切换与验证见[0042](changes/0042-published-editor-types-package.md)，该包本轮未发布；已移除 `kenvoy types` 和三个缓存 paths。旧实施事实保留在[0038](changes/0038-editor-types-and-jsx-runtime.md)、[0039](changes/0039-example-editor-types.md)、[0040](changes/0040-example-typecheck-dependencies.md)、[0041](changes/0041-examples-bun-package-manager.md)，示例使用 Bun、不提交锁文件的要求继续保留，CLI 内部工具链不变。
 
 ## 文档规范
 

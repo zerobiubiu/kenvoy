@@ -7,7 +7,7 @@
 - 在 `check/build/dev/run` 执行应用前检查显式翻译调用；漏配键或无法静态确定的动态键给出源码定位并阻断，不修改已有译文或业务库。
 - `@kenvoy/client` 提供 `useLocale()`，与 `useI18n().locale` 共用响应式规范语言状态。
 - 默认入口支持静态 React 函数/箭头函数返回 JSX、局部常量及静态重导出；不执行组件，不放宽动态 Schema 或私有模块边界。实施记录见 [0037](0037-i18n-reference-check-and-react-templates.md)。
-- 新增 `kenvoy types` 与新项目默认编辑器接线，交付真实 SDK 声明和独立 JSX 类型命名空间；保留原生 React HTML/SVG 与严格 API 检查，不自动安装依赖或覆盖已有配置。实现及验证见 [0038](0038-editor-types-and-jsx-runtime.md)。
+- 编辑器声明改为同 CLI 精确版本的 `@kenvoy/types` 开发依赖，包管理器直接提供真实 SDK 与独立 JSX 命名空间；移除 `kenvoy types`、CLI 内嵌声明和三个缓存 paths。五个 Bun 示例消费本地实际 tarball，不提交锁文件；严格 DSL/React/API 检查保持。初始实现见 [0038](0038-editor-types-and-jsx-runtime.md)，现行切换与验证见 [0042](0042-published-editor-types-package.md)。
 - 尚未安排新的产品版本，不改动已发布的 CLI 0.4.4、KEngine 0.2.0 或既有标签。
 
 ## 发布工程调整（本地，未推送）
@@ -15,6 +15,7 @@
 - 自动与手动正式发布均仅允许 main，成功后自动接续 npm、Homebrew、Scoop；取消渠道独立手动入口与任意版本输入。
 - 手动打包拆成 Windows/Linux/macOS 各 x86_64、ARM64 六个独立入口，允许任意分支，仅提供 Actions artifact 下载。
 - 复用现有构建/发布实现，保留 OIDC 文件身份；不增加发布源、PR/定时流程，不变更 CLI 0.4.4、KEngine 0.2.0 或既有标签。实施记录见 [0036](0036-workflow-entrypoints.md)。
+- 增加同版纯类型 tarball/摘要的正式 Release 资产，从已发布 CLI 源码包提取并校验，不用新 HEAD 回填旧版；npm 在类型版本可见后再发布同版 CLI 安装器。新 scope/Trusted Publisher 与首次发布未执行，仍需未来 CLI 新版本。见 [0042](0042-published-editor-types-package.md)。
 
 ## 0.4.4
 

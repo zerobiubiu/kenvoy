@@ -14,31 +14,30 @@
 
 在任一示例目录执行 `kenvoy i18n` 会更新 Schema、仅在译文文件不存在时创建只含 Schema 引用的文件，然后严格校验译文；不会提取源码、自动翻译或覆盖已有词条。新增词条必须覆盖配置中的全部语言，每种语言的代码与别名恰好选一个。`dev`、`run` 启动前同样更新 Schema 并校验；`check`、`build` 只读校验。
 
-五个示例统一使用 **Bun 1.4.3**，package.json 中固定 `packageManager: bun@1.4.3`。编辑器类型支持需要 dev 源码构建的 CLI；先在示例目录执行 `kenvoy types`，项目依赖和脚本使用 Bun 管理，不照搬 types 报告中面向默认 npm 安装器的命令。不要安装空壳 `@kenvoy/client`。
+五个示例统一使用 **Bun 1.4.3**，package.json 中固定 `packageManager: bun@1.4.3`。SDK、React JSX 与 DSL 类型改由 `@kenvoy/types` 开发依赖提供，不再执行 `kenvoy types` 或依赖 `.kenvoy/types`。不要安装空壳 `@kenvoy/client` 或重复 React 运行包。
 
-本轮已为全部示例生成编辑器类型；`.kenvoy/types` 是本机派生缓存，不随 Git 提交，重新克隆或清理缓存后再次执行 `kenvoy types`。
-
-| 示例 | 先前生成的 SDK 声明 | 项目包管理器 | 本轮验证 |
-|---|---:|---|---|
-| customer-app | 24 | Bun 1.4.3 | 按要求未执行 |
-| extensions-app | 24 | Bun 1.4.3 | 按要求未执行 |
-| options-app | 24 | Bun 1.4.3 | 按要求未执行 |
-| uploads-app | 24 | Bun 1.4.3 | 按要求未执行 |
-| i18n-app | 24 | Bun 1.4.3 | 按要求未执行 |
-
-示例的依赖锁文件只在本地生成和使用，不提交 Git；保留 package.json 中的依赖声明。没有共享锁文件时，各次安装解析出的间接依赖可能不同。后续使用时可在示例目录执行：
+仓库示例的开发依赖指向 `file:../../crates/kenvoy/frontend/dist/kenvoy-types-<CLI版本>-<内容摘要>.tgz`，消费实际 npm tarball，不依赖 Bun 的目录复制或链接。包内版本直接取 CLI Cargo 元数据，类型构建自动同步五例该开发依赖；SDK 内容或 CLI 版本改变都会换路径，避免 Bun 复用同一路径的旧包。构建产物位置记录于 `frontend/dist/types-artifact.json`，正式 Release 仍使用带版本号、不带本地摘要的资产名。在仓库根目录先生成类型包：
 
 ```text
-kenvoy types
+npm --prefix crates/kenvoy/frontend run build:types
+```
+
+这仍是 CLI 内部前端工具链的 npm 命令，不改变示例使用 Bun 的约定。随后在需要使用的示例目录执行：
+
+```text
 bun install --ignore-scripts --omit=peer
 bun run typecheck
 ```
 
-本地没有 bun.lock 时，Bun 安装过程可生成它；已有本地锁文件不会因停止 Git 跟踪而删除。`node_modules`、`.kenvoy/types` 和示例锁文件均不入库；没有本地锁时不要使用 `--frozen-lockfile`。
+本机 Bun 1.4.3 在并行首次安装同一归档时出现过缓存目录 ENOENT；多个示例按目录串行安装。不要改回固定 tarball 文件名：实测替换同一路径包内版本后，普通安装和 `--force` 仍保留旧包。
 
-本轮只切换示例项目，不切换 CLI 内部的框架工具链。自定义客户端构建仍需 Node.js 24.22+ 与其配套 npm，由 CLI 管理框架缓存。示例先用 Bun 安装依赖，再运行 `kenvoy dev/build/run`，不要使用当前仍走 npm 的 `--install-deps` 重新生成 npm 锁。当前 CLI 尚未把 bun.lock 纳入构建输入指纹，仅更新 Bun 锁后请显式执行 `kenvoy build` 再使用 run，避免复用旧资产。
+`tsconfig.json` 使用 `types: ["@kenvoy/types"]`，保留 `jsx: "react-jsx"` 和 `jsxImportSource: "@kenvoy/client"`，不再配置指向本地声明缓存的三个 `paths`。旧的本机缓存即使保留也不参与这套类型解析。
 
-声明生成和此前 npm 类型检查事实分别见 [0039](../docs/changes/0039-example-editor-types.md)、[0040](../docs/changes/0040-example-typecheck-dependencies.md)；[0041](../docs/changes/0041-examples-bun-package-manager.md) 中提交锁文件的做法是当时的历史记录，现按用户要求不再跟踪示例锁文件。
+示例依赖锁文件只在本地生成和使用，不提交 Git；保留 package.json 中的依赖声明。没有共享锁文件时，各次安装解析出的间接依赖可能不同。`node_modules`、构建输出和示例锁文件均不入库；没有本地锁时不要使用 `--frozen-lockfile`，已有本地锁也不会因停止 Git 跟踪而删除。
+
+自定义客户端构建仍需 Node.js 24.22+ 与其配套 npm，由 CLI 管理框架缓存。示例先用 Bun 安装依赖，再运行 `kenvoy dev/build/run`，不要使用当前仍走 npm 的 `--install-deps` 重新生成 npm 锁。当前 CLI 尚未把 bun.lock 纳入构建输入指纹，仅更新 Bun 锁后请显式执行 `kenvoy build` 再使用 run，避免复用旧资产。
+
+旧声明生成与 npm 类型检查事实保留在 [0039](../docs/changes/0039-example-editor-types.md)、[0040](../docs/changes/0040-example-typecheck-dependencies.md)；[0041](../docs/changes/0041-examples-bun-package-manager.md) 中提交锁文件是当时记录，现按用户要求不再跟踪。类型包切换见 [0042](../docs/changes/0042-published-editor-types-package.md)。
 
 
 

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from manifests import ARCHIVE, REPOSITORY, SHA256, VERSION, ChannelError
@@ -155,7 +155,7 @@ def load_package(path: str | Path) -> Package:
 def version_exists(package: Package) -> bool:
     """公开包只做匿名 GET；只有明确 HTTP 404 才表示该版本不存在。"""
     request = Request(
-        f"{REGISTRY}/{package.name}/{package.version}",
+        f"{REGISTRY}/{quote(package.name, safe='')}/{package.version}",
         headers={"Accept": "application/json", "User-Agent": "kenvoy-channel-publisher"},
     )
     try:
