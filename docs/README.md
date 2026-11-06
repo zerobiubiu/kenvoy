@@ -1,6 +1,6 @@
 # Kenvoy 文档中心
 
-状态：参考；治理：现状文档；核对日期：2026-11-03。
+状态：参考；治理：现状文档；核对日期：2026-11-07。
 
 这里是项目详细文档的唯一入口，负责文档索引、规范和维护要求。业务设计、接口契约、操作指导与历史记录按类型放入子目录；项目执行规则见 [AGENTS.md](../AGENTS.md)。
 
@@ -12,7 +12,7 @@
 | 了解整体设计 | [架构总览](architecture/architecture.md) → [Crate 边界](architecture/crate-boundaries.md) → [DDD 目录规范](architecture/ddd-structure.md) → [架构分类](architecture/README.md) |
 | 创建并运行应用 | [项目说明](../README.md) → [CLI](operations/cli-design.md) → [项目配置](contracts/project-configuration.md) → [示例](../examples/README.md) |
 | 编写声明与扩展 | [DSL 语法](contracts/dsl-specification.md) → [组件与选项契约](contracts/component-bindings.md) / [多文件上传与图片](contracts/file-uploads.md) → [前端 Runtime](architecture/frontend-runtime.md) → [JavaScript Runtime](architecture/javascript-runtime.md) |
-| 解决编辑器 React/SDK/JSX 报错 | [编辑器类型生成与接线](operations/cli-design.md#编辑器类型) → [SDK 与 JSX 类型](contracts/component-bindings.md#编辑器与-jsx-类型) → [实施与证据 0038](changes/0038-editor-types-and-jsx-runtime.md) |
+| 解决编辑器 React/SDK/JSX 报错 | [编辑器类型包与接线](operations/cli-design.md#编辑器类型) → [SDK 与 JSX 类型](contracts/component-bindings.md#编辑器与-jsx-类型) → [现行切换与证据 0042](changes/0042-published-editor-types-package.md) |
 | 原生支持多语言 | [强制语言与集中译文](contracts/i18n.md) → [可运行 i18n-app](../examples/i18n-app/README.md) → [CLI 初始化/校验](operations/cli-design.md#原生国际化工具) → [实施与证据 0028](changes/0028-mandatory-languages-and-schema.md) |
 | 参与开发与验证 | [工程流程](development/engineering-workflow.md) → [测试策略](development/testing-strategy.md) → [验证证据](verification/README.md) |
 | 开发分支、版本标签与发布 | [Git 与发布操作](operations/releasing.md) → [多渠道软件包](operations/distribution-channels.md) → [分支与发布规则实施记录](changes/0021-dev-main-release-rules.md) → [标签规则定稿](changes/0023-version-tag-rules.md) |
@@ -39,15 +39,17 @@
 
 0.4.4 已完成源包、六目标二进制、npm OIDC、Homebrew 与 Scoop 发布，恢复过程及验收见[0035](changes/0035-cargo-package-checksum-recovery.md)、[渠道进度](development/channel-rollout-status.md)与[版本日志](changes/CHANGELOG.md)。0.2.0 的原始发行证据保留在[0019](changes/0019-crates-and-binary-release.md)。最近入口修复见[0018](changes/0018-runtime-root-entry.md)、[0017](changes/0017-windows-password-prompt-encoding.md)，结构规范见[DDD 目录](architecture/ddd-structure.md)，上传用法见[可运行示例](../examples/uploads-app/README.md)。
 
-当前 Kenvoy CLI 为已发布的 0.4.4，KEngine 为 0.2.0；项目格式仍为 0.4.0，既有最低 CLI 声明为 0.4.0 的项目继续兼容。create 会把新项目的最低 CLI 设为创建时版本，本版生成值为 0.4.4。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；历史实施事实保留，不将原先的本地验收扩大为全部环境的上线证明。
+本次源码发行版本为 Kenvoy CLI 0.5.0，与 `@kenvoy/types@0.5.0` 准备同步正式发行，尚未实际上传或完成该版本的安装验收；现有已发布 CLI 为 0.4.4，KEngine 保持 0.2.0。项目格式仍为 0.4.0，既有最低 CLI 声明为 0.4.0 且未使用新能力的项目继续兼容。create 会把新项目的最低 CLI 设为创建时版本，0.5.0 源码生成值为 0.5.0。强制 languages、集中 translations.json、生成 Schema、产物 v4/客户端描述 v3 的现状见[语言契约](contracts/i18n.md)及[0028](changes/0028-mandatory-languages-and-schema.md)；不将项目格式支持区间误作 CLI 版本上限，也不将历史本地验收扩大为全部环境的上线证明。
 
-渠道仅保留 npm、Homebrew、Scoop。已发行的 npm `kenvoy` 是按系统与架构下载官方二进制的单安装器，dev 另接入同版本 `@kenvoy/types` 开发声明包，不恢复平台分包。历史首发见[0033](changes/0033-single-npm-package-download.md)，0.4.4 恢复见[0034](changes/0034-cargo-auth-and-044-release.md)；当前发行状态与首次类型包前提统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 继续保留六目标 ZIP，新版本还交付同版类型 tarball 和摘要。
+渠道仅保留 npm、Homebrew、Scoop。已发行的 npm `kenvoy` 是按系统与架构下载官方二进制的单安装器，本次 0.5.0 准备另行交付同版本 `@kenvoy/types` 开发声明包，不恢复平台分包。历史首发见[0033](changes/0033-single-npm-package-download.md)，0.4.4 恢复见[0034](changes/0034-cargo-auth-and-044-release.md)；当前发行状态与首次类型包前提统一维护于[渠道进度](development/channel-rollout-status.md)。GitHub Release 继续保留六目标 ZIP，0.5.0 发布流程还要求同版类型 tarball 和摘要。
 
 工作流入口已在本地按[0036](changes/0036-workflow-entrypoints.md)收敛为 main 自动/手动完整发布与六个独立手动打包入口；本轮尚未推送或触发远端任务。操作方式见[发布操作](operations/releasing.md)。
 
-dev 后续增加显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；实现及本轮验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未发布，不改变既有 0.4.4 发行与标签。
+0.5.0 纳入显式翻译键启动预检、原生 `useLocale()` 与静态 React 函数模板入口；此前实现及本地验证见 [0037](changes/0037-i18n-reference-check-and-react-templates.md)。这些修改尚未正式发布，不改变既有 0.4.4 发行与标签。
 
-dev 编辑器类型已从 CLI 生成缓存切换为 `@kenvoy/types` npm 开发依赖：真实 SDK/JSX 声明版本取 CLI Cargo 元数据，五个 Bun 示例消费本地 tarball，正式发行只从同版已发布 CLI 源码包提取并先发布类型包。切换与验证见[0042](changes/0042-published-editor-types-package.md)，该包本轮未发布；已移除 `kenvoy types` 和三个缓存 paths。旧实施事实保留在[0038](changes/0038-editor-types-and-jsx-runtime.md)、[0039](changes/0039-example-editor-types.md)、[0040](changes/0040-example-typecheck-dependencies.md)、[0041](changes/0041-examples-bun-package-manager.md)，示例使用 Bun、不提交锁文件的要求继续保留，CLI 内部工具链不变。
+0.5.0 编辑器类型从 CLI 生成缓存切换为 `@kenvoy/types` npm 开发依赖：真实 SDK/JSX 声明版本只取 CLI Cargo 元数据，五个 Bun 示例消费同版本本地 tarball，正式发行只从同版已发布 CLI 源码包提取并先发布类型包。此前切换与本地验证见[0042](changes/0042-published-editor-types-package.md)，不是 0.5.0 的线上安装证据；`kenvoy types` 和三个缓存 paths 已移除。用户已确认拥有 `@kenvoy` scope 权限，但本机 npm 登录与新包独立 Trusted Publisher 仍待完成，不能沿用 `kenvoy` 的旧 OIDC 证据宣称新包已获授权。旧实施事实保留在[0038](changes/0038-editor-types-and-jsx-runtime.md)、[0039](changes/0039-example-editor-types.md)、[0040](changes/0040-example-typecheck-dependencies.md)、[0041](changes/0041-examples-bun-package-manager.md)，示例使用 Bun、不提交锁文件的要求继续保留，CLI 内部工具链不变。
+
+本次 0.5.0 版本准备、用户授权边界与实际本地验证见[0043](changes/0043-cli-0.5.0-release-preparation.md)；正式上传和安装结果继续按[渠道进度](development/channel-rollout-status.md)区分记录，不将准备阶段标记为已发行。
 
 ## 文档规范
 

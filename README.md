@@ -13,12 +13,12 @@ KEngine 是其中独立、通用的 Rust 源码解析库，提供 JS/TS/JSX/TSX 
 
 ## 特性
 
-- **语义化声明**：`resource`、`page`、`form`、`table`、`action` 等元素描述业务，严格静态校验引用、权限与路由。
+- **语义化声明**：`resource`、`page`、`form`、`table`、`action` 等元素描述业务，严格静态校验引用、权限与路由；0.5.0 新增静态 React 函数模板入口，不执行组件来生成 Schema。
 - **单一业务模型**：同一份声明驱动页面、管理后台、受控 HTTP API 与 SQLite 表结构，不为每个资源手写 CRUD。
 - **真实持久化**：SQLite 文件数据库、追加式正式迁移链、逐步事务与 checksum 确认；开发与生产共用同一数据路径，不因切换模式重置。
 - **内置管理后台**：登录、会话、资源查询、分页、排序、编辑与删除，复用同一权限模型。
 - **可扩展前端**：原生 React + TypeScript + CSS；支持组件重载、自定义组件、联动选项、多文件上传与图片展示。
-- **原生国际化**：始终启用；集中译文、语言代码/别名与明确显示名、设备语言及兜底、JSON Schema 校验、Intl 格式化和 `useI18n()`，无需应用 Provider。
+- **原生国际化**：始终启用；集中译文、语言代码/别名与明确显示名、设备语言及兜底、JSON Schema 校验、Intl 格式化；0.5.0 的显式翻译键预检、`useI18n()` 与 `useLocale()` 复用框架上下文，无需应用 Provider。
 - **受限 JavaScript**：服务端函数与 Action 运行在 QuickJS 中，客户端代码按依赖切片，不把服务端私有模块带入浏览器。
 - **工程闭环**：`create` / `check` / `inspect` / `i18n` / `migrate` / `admin` / `build` / `run` / `dev`，含受控 Vite/HMR 与版本化产物。
 
@@ -54,11 +54,11 @@ kenvoy dev                           # http://127.0.0.1:3000
 
 访问 `/customers` 登记数据；登录 `/admin/customers` 查询、编辑和删除。匿名只有声明允许的表单提交权限。
 
-Kenvoy CLI **0.4.4** 已发布，KEngine 保持 **0.2.0**。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
+本次源码发行版本为 Kenvoy CLI **0.5.0**，与 **`@kenvoy/types@0.5.0`** 准备同步正式发行，尚未实际上传或完成该版本的安装验收；现有已发布 CLI 仍为 **0.4.4**，KEngine 保持 **0.2.0**。create 生成 languages 默认配置、根 language.schema.json 与 translations.json；`kenvoy i18n` 更新 Schema 并在缺失时初始化译文。dev/run 必须先校验集中译文，语言不能关闭。配置、自动键及 SDK 见[原生语言契约](docs/contracts/i18n.md)，完整例子见 [i18n-app](examples/i18n-app/README.md)。
 
-### 编辑器类型支持（dev 未发布）
+### 编辑器类型支持（0.5.0，发行准备中）
 
-源码构建的 CLI 为新项目生成 `tsconfig.json` 和私有开发依赖清单，`@kenvoy/types` 开发依赖严格使用该 CLI 的版本；不再执行 `kenvoy types` 或生成 `.kenvoy/types`。类型包包含真实 SDK、React JSX 与 DSL 声明，不提供运行时代码。基础 DSL 运行仍不要求 Node。
+0.5.0 CLI 为新项目生成 `tsconfig.json` 和私有开发依赖清单，`@kenvoy/types` 开发依赖精确使用 **0.5.0**；新建 `min_cli_version` 为 **0.5.0**，项目格式仍为 **0.4.0**。`kenvoy types` 已删除，不再生成 `.kenvoy/types`。类型包包含真实 SDK、React JSX 与 DSL 声明，不提供运行时代码。基础 DSL 运行仍不要求 Node。
 
 ```json
 {
@@ -70,7 +70,7 @@ Kenvoy CLI **0.4.4** 已发布，KEngine 保持 **0.2.0**。create 生成 langua
 }
 ```
 
-当前类型包本轮未发布到 npm。源码开发先执行 `npm --prefix crates/kenvoy/frontend run build:types`，产物为带 CLI 版本与内容摘要的本地 tarball，路径记录于 `frontend/dist/types-artifact.json`；构建同时同步仓库五个示例的类型开发依赖，不改写独立用户项目。Bun 通过实际 tarball 安装，不依赖 CLI 生成声明。正式发布后由包管理器安装 `@kenvoy/types`，Release 资产名为 `kenvoy-types-X.Y.Z.tgz`，完整操作和首次发布前提见[编辑器类型](docs/operations/cli-design.md#编辑器类型)。
+`@kenvoy/types@0.5.0` 尚未发布到 npm。发行前的源码开发先执行 `npm --prefix crates/kenvoy/frontend run build:types`，产物为带 CLI 版本与内容摘要的本地 tarball，路径记录于 `frontend/dist/types-artifact.json`；构建同时同步仓库五个示例的类型开发依赖，不改写独立用户项目。Bun 通过实际 tarball 安装，不依赖 CLI 生成声明。正式发布后由包管理器安装同版 `@kenvoy/types`，Release 资产名为 `kenvoy-types-0.5.0.tgz`，完整操作和首次发布前提见[编辑器类型](docs/operations/cli-design.md#编辑器类型)。
 
 保留已有应用的其他 TypeScript 设置，只移除旧的三个虚拟模块 `paths` 并加入类型包。不要安装空壳 `@kenvoy/client` 或重复 React 运行包，也不要用 `any`、空模块声明或关闭 strict 消红；该分发方式尚未包含在已发布的 CLI 0.4.4 中。
 
@@ -163,6 +163,8 @@ cargo xtask browser    # 显式运行真实浏览器用例
 开发在 `dev` 分支进行；版本变化自动维护本地版本标签，发布时合并到 `main` 并触发当前版本发布。规则见[发布操作](docs/operations/releasing.md)，工程细节见[工程流程](docs/development/engineering-workflow.md)。
 
 ## 分发状态
+
+本次 **0.5.0** 仍处于正式发行准备阶段，下面保留的是 **0.4.4** 的已发行事实，不代表 0.5.0 已上传、已安装或新类型包已获 OIDC 授权。
 
 当前已发布：
 

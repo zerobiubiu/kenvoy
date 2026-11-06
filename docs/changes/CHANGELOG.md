@@ -2,20 +2,24 @@
 
 状态：参考；治理：持续维护的版本概要。详细执行事实保留在编号变更记录中，不以本页替代验证证据。
 
-## 功能开发（未发布）
+## 0.5.0
 
-- 在 `check/build/dev/run` 执行应用前检查显式翻译调用；漏配键或无法静态确定的动态键给出源码定位并阻断，不修改已有译文或业务库。
+发布状态：准备中，尚未实际上传或完成该版本的安装验收。Kenvoy CLI 与 `@kenvoy/types` 统一为 0.5.0，KEngine 保持 0.2.0；项目格式仍为 0.4.0，0.5.0 create 的新项目最低 CLI 为 0.5.0。已发布 0.4.4、既有资产和旧标签保持不动。
+
+### 功能
+
+- 在 `check/build/dev/run` 执行应用前检查源码显式翻译调用；漏配键或无法静态确定的动态键给出源码定位并阻断，不修改已有译文或业务库。
 - `@kenvoy/client` 提供 `useLocale()`，与 `useI18n().locale` 共用响应式规范语言状态。
 - 默认入口支持静态 React 函数/箭头函数返回 JSX、局部常量及静态重导出；不执行组件，不放宽动态 Schema 或私有模块边界。实施记录见 [0037](0037-i18n-reference-check-and-react-templates.md)。
-- 编辑器声明改为同 CLI 精确版本的 `@kenvoy/types` 开发依赖，包管理器直接提供真实 SDK 与独立 JSX 命名空间；移除 `kenvoy types`、CLI 内嵌声明和三个缓存 paths。五个 Bun 示例消费本地实际 tarball，不提交锁文件；严格 DSL/React/API 检查保持。初始实现见 [0038](0038-editor-types-and-jsx-runtime.md)，现行切换与验证见 [0042](0042-published-editor-types-package.md)。
-- 尚未安排新的产品版本，不改动已发布的 CLI 0.4.4、KEngine 0.2.0 或既有标签。
+- 编辑器声明改为同 CLI 精确版本的 `@kenvoy/types` 开发依赖，包管理器直接提供真实 SDK 与独立 JSX 命名空间；移除 `kenvoy types`、CLI 内嵌声明和三个缓存 paths。五个 Bun 示例消费同版本本地实际 tarball，不提交锁文件；严格 DSL/React/API 检查保持。初始实现见 [0038](0038-editor-types-and-jsx-runtime.md)，现行切换与此前本地验证见 [0042](0042-published-editor-types-package.md)。
 
-## 发布工程调整（本地，未推送）
+### 工程与分发
 
 - 自动与手动正式发布均仅允许 main，成功后自动接续 npm、Homebrew、Scoop；取消渠道独立手动入口与任意版本输入。
 - 手动打包拆成 Windows/Linux/macOS 各 x86_64、ARM64 六个独立入口，允许任意分支，仅提供 Actions artifact 下载。
-- 复用现有构建/发布实现，保留 OIDC 文件身份；不增加发布源、PR/定时流程，不变更 CLI 0.4.4、KEngine 0.2.0 或既有标签。实施记录见 [0036](0036-workflow-entrypoints.md)。
-- 增加同版纯类型 tarball/摘要的正式 Release 资产，从已发布 CLI 源码包提取并校验，不用新 HEAD 回填旧版；npm 在类型版本可见后再发布同版 CLI 安装器。新 scope/Trusted Publisher 与首次发布未执行，仍需未来 CLI 新版本。见 [0042](0042-published-editor-types-package.md)。
+- 复用现有构建/发布实现，保留 OIDC 文件身份；不增加发布源、PR/定时流程，不改动既有标签。此前本地实施记录见 [0036](0036-workflow-entrypoints.md)。
+- 增加同版纯类型 tarball/摘要的正式 Release 资产，首次安排为 `kenvoy-types-0.5.0.tgz`；只从同版已发布 CLI 源码包提取并校验，不用新 HEAD 回填旧版。npm 在类型版本可见后再发布同版 CLI 安装器，实施边界见 [0042](0042-published-editor-types-package.md)。
+- 用户已确认拥有 `@kenvoy` scope 发布权限；本机 `npm whoami` 实际返回 401，登录仍待用户完成，`@kenvoy/types` 的独立 Trusted Publisher 尚未配置、执行或验证，首次上传也未发生。现有 `kenvoy` OIDC 授权不自动覆盖新包，前置与后续远端证据统一维护于[渠道进度](../development/channel-rollout-status.md)。
 
 ## 0.4.4
 

@@ -1,6 +1,6 @@
 # 可运行示例
 
-五个 kenvoy 项目均使用 **项目格式 0.4.0**。当前编辑器配置采用原生 SDK/JSX 类型入口，需要使用本仓库 dev 源码构建的 Kenvoy CLI；已发布的 0.4.4 尚不包含 types 命令及对应 JSX 入口。原生国际化始终启用：每个示例根目录都包含 `translations.json` 和按 `[languages]` 配置生成的 `language.schema.json`。
+五个 kenvoy 项目均使用 **项目格式 0.4.0**。当前编辑器 SDK/JSX 接线要求 **Kenvoy CLI 0.5.0 与 `@kenvoy/types@0.5.0`**；`i18n-app` 的函数模板入口、`useLocale()` 和显式翻译键预检也要求 CLI 0.5.0。0.5.0 正在准备正式发行，尚未实际上传或完成该版本的安装验收；发行前使用本仓库 dev 的 0.5.0 源码构建和同版本本地类型 tarball，不把已发布 0.4.4 当作这些新能力的来源。原生国际化始终启用：每个示例根目录都包含 `translations.json` 和按 `[languages]` 配置生成的 `language.schema.json`。
 
 | 示例 | 内容 | 运行入口 |
 |---|---|---|
@@ -14,9 +14,9 @@
 
 在任一示例目录执行 `kenvoy i18n` 会更新 Schema、仅在译文文件不存在时创建只含 Schema 引用的文件，然后严格校验译文；不会提取源码、自动翻译或覆盖已有词条。新增词条必须覆盖配置中的全部语言，每种语言的代码与别名恰好选一个。`dev`、`run` 启动前同样更新 Schema 并校验；`check`、`build` 只读校验。
 
-五个示例统一使用 **Bun 1.4.3**，package.json 中固定 `packageManager: bun@1.4.3`。SDK、React JSX 与 DSL 类型改由 `@kenvoy/types` 开发依赖提供，不再执行 `kenvoy types` 或依赖 `.kenvoy/types`。不要安装空壳 `@kenvoy/client` 或重复 React 运行包。
+五个示例统一使用 **Bun 1.4.3**，package.json 中固定 `packageManager: bun@1.4.3`。SDK、React JSX 与 DSL 类型改由同 CLI 精确版本的 **`@kenvoy/types@0.5.0`** 开发依赖提供；`kenvoy types` 已删除，不再依赖 `.kenvoy/types`。不要安装空壳 `@kenvoy/client` 或重复 React 运行包。
 
-仓库示例的开发依赖指向 `file:../../crates/kenvoy/frontend/dist/kenvoy-types-<CLI版本>-<内容摘要>.tgz`，消费实际 npm tarball，不依赖 Bun 的目录复制或链接。包内版本直接取 CLI Cargo 元数据，类型构建自动同步五例该开发依赖；SDK 内容或 CLI 版本改变都会换路径，避免 Bun 复用同一路径的旧包。构建产物位置记录于 `frontend/dist/types-artifact.json`，正式 Release 仍使用带版本号、不带本地摘要的资产名。在仓库根目录先生成类型包：
+仓库示例的开发依赖指向 `file:../../crates/kenvoy/frontend/dist/kenvoy-types-<CLI版本>-<内容摘要>.tgz`，消费实际 npm tarball，不依赖 Bun 的目录复制或链接。本次 CLI/类型版本均为 0.5.0；包内版本直接取 CLI Cargo 元数据，类型构建自动同步五例该开发依赖。SDK 内容或 CLI 版本改变都会换路径，避免 Bun 复用同一路径的旧包。构建产物位置记录于 `frontend/dist/types-artifact.json`，正式 Release 的类型资产名为 `kenvoy-types-0.5.0.tgz`，只能来自同版已发布 CLI crate，目前尚未发布。在仓库根目录先生成本地类型包：
 
 ```text
 npm --prefix crates/kenvoy/frontend run build:types

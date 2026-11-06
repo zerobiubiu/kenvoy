@@ -2,6 +2,8 @@
 
 状态：参考；治理：现状文档。适用：本 Workspace 的 Kenvoy CLI、KEngine 及同 CLI 版本的 `@kenvoy/types`，不是 kenvoy 项目的业务部署。执行规则见 [AGENTS.md](../../AGENTS.md)，入口约定见 [0036](../changes/0036-workflow-entrypoints.md)，类型包接续见 [0042](../changes/0042-published-editor-types-package.md)；双分支历史见 [0021](../changes/0021-dev-main-release-rules.md)，0.4.4 正式发行证据见 [0035](../changes/0035-cargo-package-checksum-recovery.md)。
 
+本次准备正式发行 **Kenvoy CLI 0.5.0 与 `@kenvoy/types@0.5.0`**，KEngine 相对 v0.4.4 无变更，保持已发布的 **0.2.0**。0.5.0 尚未实际上传或完成该版本的安装验收；0.4.4 的发行事实、SHA 和旧标签不变。新包 scope 权限已由用户确认，但本机 npm 登录及独立 Trusted Publisher 尚待完成，实际前置与远端证据统一维护于[渠道进度](../development/channel-rollout-status.md)。
+
 ## 分支与授权
 
 | 分支 | 用途 | 自动触发 |
@@ -61,7 +63,7 @@ flowchart TD
   G --> J[Scoop]
 ```
 
-必须**先推版本 tag，再合并/推送 main**，例如 `git push origin v0.3.1`；逐个推送仅限本次获授权的标签，不用 `--tags` / `--follow-tags` 批量上传未核对版本。tag 推送本身不会触发本仓库发布，因此此规则不是依赖 tag 事件数量限制。
+必须**先推版本 tag，再合并/推送 main**，本次标签为 `v0.5.0`，例如 `git push origin v0.5.0`；逐个推送仅限本次获授权的标签，不用 `--tags` / `--follow-tags` 批量上传未核对版本。tag 推送本身不会触发本仓库发布，因此此规则不是依赖 tag 事件数量限制。
 
 CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一致、已合入 main、版本相符。若有新源包待发布，main 源码树必须与版本标签一致；标签后继续修改源码应完成新版本并打新标签，不能让旧标签描述另一份代码。缺标签、标签冲突、源代码漂移都在上传前失败；工作流不自动创建或移动远端 tag。
 
@@ -98,7 +100,7 @@ CI 在任何 crate 上传前检查远端标签存在、与本地精确提交一�
 
 上传是不可逆操作；不覆盖既有版本，不盲目重试上传写请求。KEngine 成功、Kenvoy 失败时，手动兜底只处理仍缺失的当前版本步骤。已发布源包补二进制时，从实际 registry 源包核对官方 SHA256 后构建，使用包内前端，不拿后来修改的工作区冒充原发布源码。
 
-GitHub Release 先以草稿收集缺失资产，六个 ZIP、类型 `kenvoy-types-X.Y.Z.tgz` 及各自 SHA256 共 14 项齐全并验证后公开；标题固定为 `Kenvoy <version>`。类型资产由 `package_types.py` 下载同版本已发布 CLI crate、校验官方 checksum、安全解包后从包内声明目录执行隔离凭据的 npm pack，不读取新 HEAD 补造旧版。当前已发布 0.4.4 源码包不含该目录，类型包首次正式发行需未来 CLI 新版本。
+GitHub Release 先以草稿收集缺失资产，六个 ZIP、类型 `kenvoy-types-X.Y.Z.tgz` 及各自 SHA256 共 14 项齐全并验证后公开；标题固定为 `Kenvoy <version>`。类型资产由 `package_types.py` 下载同版本已发布 CLI crate、校验官方 checksum、安全解包后从包内声明目录执行隔离凭据的 npm pack，不读取新 HEAD 补造旧版。已发布 0.4.4 源码包不含该目录，首次正式类型发行安排为 0.5.0，必须先发布携带目录的 0.5.0 CLI crate，再提取同版类型资产；不能在 0.4.4 名下补造。
 
 既有归档/侧车不使用 `--clobber`：缺侧车时按原归档计算校验值，不重新构建后替换；类型 tarball 还须逐文件匹配同版 crate。发现既有校验冲突即停，留给人工核查。历史已发布版本按其下载元数据识别资产，不因新规则重命名旧文件；也不在旧版本名下补造新类型。
 

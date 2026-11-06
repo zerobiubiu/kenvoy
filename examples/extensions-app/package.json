@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@types/react": "19.3.0",
-    "@kenvoy/types": "file:../../crates/kenvoy/frontend/dist/kenvoy-types-0.4.4-0e231512d45077e0.tgz",
+    "@kenvoy/types": "file:../../crates/kenvoy/frontend/dist/kenvoy-types-0.5.0-1b23d559c67b0547.tgz",
     "@types/react-dom": "19.3.0",
     "typescript": "7.0.2"
   }

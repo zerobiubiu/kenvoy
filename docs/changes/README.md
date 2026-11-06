@@ -56,6 +56,7 @@
 | 0040 | [五个示例的开发类型安装与检查](0040-example-typecheck-dependencies.md) | 已执行；显式授权安装、五例 tsc 正反向与静态资源模型复核 | 开发依赖/锁文件、CSS 副作用声明、静态 JSX 插值及用户暂存保护 |
 | 0041 | [examples 切换 Bun 包管理](0041-examples-bun-package-manager.md) | 已执行；按用户要求仅切换，未验证 | 五份包管理器声明、Bun 锁替换 npm 锁、示例命令与框架边界说明 |
 | 0042 | [独立编辑器类型包与同版发布](0042-published-editor-types-package.md) | 已执行；真实 tarball、Bun 五例、新建项目与本地发布边界验证；未首次发布 | `@kenvoy/types` 单一版本源、包管理器接线、移除 types/cache、同版 registry 源包和类型优先渠道 |
+| 0043 | [CLI 0.5.0 与类型包同步发行准备](0043-cli-0.5.0-release-preparation.md) | 已执行；本地版本、完整标准 Rust/前端套件、五例检查与首发前置；尚未上传 | CLI/types 0.5.0、KEngine 0.2.0、i18n 最低 CLI、同版正式来源与首次会话/TP 顺序 |
 
 0041 记录切换 Bun 时提交锁文件的历史事实；后按用户要求，examples 下的锁文件不再由 Git 跟踪，本地文件保留。当前安装方式见[示例总览](../../examples/README.md)。
 

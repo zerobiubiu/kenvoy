@@ -2,6 +2,8 @@
 
 状态：参考；治理：现状文档。适用范围：Kenvoy CLI 二进制分发到 npm、Homebrew、Scoop，以及同版本 `@kenvoy/types` npm 开发类型包。crates.io 与 GitHub Release 沿用 [Git 与发布操作](releasing.md)；渠道退役见 [0032](../changes/0032-retire-linux-and-winget-channels.md)，CLI 单安装器切换与首发见 [0033](../changes/0033-single-npm-package-download.md)，类型包接续见 [0042](../changes/0042-published-editor-types-package.md)，实际进度见[渠道进度](../development/channel-rollout-status.md)。安装命令不代表尚未发布版本已上线。
 
+本次准备同步正式发行 **`kenvoy@0.5.0` 与 `@kenvoy/types@0.5.0`**，KEngine 保持 0.2.0；0.5.0 尚未实际上传或完成该版本的安装验收。已公开的 CLI 安装器仍为 0.4.4，其 OIDC 发行证据不代表新类型包已获授权。
+
 ## 总体结构
 
 ```mermaid
@@ -16,7 +18,7 @@ flowchart TD
 
 渠道工作流为 [.github/workflows/channels.yml](../../.github/workflows/channels.yml)：仅作为 `main 最新版本自动发布` 和 `main 最新版本手动发布` 成功结束后的内部接续；父事件分别为 push 或 workflow_dispatch。不再提供独立 workflow_dispatch 或版本输入，不需要操作者再手动运行渠道。`prepare` 检查当前 ref、来源分支和来源仓库，拒绝 dev、tag 与外仓事件；checkout 固定父运行 head_sha，版本从该源码的 Cargo.toml 读取，后续 job 继续固定同一 source_sha。它只消费正式 Release 资产，不重新编译、不改动 crate 或 Release。每个渠道独立 job，失败不撤销已完成的 Release；完整发布需主流程及三个渠道均成功。入口变更见 [0036](../changes/0036-workflow-entrypoints.md)。
 
-前置条件：版本 tag 已推送；对应正式 Release 已发布、非 draft/prerelease，六个 ZIP、同版 `kenvoy-types-X.Y.Z.tgz` 和其 `.sha256` 均有 GitHub 官方 digest。类型包还验证侧车声明的 tarball 摘要、包名/版本和纯类型内容；不覆盖损坏缓存。缺归档或摘要不符时停止，不进入各渠道。历史旧版没有类型目录时不拿新源码回填；首次类型发行需未来 CLI 新版本，0.2.0 及更早三元组文件名仍不在自动发现范围。
+前置条件：版本 tag 已推送；对应正式 Release 已发布、非 draft/prerelease，六个 ZIP、同版 `kenvoy-types-X.Y.Z.tgz` 和其 `.sha256` 均有 GitHub 官方 digest。类型包还验证侧车声明的 tarball 摘要、包名/版本和纯类型内容；不覆盖损坏缓存。缺归档或摘要不符时停止，不进入各渠道。历史旧版没有类型目录时不拿新源码回填；首次类型发行安排为 0.5.0，须先有携带完整声明目录的同版已发布 CLI crate。0.2.0 及更早三元组文件名仍不在自动发现范围。
 
 源码发布仍执行完整 Git 树一致性门禁：首次发布源码时，main 的树必须与该版本 tag 一致。标签之后仅修改文档或渠道配置，也不能跳过检查。0.4.3 因 Cargo 凭据变量错误在上传前失败，经用户确认修复后改发 0.4.4；保留所有旧标签，先推新标签再同步 main，不放宽门禁。恢复事实见 [0034](../changes/0034-cargo-auth-and-044-release.md)。
 
@@ -41,7 +43,7 @@ npm 发布两个用途不同、**版本相同**的包：无 scope 的 **`kenvoy`
 ### npm 鉴权与首次接入
 
 - 长期使用 Trusted Publishing（OIDC）：GitHub-hosted runner、`id-token: write`、npm ≥ 11.5.1、Node ≥ 22.14；绑定仓库 `zerobiubiu/kenvoy` 和工作流文件 `channels.yml`，包的 `repository.url` 须对应本仓库。现有工作流让 npm 自行选择 OIDC，缺少 `NPM_TOKEN` 不会提前阻断有效的可信发布。
-- 首次创建包与 OIDC 绑定是独立前提。`kenvoy` 的现有授权不覆盖 `@kenvoy/types`：须有 `@kenvoy` scope 发布权限，并分别给两个包配置指向 `channels.yml` 的 Trusted Publisher。手动首发须明确授权，使用已验证正式归档及账号要求的 2FA；本地不伪造 main 上下文或 CI provenance。仍没有六个平台包的绑定。
+- 首次创建包与 OIDC 绑定是独立前提：npm 包必须已经存在，才能给它配置 Trusted Publisher。`kenvoy` 的现有授权不覆盖 `@kenvoy/types`；用户已确认拥有 `@kenvoy` scope 发布权限，但仍须在用户完成登录及账号要求的 2FA 后，按授权使用同版已发布 CLI crate 提取的正式类型归档完成首发，确认包公开可见，再为新包独立配置指向 `channels.yml` 的 Trusted Publisher。可使用官方 `npm trust` 管理该绑定；配置成功不等于已经完成真实 OIDC 发布验证。手动首发不伪造 main 上下文或 CI provenance，仍没有六个平台包的绑定。
 - 不再创建旧式 Automation token。npm 自 2025 年 11 月起仅支持 Granular token；其绕过 2FA 的直接发布方式将于 2027 年 1 月退役。不得绕过账号或组织的强制 2FA 要求。
 - 自 2026 年 9 月起，新可信发布配置还须明确允许工作流执行 `npm publish`，不能只启用 staging。新绑定两天内未首次发布会失效，应在实际发布窗口配置，而非长期提前占位。
 - `npm whoami`/`npm view` 不能证明 OIDC 已获发布授权；以真实受授权发布及安装结果验收。
@@ -100,4 +102,4 @@ APT、RPM、Alpine、Arch、WinGet、Chocolatey 与 AUR 均已退役，不再配
 
 ## 验证边界
 
-CLI 安装器的六目标选择、真实 ZIP 下载/双重校验/原子安装、命令运行与失败保护保留 [0033](../changes/0033-single-npm-package-download.md#执行验证记录) 的实际证据。新类型包已执行真实 tarball 消费、Bun 示例和本地发布边界验证，见 [0042](../changes/0042-published-editor-types-package.md#执行验证记录)；本轮未上传 npm、配置新 scope/OIDC 或触发远端 Actions。不将本地生成版本、旧 CLI 发行或未运行平台冒充新类型包已上线。
+CLI 安装器的六目标选择、真实 ZIP 下载/双重校验/原子安装、命令运行与失败保护保留 [0033](../changes/0033-single-npm-package-download.md#执行验证记录) 的实际证据。此前类型包的真实 tarball 消费、Bun 示例和本地发布边界验证见 [0042](../changes/0042-published-editor-types-package.md#执行验证记录)，其中当时的 0.4.4 本地产物不是 0.5.0 的上传或安装证据。0.5.0 尚未实际上传、安装或触发远端 Actions；用户已确认 scope 权限，但本机 `npm whoami` 返回 401，登录仍待用户完成，新包独立 Trusted Publisher 也尚未配置、执行或验证。不将本地生成版本、旧 CLI 发行或未运行平台冒充新类型包已上线。

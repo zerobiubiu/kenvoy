@@ -2,6 +2,8 @@
 
 状态：参考（现状文档）。正式迁移、兼容门禁、旧库接入和快照见 [迁移操作](migration-design.md)；早期生命周期证据见[原验收报告](../verification/0011-cli-lifecycle.md)，不将历史动态迁移行为作为当前契约。
 
+本文新增能力对应源码版本 **0.5.0**，与 **`@kenvoy/types@0.5.0`** 准备同步正式发行，尚未实际上传或完成该版本的安装验收；当前已发布 CLI 仍为 0.4.4。KEngine 保持 0.2.0，发行前请使用本仓库 dev 的 0.5.0 源码构建。
+
 ## 创建与检查
 
 ```text
@@ -12,9 +14,9 @@ kenvoy --project customer-app inspect
 kenvoy --project customer-app inspect --generic
 ```
 
-create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；dev 后续实现还创建编辑器 tsconfig.json 和声明同 CLI 精确版本 `@kenvoy/types` 的私有 package.json，不再生成 `.kenvoy/types`。项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（当前为 0.4.4），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装依赖或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
+create 创建配置、src/app.tsx、README、.gitignore、data 目录、已固化初始迁移及根 language.schema.json、translations.json；0.5.0 还创建编辑器 tsconfig.json 和声明同 CLI 精确版本 `@kenvoy/types` 的私有 package.json，不再生成 `.kenvoy/types`。项目格式为 0.4.0，最低 CLI 声明取创建时的 CLI 版本（本次源码为 0.5.0），languages 默认中文/英文/韩文，国际化始终启用。既有项目的最低 CLI 不自动提升。不初始化 Git、安装依赖或创建 SQLite。已有目录（包括空目录）拒绝覆盖；写入失败保留本次部分内容并报告，不删除未知文件。
 
-check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
+check 验证语法、模块、DSL、资源、路由、字段、词典与客户端/服务端边界，并准备、验证服务端 JavaScript 模块包；不执行用户函数、不连接数据库。0.5.0 还校验源码显式翻译调用的静态键集合，缺键或无法证明完整集合的动态键都会阻断，传 fallback 不能豁免。错误给出 KE/KV 代码、路径、行列、建议并返回非零状态。也可离线验证数据：
 
 ```text
 kenvoy check --resource customers --input record.json
@@ -25,7 +27,7 @@ kenvoy check --resource customers --input patch.json --patch
 
 ## 编辑器类型
 
-以下为 dev 未发布能力。编辑器类型由独立 npm 包 `@kenvoy/types` 提供，版本与 CLI 完全一致；新项目自动写入精确版本的开发依赖。CLI 不再内嵌或导出编辑器声明，旧 `kenvoy types` 命令已移除。
+以下能力要求 **Kenvoy CLI 0.5.0 与 `@kenvoy/types@0.5.0`**，目前处于正式发行准备阶段。编辑器类型由独立 npm 包提供，版本与 CLI 完全一致；新项目自动写入精确版本的开发依赖。CLI 不再内嵌或导出编辑器声明，旧 `kenvoy types` 命令已删除。
 
 已有项目保留原配置，只做以下接线：
 
@@ -45,7 +47,7 @@ kenvoy check --resource customers --input patch.json --patch
 
 默认配置继续采用 strict、noEmit、Bundler，不设置 baseUrl、skipLibCheck 或任意标签 any 索引。类型包从真实 SDK 源码和两个 JSX runtime 根生成声明，用环境模块连接 `@kenvoy/client`、生产与开发 JSX runtime；不提供 JavaScript，也不污染普通 `React.JSX`。React 运行包仍由 Kenvoy 共享，不安装重复 React 或占位 npm `@kenvoy/client`。
 
-**首次 npm 发布尚未执行。** 当前已发布 CLI 0.4.4 源码包不含新类型包目录，不能拿新 HEAD 回填旧版本；首次正式发布需未来 CLI 新版本完整携带目录，并配置 `@kenvoy` scope 权限与 `@kenvoy/types` 独立 Trusted Publisher。正式发布后，正常项目仅需安装 package.json 的开发依赖，不再运行 CLI 生成类型。
+**首次 npm 发布尚未执行。** 已发布 CLI 0.4.4 源码包不含新类型包目录，不能拿新 HEAD 回填旧版本；首次正式发行安排为 0.5.0，须先发布携带完整声明目录的同版 CLI crate。用户已确认拥有 `@kenvoy` scope 发布权限，但本机 `npm whoami` 实际返回 401，登录仍待用户完成；`@kenvoy/types` 独立 Trusted Publisher 尚未配置、执行或验证，原 `kenvoy` 授权不覆盖新包。正式发布后，正常项目仅需安装 package.json 的开发依赖，不再运行 CLI 生成类型。
 
 源码开发在仓库根执行：
 
@@ -70,7 +72,7 @@ kenvoy i18n
 
 命令先检查 languages 与兼容配置，再更新根 language.schema.json；已有相同 Schema 不重写。translations.json 缺失时独占创建，仅包含 `"$schema":"./language.schema.json"`；已存在则不覆盖。随后按最新生成的 draft 2020-12 Schema 校验引用及每个词条完整的非空语言矩阵，代码与别名只能选一个。无需源码或产物，不编译应用或连接数据库；旧 extract/check 子命令已移除。
 
-dev/run 启动时重复配置、Schema 和译文检查，但不创建 translations.json；缺失时提示该命令或手工带引用创建。坏文件在数据库创建、迁移和应用代码执行前阻断。详见[原生语言契约](../contracts/i18n.md)。
+dev/run 启动时重复配置、Schema 和译文检查，但不创建 translations.json；缺失时提示该命令或手工带引用创建。坏文件在数据库创建、迁移和应用代码执行前阻断。0.5.0 的 check/build/dev/run 在源码可用时还预检显式 `t(...)` 引用；无源码 run 仍要求根译文与已验证产物匹配，不重新扫描不存在的源码。`useLocale()` 读取与 `useI18n().locale` 相同的规范语言代码，不建立第二套状态。详见[原生语言契约](../contracts/i18n.md)。
 
 
 ## 数据库迁移
